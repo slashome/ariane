@@ -75,6 +75,23 @@ Core commands:
 - **`ariane init`** — bootstraps a machine: clones the user's content repository, creates the symlinks, adds `dir_name` to the global git excludes, materializes the config, and installs the registered skill packs.
 - **`ariane update`** — re-syncs an existing setup: refreshes links for new nodes and updates skill packs to their registered versions.
 
+### 11. `RESUME.md` — the handoff protocol
+
+Everything above assumes the reader has the user's content repository. Someone who clones only a host repository — a collaborator, a fresh agent session, the user on another machine before `ariane init` — has none of it: no `_ariane/`, no `INDEX.md`, no history of what was decided and why. The work is unrecoverable from the code alone, because code records what was built, never what is in flight, what is blocked, or what is waiting on a decision.
+
+Ariane therefore defines one conventional file, **`RESUME.md`, committed at the root of the host repository**, holding the live state of the work in progress. It answers, for a reader arriving cold with nothing but a clone: where the work stands, what just landed, what is in flight, what is blocked and on whose decision, what comes next, and how to verify all of that mechanically rather than take it on trust.
+
+**This is a deliberate exception to §4 and §5, and the only one.** Every other Ariane artifact is physically hosted in the central content repository and merely materialized at the node, leaving zero footprint in the host repository. `RESUME.md` is the inverse: it is tracked *by the host repository*, travels with the code, and is visible to people who do not use Ariane at all. That is the entire point — it is an **exchange surface**, not memory. The private tree is where knowledge accumulates; `RESUME.md` is the baton handed over at the boundary.
+
+The exception is contained by four rules:
+
+1. **It is a snapshot, not a log.** Rewritten wholesale each time, never appended to. A reader must find the current state at the top of the file, not reconstruct it from entries.
+2. **It never becomes a second source of truth.** Decisions, stories and conventions live in `_ariane/` (or in the project's own documents) and are *pointed at* from `RESUME.md`, never copied into it. Where a fact exists in both, the tracked artifact wins.
+3. **It is updated in the same commit as the work it describes, or it is deleted.** A stale `RESUME.md` is worse than none: it is trusted, and it lies. Deleting it is always a legitimate move — the repository simply stops offering a handoff.
+4. **It distinguishes what was verified from what was asserted.** Claims that a suite passes, a check is green, or a deployment is live carry the command that proves it, so the next reader re-runs rather than believes.
+
+`INDEX.md` and `RESUME.md` are complementary and must not be merged: `INDEX.md` is the durable state of a node inside the private tree, cumulative and cross-repository; `RESUME.md` is the volatile, shareable state of one repository's work in flight. One is memory, the other is a baton.
+
 ## Roadmap (v1)
 
 Each step is one reviewable PR:
@@ -82,7 +99,7 @@ Each step is one reviewable PR:
 1. ~~Basic README~~ · ~~This plan~~
 2. Item lifecycle workshop — settle the lifecycle (§6), likely run as an elicitation/brainstorming session using BMAD's skills
 3. `SPEC.md` — the concepts above, normatively specified
-4. `templates/` — `INDEX.md`, `story.md`, `task.md`, `conventions.md`, `config.toml`
+4. `templates/` — `INDEX.md`, `RESUME.md` (§11), `story.md`, `task.md`, `conventions.md`, `config.toml`
 5. `agents/ariane/AGENT.md` + `adapters/claude/skills/ariane/SKILL.md` — the Ariane agent
 6. Reference instance — a documented walkthrough of bootstrapping a user's `_ariane` repository
 7. `ariane` CLI (Go, single static binary) — `doctor` first, then `init` and `update`
