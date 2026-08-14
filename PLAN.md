@@ -56,6 +56,12 @@ An agent is defined once in a neutral `AGENT.md` (persona, mandate, rules — no
 
 TOML, versioned in the user's content repository: `config/config.toml`. First key: `dir_name = "_ariane"`.
 
+### 10. Tooling: the `ariane` CLI
+
+Materialization relies on local state (a central clone, symlinks, a global git excludes entry) that can silently drift. The method therefore ships a small CLI, distributed as an npm package exposing an **`ariane` binary** (scoped name, e.g. `@slashome/ariane`, if the short name is unavailable). It is installed globally (`pnpm add -g`) so it works from any directory, or run ad hoc with `pnpm dlx` — never added as a dependency of host repositories, in line with the zero-footprint rule.
+
+First command: **`ariane doctor`** — a linter for the local deployment. It verifies that the central content clone exists, that every declared node's `_ariane` symlink resolves into the right subtree, that the global git excludes file contains the configured `dir_name`, that the config parses, and that each node has an `INDEX.md`. Run from anywhere, it diagnoses the whole tree; run inside a node, it focuses on it.
+
 ## Roadmap (v1)
 
 Each step is one reviewable PR:
@@ -65,8 +71,9 @@ Each step is one reviewable PR:
 3. `templates/` — `INDEX.md`, `story.md`, `task.md`, `conventions.md`, `config.toml`
 4. `agents/ariane/AGENT.md` + `adapters/claude/skills/ariane/SKILL.md` — the Ariane agent
 5. Reference instance — a documented walkthrough of bootstrapping a user's `_ariane` repository
+6. `ariane` CLI (npm) — `ariane doctor`, the local deployment integrity linter
 
-Later: a `link` tool to automate materialization, more adapters (AGENTS.md, Cursor, subagents), multi-user projects, migration guides.
+Later: more CLI commands (`ariane init`, `ariane link` to automate materialization), more adapters (AGENTS.md, Cursor, subagents), multi-user projects, migration guides.
 
 ## Positioning vs BMAD
 
