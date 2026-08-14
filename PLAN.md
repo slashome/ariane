@@ -44,9 +44,13 @@ reflexion → backlog → task | story → archive
 
 Free-form thinking matures into backlog items, which get promoted to actionable tasks or stories, and end up archived — never deleted. `INDEX.md` reflects the live state at all times.
 
+> **Status: draft.** This lifecycle is a snapshot of the practice Ariane emerged from, not a settled decision. It is a foundation of the method and must be deliberately designed — see the roadmap: a dedicated elicitation workshop (a good use case for BMAD's brainstorming/elicitation skills) will settle it.
+
 ### 7. Agents and skills are owned per project
 
 Unlike methods that ship a fixed cast of shared agents, Ariane states that **each project owns its agents and skills**, referenced from its `INDEX.md`. The home level only registers the user's global skills. The method itself ships exactly one agent: **Ariane**, the guide — it resolves the right level, reads the indexes, answers "where are we / what's next", and operates the lifecycle.
+
+Third-party skill packs (e.g. BMAD, FSD skills) follow the lockfile philosophy: the user's content repository holds a **registry** — name, source, version — and the CLI **installs** them at `init`/`update` into the platform's skill location. Their content is **never duplicated** into the user's `_ariane` repository.
 
 ### 8. Agent definitions are platform-neutral
 
@@ -54,27 +58,39 @@ An agent is defined once in a neutral `AGENT.md` (persona, mandate, rules — no
 
 ### 9. Configuration
 
-TOML, versioned in the user's content repository: `config/config.toml`. First key: `dir_name = "_ariane"`.
+Ariane defines a **logical contract**: its configuration is a TOML file at the XDG path `~/.config/ariane/config.toml` (first key: `dir_name = "_ariane"`). How that path is materialized is the user's choice:
+
+- **Default**: the file is versioned in the user's content repository (`<central>/config/`) and `~/.config/ariane` is a symlink into it — set up by `ariane init`.
+- **Delegated**: users who manage their configurations with a dedicated tool (a dotfiles manager such as dotflies — Ariane's sibling project —, GNU stow, chezmoi…) own that path themselves; Ariane suggests this but never requires it.
+
+Either way, `ariane doctor` only checks that the file exists and parses.
 
 ### 10. Tooling: the `ariane` CLI
 
 Materialization relies on local state (a central clone, symlinks, a global git excludes entry) that can silently drift. The method therefore ships a small CLI: an **`ariane` binary written in Go** — a single static binary with no runtime dependency, because the tool that diagnoses a machine must not depend on that machine being healthy (or on Node being installed at all). Distributed through a Homebrew tap (`brew install slashome/tap/ariane`), GitHub Releases binaries, and `go install` — never added as a dependency of host repositories, in line with the zero-footprint rule.
 
-First command: **`ariane doctor`** — a linter for the local deployment. It verifies that the central content clone exists, that every declared node's `_ariane` symlink resolves into the right subtree, that the global git excludes file contains the configured `dir_name`, that the config parses, and that each node has an `INDEX.md`. Run from anywhere, it diagnoses the whole tree; run inside a node, it focuses on it.
+Core commands:
+
+- **`ariane doctor`** (implemented first) — a linter for the local deployment. It verifies that the central content clone exists, that every declared node's `_ariane` symlink resolves into the right subtree, that the global git excludes file contains the configured `dir_name`, that the config parses, and that each node has an `INDEX.md`. Run from anywhere, it diagnoses the whole tree; run inside a node, it focuses on it. Read-only: it validates by hand-made setups as well as CLI-made ones.
+- **`ariane init`** — bootstraps a machine: clones the user's content repository, creates the symlinks, adds `dir_name` to the global git excludes, materializes the config, and installs the registered skill packs.
+- **`ariane update`** — re-syncs an existing setup: refreshes links for new nodes and updates skill packs to their registered versions.
 
 ## Roadmap (v1)
 
 Each step is one reviewable PR:
 
 1. ~~Basic README~~ · ~~This plan~~
-2. `SPEC.md` — the concepts above, normatively specified
-3. `templates/` — `INDEX.md`, `story.md`, `task.md`, `conventions.md`, `config.toml`
-4. `agents/ariane/AGENT.md` + `adapters/claude/skills/ariane/SKILL.md` — the Ariane agent
-5. Reference instance — a documented walkthrough of bootstrapping a user's `_ariane` repository
-6. `ariane` CLI (Go, single static binary) — `ariane doctor`, the local deployment integrity linter
+2. Item lifecycle workshop — settle the lifecycle (§6), likely run as an elicitation/brainstorming session using BMAD's skills
+3. `SPEC.md` — the concepts above, normatively specified
+4. `templates/` — `INDEX.md`, `story.md`, `task.md`, `conventions.md`, `config.toml`
+5. `agents/ariane/AGENT.md` + `adapters/claude/skills/ariane/SKILL.md` — the Ariane agent
+6. Reference instance — a documented walkthrough of bootstrapping a user's `_ariane` repository
+7. `ariane` CLI (Go, single static binary) — `doctor` first, then `init` and `update`
 
-Later: more CLI commands (`ariane init`, `ariane link` to automate materialization), more adapters (AGENTS.md, Cursor, subagents), multi-user projects, migration guides.
+Later: more CLI commands (`ariane link` to materialize a new node), more adapters (AGENTS.md, Cursor, subagents), multi-user projects, migration guides.
 
 ## Positioning vs BMAD
 
 BMAD is ceremony-driven (PRD → architecture → epics → stories), greenfield-oriented, and ships a fixed cast of shared agent personas. Ariane is **file-driven** (`INDEX.md` is the source of truth), **brownfield-first** (continuous work on living projects), **hierarchical** (home → project → repo), and **decentralizes agents to the projects that own them**. Some BMAD ideas remain worth borrowing at the item level (story formats, course correction, retrospectives); they will be re-expressed within Ariane's structure rather than imported wholesale.
+
+They are **complementary, not exclusive**: an Ariane user can perfectly use BMAD. It is registered as a skill pack in the user's content repository and installed by `ariane init`/`update` (§7) — never vendored. As for BMAD's working folders (`_bmad/`, `_bmad_output/`): Ariane does not track stray tool folders. Either the user points BMAD's configurable output location **inside the node's materialized `_ariane/` directory** — and the central repository captures those artifacts like any other content — or they remain ephemeral and git-ignored. No conflict, one rule: persistent knowledge lives in `_ariane`, everything else is disposable.
