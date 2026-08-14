@@ -44,7 +44,23 @@ reflexion → backlog → task | story → archive
 
 Free-form thinking matures into backlog items, which get promoted to actionable tasks or stories, and end up archived — never deleted. `INDEX.md` reflects the live state at all times.
 
-> **Status: draft.** This lifecycle is a snapshot of the practice Ariane emerged from, not a settled decision. It is a foundation of the method and must be deliberately designed — see the roadmap: a dedicated elicitation workshop (a good use case for BMAD's brainstorming/elicitation skills) will settle it.
+Physically, each state is a directory inside the node's `_ariane/`, and an item is one file:
+
+```
+_ariane/
+  INDEX.md
+  reflexions/
+  backlog/
+  tasks/
+  stories/
+  archives/
+```
+
+Changing state means moving the file and updating the node's `INDEX.md`. Nothing is ever deleted: completed and abandoned items alike end up in `archives/`, and the trail stays in git.
+
+> **Status: state of the art, not a decision.** The lifecycle above is transcribed from a project-management directory in production use, where it governs the work of many repositories at once. It is the one part of the method proven by daily practice rather than designed, and it is recorded here so that the step 2 workshop challenges something real instead of starting from a blank page — not because it is settled.
+>
+> Known open points: whether `tasks/` and `stories/` are two directories or one with a typed header; whether `archives/` is per-node or centralized at the project level; whether every node carries all five directories or only the ones it uses; and how an item that concerns two nodes is placed. A dedicated elicitation workshop (a good use case for BMAD's brainstorming/elicitation skills) settles all of it — see the roadmap.
 
 ### 7. Agents and skills are owned per project
 
@@ -80,7 +96,7 @@ Core commands:
 Each step is one reviewable PR:
 
 1. ~~Basic README~~ · ~~This plan~~
-2. Item lifecycle workshop — settle the lifecycle (§6), likely run as an elicitation/brainstorming session using BMAD's skills
+2. Item lifecycle workshop — settle the lifecycle and its directory layout (§6), likely run as an elicitation/brainstorming session using BMAD's skills
 3. `SPEC.md` — the concepts above, normatively specified
 4. `templates/` — `INDEX.md`, `story.md`, `task.md`, `conventions.md`, `config.toml`
 5. `agents/ariane/AGENT.md` + `adapters/claude/skills/ariane/SKILL.md` — the Ariane agent
