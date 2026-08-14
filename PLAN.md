@@ -1,6 +1,6 @@
 # Ariane — Design Plan
 
-> This document is the founding plan of the method. It will progressively be superseded by `SPEC.md` as concepts get formalized, and by the issue tracker for the roadmap.
+> This document is the founding plan of the method. It will progressively be superseded by `SPEC.md` as concepts get formalized, and by the issue tracker for the roadmap. The decisions taken along the way — and, more importantly, the alternatives rejected and why — are recorded in [`docs/adr/`](docs/adr/).
 
 ## Why
 
