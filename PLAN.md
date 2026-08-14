@@ -58,7 +58,7 @@ TOML, versioned in the user's content repository: `config/config.toml`. First ke
 
 ### 10. Tooling: the `ariane` CLI
 
-Materialization relies on local state (a central clone, symlinks, a global git excludes entry) that can silently drift. The method therefore ships a small CLI, distributed as an npm package exposing an **`ariane` binary** (scoped name, e.g. `@slashome/ariane`, if the short name is unavailable). It is installed globally (`pnpm add -g`) so it works from any directory, or run ad hoc with `pnpm dlx` — never added as a dependency of host repositories, in line with the zero-footprint rule.
+Materialization relies on local state (a central clone, symlinks, a global git excludes entry) that can silently drift. The method therefore ships a small CLI: an **`ariane` binary written in Go** — a single static binary with no runtime dependency, because the tool that diagnoses a machine must not depend on that machine being healthy (or on Node being installed at all). Distributed through a Homebrew tap (`brew install slashome/tap/ariane`), GitHub Releases binaries, and `go install` — never added as a dependency of host repositories, in line with the zero-footprint rule.
 
 First command: **`ariane doctor`** — a linter for the local deployment. It verifies that the central content clone exists, that every declared node's `_ariane` symlink resolves into the right subtree, that the global git excludes file contains the configured `dir_name`, that the config parses, and that each node has an `INDEX.md`. Run from anywhere, it diagnoses the whole tree; run inside a node, it focuses on it.
 
@@ -71,7 +71,7 @@ Each step is one reviewable PR:
 3. `templates/` — `INDEX.md`, `story.md`, `task.md`, `conventions.md`, `config.toml`
 4. `agents/ariane/AGENT.md` + `adapters/claude/skills/ariane/SKILL.md` — the Ariane agent
 5. Reference instance — a documented walkthrough of bootstrapping a user's `_ariane` repository
-6. `ariane` CLI (npm) — `ariane doctor`, the local deployment integrity linter
+6. `ariane` CLI (Go, single static binary) — `ariane doctor`, the local deployment integrity linter
 
 Later: more CLI commands (`ariane init`, `ariane link` to automate materialization), more adapters (AGENTS.md, Cursor, subagents), multi-user projects, migration guides.
 
