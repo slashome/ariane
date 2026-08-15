@@ -16,7 +16,7 @@ The discomfort behind the question points at a real defect, though not where it 
 
 - **`init` acquires** what does not exist yet and cannot be derived from the declared state: the central clone, the materialization of the configuration, the line in the user's effective global excludes file. It runs once, it is interactive, and it touches files the user owns.
 - **`update` converges**: it makes the disk match the declared state. It runs often, non-interactively, idempotently. **It, and only it, creates a missing symlink.**
-- **`doctor` observes.** No write path anywhere in its code, and **no `--fix` flag**. Every finding names the exact command that repairs it, or states that the decision belongs to a human.
+- **`doctor` observes.** No write path anywhere in its code, and **no `--fix` flag**. Every finding names the exact command that repairs it — or, when the decision belongs to a human, **enumerates the resolutions available**. `human` is never a bare verdict: a finding that says only "your call" is the polite form of "work it out yourself", and that is precisely how a diagnostic drifts into the list of recommendations nobody reads. Ariane chooses none of them and executes none of them; it lays them out.
 
 And the structural consequence: **`init` does not implement link placement, it calls `update`'s convergence engine after bootstrapping.** `init` ≡ *bootstrap* + `update`. Exactly one piece of code knows how to make the disk match the declaration.
 
