@@ -40,6 +40,7 @@ A closing *Revisit if* section names the conditions under which the decision wou
 | [0003](0003-no-git-hooks.md) | Use no git hooks, and enumerate worktrees on demand | Accepted | 2026-08-15 |
 | [0004](0004-write-or-judge.md) | Separate the commands that write from the command that judges | Proposed | 2026-08-15 |
 | [0005](0005-write-ariane-in-rust.md) | Write the `ariane` CLI in Rust | Accepted | 2026-08-15 |
+| [0006](0006-skill-pack-placement.md) | Declare skill packs per node, install them once at user level | Accepted | 2026-08-15 |
 
 ## Adding one
 
