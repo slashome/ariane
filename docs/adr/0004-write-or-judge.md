@@ -27,7 +27,15 @@ Two properties are stated as requirements rather than intentions:
 
 Exit codes are monotone in *how much human involvement is required*: `0` healthy · `1` findings `ariane update` repairs on its own · `2` findings needing a human decision · `3` the diagnosis itself could not be performed. `--json` is the interface the agent consumes; `--strict` promotes warnings to errors for CI.
 
-## Alternatives rejected
+## Consequences
+
+- Three commands with three verbs, and no flag can blur them.
+- `doctor` is safe to run in a loop, from a script, from CI, or from an agent under a standing permission — which is what makes the agent able to know the state of the deployment at all.
+- A check that cannot name its remedy is not a check but an opinion, and gets deleted. This is the rule that keeps `doctor` from drifting into a list of recommendations nobody reads.
+- Ariane gains a fourth command, `ariane adopt`, for the one situation `update` will never resolve on its own.
+- Some findings are permanently unfixable by the CLI — a host repository negating the exclusion, a back-pointer contradicting the mirror position, a real directory in place of a link. They exit `2` and stop automation, by design.
+
+## Alternatives considered
 
 ### `doctor --fix`
 
@@ -65,14 +73,6 @@ Two related facts, both verified, both of which would have produced silent bugs:
 
 - **The pattern must be `_ariane`, never `_ariane/`.** A trailing slash matches directories only, and a symlink to a directory is not a directory for git. The materialization would not be ignored, silently — and a `grep _ariane` check would happily validate the broken file. This is the proof by example that the *property* must be tested, not the presence of a line.
 - **`git check-ignore` exits 0 on a negated pattern**, i.e. on a path that is *not* ignored (`.gitignore:20:!.env.example` → exit 0). The exit code alone is a false test; the pattern field must be parsed. `--no-index` is mandatory, otherwise a tracked path is reported as unignored with no rule at all.
-
-## Consequences
-
-- Three commands with three verbs, and no flag can blur them.
-- `doctor` is safe to run in a loop, from a script, from CI, or from an agent under a standing permission — which is what makes the agent able to know the state of the deployment at all.
-- A check that cannot name its remedy is not a check but an opinion, and gets deleted. This is the rule that keeps `doctor` from drifting into a list of recommendations nobody reads.
-- Ariane gains a fourth command, `ariane adopt`, for the one situation `update` will never resolve on its own.
-- Some findings are permanently unfixable by the CLI — a host repository negating the exclusion, a back-pointer contradicting the mirror position, a real directory in place of a link. They exit `2` and stop automation, by design.
 
 ## Revisit if
 

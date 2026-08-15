@@ -29,7 +29,14 @@ Behind it sits the general rule this decision exists to enforce:
 > **What must hold invariably is the CLI's job to verify. What requires judgement is the agent's.**
 > An agent instruction is best-effort by nature and carries no guarantee. If the violation of a rule is detectable by a program, it must be detected by one.
 
-## Alternatives rejected
+## Consequences
+
+- Ariane writes nothing inside a host repository — no `.gitignore`, no `.git/info/exclude`, no `.git/config`, no hook, no `core.hooksPath`. This becomes a prohibition, not a preference.
+- The link appears in a new worktree at the next `ariane update`, not at the instant the worktree is created. There is a window during which an agent launched in that worktree finds no node. Accepted: the failure is loud (no node found) rather than silent, and the remedy is one command.
+- git maintains the worktree registry itself and marks stale entries `prunable`, so Ariane needs no state of its own to track materializations.
+- The "is `_ariane` ignored here" check becomes cheap and repeatable by construction, since it can never be cached.
+
+## Alternatives considered
 
 ### A `post-checkout` hook, installed per repository
 
@@ -52,13 +59,6 @@ Rejected as a *sole* mechanism: it depends on remembering, so it will fail event
 ### Scanning the disk for directories that look like nodes
 
 Rejected: slow, noisy (`~/Documents`, `~/Zomboid`), and asking the wrong question. "Should this directory be a node, and under which project?" is logical placement — judgement, therefore the agent's (§5). A bounded `doctor --scan` may list candidates as information, never as an error, never by default.
-
-## Consequences
-
-- Ariane writes nothing inside a host repository — no `.gitignore`, no `.git/info/exclude`, no `.git/config`, no hook, no `core.hooksPath`. This becomes a prohibition, not a preference.
-- The link appears in a new worktree at the next `ariane update`, not at the instant the worktree is created. There is a window during which an agent launched in that worktree finds no node. Accepted: the failure is loud (no node found) rather than silent, and the remedy is one command.
-- git maintains the worktree registry itself and marks stale entries `prunable`, so Ariane needs no state of its own to track materializations.
-- The "is `_ariane` ignored here" check becomes cheap and repeatable by construction, since it can never be cached.
 
 ## Revisit if
 

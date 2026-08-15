@@ -1,4 +1,4 @@
-# ADR-NNNN — Title in one line
+# ADR-NNNN — Imperative title in one line
 
 - **Status:** Proposed
 - **Date:** YYYY-MM-DD
@@ -12,15 +12,15 @@ What forces a decision here. The constraints that are not negotiable, and the on
 
 What is decided, stated so that someone can implement it without reading the rest of this file.
 
-## Alternatives rejected
+## Consequences
+
+What this costs, what it makes easy, and what it forecloses. The negative effects belong here as much as the positive ones — an ADR that costs nothing is usually an ADR that settled nothing.
+
+## Alternatives considered
 
 ### Option — one line naming it
 
 Why it was attractive, and the precise thing that kills it. Not "it was less good": the failure case, the collision, the precedent that shows it does not survive contact.
-
-## Consequences
-
-What this costs, what it makes easy, and what it forecloses. Include the consequences that are unwelcome — an ADR listing only benefits is a sales pitch.
 
 ## Revisit if
 

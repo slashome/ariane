@@ -22,7 +22,15 @@ Three properties come with it:
 
 Keeping it current is a line of the Ariane agent's mandate (`AGENT.md`), not a separate skill.
 
-## Alternatives rejected
+## Consequences
+
+- The method has no exception to zero-footprint. Anyone reading §4 can rely on it without qualification.
+- A collaborator who does not use Ariane gets nothing. Accepted for v1; if multi-user work later requires an exchange surface, it is a new decision superseding this one, not a reopening of §4.
+- `doctor` gains a staleness check: a handoff whose receipt names a commit older than the node's current head means work has landed since the last one was picked up.
+- The receipt line's format (machine, date, commit) becomes part of the specification, since `doctor` parses it.
+- The handoff template of roadmap step 4 has a proven structure to borrow from rather than one to invent.
+
+## Alternatives considered
 
 ### Committed at the root of the host repository (the original §11)
 
@@ -49,14 +57,6 @@ Rejected because §7 ships exactly one agent and puts skills under project owner
 ### Keeping the name `RESUME.md`
 
 At the root of an English repository it reads as a CV before it reads as "resume the work". `HANDOFF` was already the section's own word — *the baton handed over at the boundary* — and it names an existing protocol family (relay handoff, telecom handoff, clinical shift handoff) rather than inventing one. Renaming cost nothing before the template of roadmap step 4 exists.
-
-## Consequences
-
-- The method has no exception to zero-footprint. Anyone reading §4 can rely on it without qualification.
-- A collaborator who does not use Ariane gets nothing. Accepted for v1; if multi-user work later requires an exchange surface, it is a new decision superseding this one, not a reopening of §4.
-- `doctor` gains a staleness check: a handoff whose receipt names a commit older than the node's current head means work has landed since the last one was picked up.
-- The receipt line's format (machine, date, commit) becomes part of the specification, since `doctor` parses it.
-- The handoff template of roadmap step 4 has a proven structure to borrow from rather than one to invent.
 
 ## Revisit if
 

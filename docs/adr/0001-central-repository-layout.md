@@ -37,7 +37,16 @@ Four parts, none optional:
 
 On node names: **forbid rather than encode.** A node is a project or a repository; there is no legitimate reason for it to be named `.github`, contain a space, or run to 200 characters. `doctor` refuses such names with an explicit error rather than transforming them silently, and flags sibling nodes differing only in case (APFS is case-insensitive here — verified: `/Users/ALUCARD/workspace` resolves). chezmoi encodes because it *must* accept pre-existing dotfiles; Ariane has no such debt and must not adopt it.
 
-## Alternatives rejected
+## Consequences
+
+- The central repository is readable without any tool: an agent dropped into it understands the tree by reading it, which is the `INDEX.md` principle applied to the directory structure itself.
+- The reverse lookup `doctor` depends on is a prefix subtraction — exact, O(1), and impossible to desynchronize from the forward mapping.
+- Renaming or moving a node moves files and produces rename commits. Accepted: renames are rare, and `update` handles the relink.
+- Intermediate nodes always exist as directories. They are never empty in git's sense, since §2 requires an `INDEX.md` per node.
+- Reserved names at the root of the central repository (`tree/`, `config/`, `registry.toml`) must be specified, along with the behaviour when a project carries one of those names.
+- macOS case-insensitivity and NFD/NFC normalization become `doctor`'s problem (`core.precomposeunicode`), not a naming scheme's.
+
+## Alternatives considered
 
 ### Flat directories, name derived from the path (file-based-routing style)
 
@@ -69,15 +78,6 @@ Finally, it loses the hierarchy inside the central repository. §1 makes the tre
 ### The "history is preserved" argument for flat layouts
 
 Rejected on a factual basis: git does not store renames, it detects them by similarity. `git mv` of a subtree followed by `git log --follow` restores the history. Renaming a node under the mirror costs one `git mv` and one `ln -sfn`, both of which `ariane update` performs on its own.
-
-## Consequences
-
-- The central repository is readable without any tool: an agent dropped into it understands the tree by reading it, which is the `INDEX.md` principle applied to the directory structure itself.
-- The reverse lookup `doctor` depends on is a prefix subtraction — exact, O(1), and impossible to desynchronize from the forward mapping.
-- Renaming or moving a node moves files and produces rename commits. Accepted: renames are rare, and `update` handles the relink.
-- Intermediate nodes always exist as directories. They are never empty in git's sense, since §2 requires an `INDEX.md` per node.
-- Reserved names at the root of the central repository (`tree/`, `config/`, `registry.toml`) must be specified, along with the behaviour when a project carries one of those names.
-- macOS case-insensitivity and NFD/NFC normalization become `doctor`'s problem (`core.precomposeunicode`), not a naming scheme's.
 
 ## Revisit if
 
