@@ -71,9 +71,63 @@ Materialization relies on local state (a central clone, symlinks, a global git e
 
 Core commands:
 
-- **`ariane doctor`** (implemented first) — a linter for the local deployment. It verifies that the central content clone exists, that every declared node's `_ariane` symlink resolves into the right subtree, that the global git excludes file contains the configured `dir_name`, that the config parses, and that each node has an `INDEX.md`. Run from anywhere, it diagnoses the whole tree; run inside a node, it focuses on it. Read-only: it validates by hand-made setups as well as CLI-made ones.
+- **`ariane doctor`** (implemented first) — a linter for the local deployment. It verifies that the central content clone exists, that every declared node's `_ariane` symlink resolves into the right subtree, that the global git excludes file contains the configured `dir_name`, that the config parses, that each node has an `INDEX.md`, and that no node's `HANDOFF.md` (§11) is stale — a handoff whose receipt names a commit older than the node's current head means work has landed since the last one was picked up. Run from anywhere, it diagnoses the whole tree; run inside a node, it focuses on it. Read-only: it validates by hand-made setups as well as CLI-made ones.
 - **`ariane init`** — bootstraps a machine: clones the user's content repository, creates the symlinks, adds `dir_name` to the global git excludes, materializes the config, and installs the registered skill packs.
 - **`ariane update`** — re-syncs an existing setup: refreshes links for new nodes and updates skill packs to their registered versions.
+
+### 11. `HANDOFF.md` — passing the work on
+
+Everything above records what a node **is**: its state, its items, its decisions. None of it records what is **in flight** — the half-finished change, the question waiting on an answer, the assumption that has not been checked yet, the reason the obvious approach was abandoned an hour ago. That knowledge exists only in the session that produced it and dies with it. Whoever comes next — the user on another machine, a fresh agent session, the same user in three weeks — restarts from the code, which records what was *built* and never what was being *attempted*.
+
+Ariane therefore defines one conventional file per node, **`HANDOFF.md`**, holding the live state of the work in progress.
+
+**It is hosted like everything else.** It lives in the central content repository at its node, materialized through the node's `_ariane/` directory, and is **never committed into the host repository** — §4 and §5 apply to it unchanged. The zero-footprint rule has no exception.
+
+#### Its normal state is empty
+
+Three states must stay distinguishable, because confusing the last two is what costs a day of work:
+
+| The file | Means |
+|---|---|
+| absent | this node has never handed anything over |
+| a receipt line only | nothing in flight — the last handoff was picked up |
+| content | work is in flight, read it before anything else |
+
+A consumed handoff is emptied down to a receipt: **who picked it up, when, and at which commit.** The commit is the part that matters — "picked up on 14 August" says nothing about whether work happened since, while a commit lets `ariane doctor` state that twenty-three commits have landed since the last handoff was consumed, and that the node has been running blind ever since.
+
+#### Why not a section of `INDEX.md`
+
+Because they are not two contents, they are **two incompatible writing disciplines**:
+
+| | `INDEX.md` | `HANDOFF.md` |
+|---|---|---|
+| Written by | editing, accumulating, curating | wholesale replacement |
+| Emptied | never | routinely — that is its resting state |
+| Lifetime | that of the node | that of a session |
+
+Putting a *replace-this-whole-block-every-time* region inside a *preserve-and-enrich* file, and handing it to an agent, is how durable memory eventually leaves with the replacement. Two files means two writing regimes, and a truncation can then never reach the memory. This is a safety argument, not a stylistic one.
+
+#### Structure: borrowed from clinical handoff
+
+The problem is not new, and the field that took it most seriously is medicine: a *shift handoff* transfers a patient between two teams, and information lost at that boundary kills people. The answer there is a short document with a fixed structure — SBAR. Ariane takes the same four movements:
+
+- **Situation** — where the work stands right now, in one or two sentences.
+- **Background** — how it got here: what landed, what was decided, and *where that decision is recorded* — a pointer, never a copy.
+- **Assessment** — what is blocked and on whose decision, what is uncertain, and above all what is **verified** versus what is merely **asserted**.
+- **Recommendation** — the next action, concretely, and what to do first.
+
+Four rules keep it honest:
+
+1. **It is a snapshot, not a log.** Rewritten wholesale, never appended to. The reader must find the current state, not reconstruct it from entries.
+2. **It never becomes a second source of truth.** Decisions, stories and conventions live in `_ariane/` and are pointed at, never copied. Where a fact exists in both, the durable artifact wins.
+3. **It is written or emptied in the same commit as the work it describes.** A stale handoff is worse than none: it is trusted, and it lies.
+4. **What was verified carries its proof.** "The suite passes", "the check is green", "it is deployed" each carry the command that proves it, so the next reader re-runs instead of believing.
+
+#### Whose job it is
+
+Reading the handoff when a session opens, consuming it down to its receipt, and writing it before a session ends belong to the **mandate of the Ariane agent** (§7) — defined in `AGENT.md` and exposed by the adapters (§8). Not a separate skill: the method ships one agent, and skills are owned by projects. A method-level skill would be a third kind of shipped artifact whose authority over `AGENT.md` would have to be defined, for no gain.
+
+`INDEX.md` and `HANDOFF.md` must not be merged: one is the durable, cumulative state of a node, the other the volatile state of one session's work in flight. One is memory, the other is a baton.
 
 ## Roadmap (v1)
 
@@ -82,7 +136,7 @@ Each step is one reviewable PR:
 1. ~~Basic README~~ · ~~This plan~~
 2. Item lifecycle workshop — settle the lifecycle (§6), likely run as an elicitation/brainstorming session using BMAD's skills
 3. `SPEC.md` — the concepts above, normatively specified
-4. `templates/` — `INDEX.md`, `story.md`, `task.md`, `conventions.md`, `config.toml`
+4. `templates/` — `INDEX.md`, `HANDOFF.md` (§11), `story.md`, `task.md`, `conventions.md`, `config.toml`
 5. `agents/ariane/AGENT.md` + `adapters/claude/skills/ariane/SKILL.md` — the Ariane agent
 6. Reference instance — a documented walkthrough of bootstrapping a user's `_ariane` repository
 7. `ariane` CLI (Go, single static binary) — `doctor` first, then `init` and `update`
