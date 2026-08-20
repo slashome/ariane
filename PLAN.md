@@ -87,7 +87,7 @@ Materialization relies on local state (a central clone, symlinks, a global git e
 
 Core commands:
 
-- **`ariane doctor`** (implemented first) — a linter for the local deployment. It verifies that the central content clone exists, that every declared node's `_ariane` symlink resolves into the right subtree, that the global git excludes file contains the configured `dir_name`, that the config parses, that each node has an `INDEX.md`, and that no node's `HANDOFF.md` (§11) is stale — a handoff whose receipt names a commit older than the node's current head means work has landed since the last one was picked up. Run from anywhere, it diagnoses the whole tree; run inside a node, it focuses on it. Read-only: it validates by hand-made setups as well as CLI-made ones.
+- **`ariane doctor`** (implemented first) — a linter for the local deployment. It verifies that the central content clone exists, that every declared node's `_ariane` symlink resolves into the right subtree, that the global git excludes file contains the configured `dir_name`, that the config parses, and that each node has an `INDEX.md`. Run from anywhere, it diagnoses the whole tree; run inside a node, it focuses on it. Read-only: it validates by hand-made setups as well as CLI-made ones.
 - **`ariane init`** — bootstraps a machine: clones the user's content repository, creates the symlinks, adds `dir_name` to the global git excludes, materializes the config, and installs the registered skill packs.
 - **`ariane update`** — re-syncs an existing setup: refreshes links for new nodes and updates skill packs to their registered versions.
 
@@ -109,7 +109,9 @@ Three states must stay distinguishable, because confusing the last two is what c
 | a receipt line only | nothing in flight — the last handoff was picked up |
 | content | work is in flight, read it before anything else |
 
-A consumed handoff is emptied down to a receipt: **who picked it up, when, and at which commit.** The commit is the part that matters — "picked up on 14 August" says nothing about whether work happened since, while a commit lets `ariane doctor` state that twenty-three commits have landed since the last handoff was consumed, and that the node has been running blind ever since.
+A consumed handoff is emptied down to a receipt: **who picked it up, when, and at which commit.** The commit is the part that matters — "picked up on 14 August" says nothing about whether work happened since, while a commit says exactly where the last resumption started from.
+
+That receipt is a forensic record, not a monitored value. It once justified a `doctor` check — *twenty-three commits have landed since the last handoff was consumed, the node has been running blind* — and [ADR-0007](docs/adr/0007-write-the-handoff-on-request.md) removes it: once writing is on request, a node accumulating commits without a handoff is the **normal** case, not an anomaly. The warning would fire on every healthy node and be trained away.
 
 #### Why not a section of `INDEX.md`
 
