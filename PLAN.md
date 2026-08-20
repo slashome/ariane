@@ -61,6 +61,8 @@ Changing state means moving the file and updating the node's `INDEX.md`. Nothing
 > **Status: state of the art, not a decision.** The lifecycle above is transcribed from a project-management directory in production use, where it governs the work of many repositories at once. It is the one part of the method proven by daily practice rather than designed, and it is recorded here so that the step 2 workshop challenges something real instead of starting from a blank page — not because it is settled.
 >
 > Known open points: whether `tasks/` and `stories/` are two directories or one with a typed header; whether `archives/` is per-node or centralized at the project level; whether every node carries all five directories or only the ones it uses; and how an item that concerns two nodes is placed. A dedicated elicitation workshop (a good use case for BMAD's brainstorming/elicitation skills) settles all of it — see the roadmap.
+>
+> One more, and this one is measured rather than suspected: **an item's state is not readable without reading the item.** The directories above carry the lifecycle state, but status and priority live in free prose inside the file — `> Créée : … — statut : …` in one, `- **Priorité** : …` in another, nothing at all in a third. On the reference instance, **44% of live items** (27 of 61) expose no status a tool can parse; the count comes from the prototype in [`tools/`](tools/), which had to guess. Whatever the workshop decides about the directories, `templates/` (roadmap step 4) has to settle the **item header** — the small set of fields every item carries, in one place, in one form.
 
 ### 7. Agents and skills are owned per project
 
@@ -83,13 +85,16 @@ Either way, `ariane doctor` only checks that the file exists and parses.
 
 ### 10. Tooling: the `ariane` CLI
 
-Materialization relies on local state (a central clone, symlinks, a global git excludes entry) that can silently drift. The method therefore ships a small CLI: an **`ariane` binary written in Go** — a single static binary with no runtime dependency, because the tool that diagnoses a machine must not depend on that machine being healthy (or on Node being installed at all). Distributed through a Homebrew tap (`brew install slashome/tap/ariane`), GitHub Releases binaries, and `go install` — never added as a dependency of host repositories, in line with the zero-footprint rule.
+Materialization relies on local state (a central clone, symlinks, a global git excludes entry) that can silently drift. The method therefore ships a small CLI: an **`ariane` binary written in Rust** ([ADR-0005](docs/adr/0005-write-ariane-in-rust.md)) — a single static binary with no runtime dependency, because the tool that diagnoses a machine must not depend on that machine being healthy (or on Node being installed at all). Distributed through a Homebrew tap (`brew install slashome/tap/ariane`) and GitHub Releases binaries — never added as a dependency of host repositories, in line with the zero-footprint rule.
+
+> The no-runtime-dependency argument above is **not** what chose the language: it is equally true of Go, Rust, Zig and C, and it rules out Node and Python without separating the candidates that were actually in contention. ADR-0005 settles that separately, on the ground that Ariane's closed set is on the *output* side — the finding-to-remedy contract of [ADR-0004](docs/adr/0004-write-or-judge.md) — and it drops the `go install` channel this section used to advertise.
 
 Core commands:
 
 - **`ariane doctor`** (implemented first) — a linter for the local deployment. It verifies that the central content clone exists, that every declared node's `_ariane` symlink resolves into the right subtree, that the global git excludes file contains the configured `dir_name`, that the config parses, and that each node has an `INDEX.md`. Run from anywhere, it diagnoses the whole tree; run inside a node, it focuses on it. Read-only: it validates by hand-made setups as well as CLI-made ones.
 - **`ariane init`** — bootstraps a machine: clones the user's content repository, creates the symlinks, adds `dir_name` to the global git excludes, materializes the config, and installs the registered skill packs.
 - **`ariane update`** — re-syncs an existing setup: refreshes links for new nodes and updates skill packs to their registered versions.
+- **`ariane tasks`** — the one read command: every item of the tree in a single cross-cutting view, which no `INDEX.md` can give. Each index answers for its own node — that is §2 working as designed — but *"what is on my plate, everywhere at once"* crosses them all, and nothing in the method answers it today. A throwaway prototype lives in [`tools/`](tools/) until this ships, and it is deleted when it does.
 
 ### 11. `HANDOFF.md` — passing the work on
 
