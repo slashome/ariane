@@ -87,7 +87,7 @@ Materialization relies on local state (a central clone, symlinks, a global git e
 
 Core commands:
 
-- **`ariane doctor`** (implemented first) — a linter for the local deployment. It verifies that the central content clone exists, that every declared node's `_ariane` symlink resolves into the right subtree, that the global git excludes file contains the configured `dir_name`, that the config parses, that each node has an `INDEX.md`, and that no node's `HANDOFF.md` (§11) is stale — a handoff whose receipt names a commit older than the node's current head means work has landed since the last one was picked up. Run from anywhere, it diagnoses the whole tree; run inside a node, it focuses on it. Read-only: it validates by hand-made setups as well as CLI-made ones.
+- **`ariane doctor`** (implemented first) — a linter for the local deployment. It verifies that the central content clone exists, that every declared node's `_ariane` symlink resolves into the right subtree, that the global git excludes file contains the configured `dir_name`, that the config parses, and that each node has an `INDEX.md`. Run from anywhere, it diagnoses the whole tree; run inside a node, it focuses on it. Read-only: it validates by hand-made setups as well as CLI-made ones.
 - **`ariane init`** — bootstraps a machine: clones the user's content repository, creates the symlinks, adds `dir_name` to the global git excludes, materializes the config, and installs the registered skill packs.
 - **`ariane update`** — re-syncs an existing setup: refreshes links for new nodes and updates skill packs to their registered versions.
 
@@ -109,7 +109,9 @@ Three states must stay distinguishable, because confusing the last two is what c
 | a receipt line only | nothing in flight — the last handoff was picked up |
 | content | work is in flight, read it before anything else |
 
-A consumed handoff is emptied down to a receipt: **who picked it up, when, and at which commit.** The commit is the part that matters — "picked up on 14 August" says nothing about whether work happened since, while a commit lets `ariane doctor` state that twenty-three commits have landed since the last handoff was consumed, and that the node has been running blind ever since.
+A consumed handoff is emptied down to a receipt: **who picked it up, when, and at which commit.** The commit is the part that matters — "picked up on 14 August" says nothing about whether work happened since, while a commit says exactly where the last resumption started from.
+
+That receipt is a forensic record, not a monitored value. It once justified a `doctor` check — *twenty-three commits have landed since the last handoff was consumed, the node has been running blind* — and [ADR-0007](docs/adr/0007-write-the-handoff-on-request.md) removes it: once writing is on request, a node accumulating commits without a handoff is the **normal** case, not an anomaly. The warning would fire on every healthy node and be trained away.
 
 #### Why not a section of `INDEX.md`
 
@@ -141,7 +143,9 @@ Four rules keep it honest:
 
 #### Whose job it is
 
-Reading the handoff when a session opens, consuming it down to its receipt, and writing it before a session ends belong to the **mandate of the Ariane agent** (§7) — defined in `AGENT.md` and exposed by the adapters (§8). Not a separate skill: the method ships one agent, and skills are owned by projects. A method-level skill would be a third kind of shipped artifact whose authority over `AGENT.md` would have to be defined, for no gain.
+Reading the handoff when a session opens, consuming it down to its receipt, and writing it belong to the **mandate of the Ariane agent** (§7) — defined in `AGENT.md` and exposed by the adapters (§8). Not a separate skill: the method ships one agent, and skills are owned by projects. A method-level skill would be a third kind of shipped artifact whose authority over `AGENT.md` would have to be defined, for no gain.
+
+**Reading is automatic; writing is on request.** Ariane reads the handoff whenever a session opens, because a session opening is observable. She writes it only when the user asks — [ADR-0007](docs/adr/0007-write-the-handoff-on-request.md). The trigger this section first proposed, *before a session ends*, is not observable from inside an agent: it sees a turn stop, not a session close, and above all it cannot know whether what follows is a coffee break or another machine. Only the user knows that. Left as an instruction, it degrades to *write on every session*, which contradicts both the resting state above and rule 2 below — the handoff starts duplicating what the items already record, and rule 3 then applies to it: it is trusted, and it lies.
 
 `INDEX.md` and `HANDOFF.md` must not be merged: one is the durable, cumulative state of a node, the other the volatile state of one session's work in flight. One is memory, the other is a baton.
 
