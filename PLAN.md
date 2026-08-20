@@ -141,7 +141,9 @@ Four rules keep it honest:
 
 #### Whose job it is
 
-Reading the handoff when a session opens, consuming it down to its receipt, and writing it before a session ends belong to the **mandate of the Ariane agent** (§7) — defined in `AGENT.md` and exposed by the adapters (§8). Not a separate skill: the method ships one agent, and skills are owned by projects. A method-level skill would be a third kind of shipped artifact whose authority over `AGENT.md` would have to be defined, for no gain.
+Reading the handoff when a session opens, consuming it down to its receipt, and writing it belong to the **mandate of the Ariane agent** (§7) — defined in `AGENT.md` and exposed by the adapters (§8). Not a separate skill: the method ships one agent, and skills are owned by projects. A method-level skill would be a third kind of shipped artifact whose authority over `AGENT.md` would have to be defined, for no gain.
+
+**Reading is automatic; writing is on request.** Ariane reads the handoff whenever a session opens, because a session opening is observable. She writes it only when the user asks — [ADR-0007](docs/adr/0007-write-the-handoff-on-request.md). The trigger this section first proposed, *before a session ends*, is not observable from inside an agent: it sees a turn stop, not a session close, and above all it cannot know whether what follows is a coffee break or another machine. Only the user knows that. Left as an instruction, it degrades to *write on every session*, which contradicts both the resting state above and rule 2 below — the handoff starts duplicating what the items already record, and rule 3 then applies to it: it is trusted, and it lies.
 
 `INDEX.md` and `HANDOFF.md` must not be merged: one is the durable, cumulative state of a node, the other the volatile state of one session's work in flight. One is memory, the other is a baton.
 

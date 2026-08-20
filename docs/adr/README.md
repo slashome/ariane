@@ -41,6 +41,7 @@ A closing *Revisit if* section names the conditions under which the decision wou
 | [0004](0004-write-or-judge.md) | Separate the commands that write from the command that judges | Proposed | 2026-08-15 |
 | [0005](0005-write-ariane-in-rust.md) | Write the `ariane` CLI in Rust | Accepted | 2026-08-15 |
 | [0006](0006-skill-pack-placement.md) | Declare skill packs per node, install them once at user level | Accepted | 2026-08-15 |
+| [0007](0007-write-the-handoff-on-request.md) | Write `HANDOFF.md` on explicit request, never on session end | Accepted | 2026-08-20 |
 
 ## Adding one
 
