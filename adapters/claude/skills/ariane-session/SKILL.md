@@ -1,106 +1,106 @@
 ---
 name: ariane-session
-description: Met à jour le registre des fils de travail (sessions/) d'un nœud Ariane depuis la conversation en cours — range ce qui a été tranché, ouvre un fil si le sujet n'en a pas, signale ceux dont la condition d'archivage est remplie. À invoquer en fin de session, ou quand une conversation a manifestement dérivé sur plusieurs sujets.
+description: Updates the registry of work threads (sessions/) of an Ariane node from the current conversation — files what was settled, opens a thread when a topic has none, flags the threads whose archiving condition is met. Invoke at the end of a session, or when a conversation has clearly drifted across several topics.
 ---
 
 # ariane-session
 
-Le dossier `sessions/` d'un nœud répond à une question qu'aucun autre n'adresse :
-**« dans quelle conversation est-ce que j'ouvre ça ? »**
+A node's `sessions/` directory answers a question no other one addresses:
+**"in which conversation do I pick this up?"**
 
-Un fil est une **lignée de conversations**, pas un sujet. Il a une frontière, un
-état, une condition d'archivage. Ce skill l'entretient.
+A thread is a **lineage of conversations**, not a topic. It has a boundary, a
+state, and an archiving condition. This skill maintains it.
 
-## Ce que ce dossier n'est pas
+## What this directory is not
 
-Ne recopie **rien** ici. Le nœud a déjà trois endroits, et ils gardent leur rôle :
+Copy **nothing** here. The node already has three places, and they keep their role:
 
-| | Répond à |
+| | Answers |
 |---|---|
-| `reflexions/` | *qu'est-ce qu'on décide sur ce sujet ?* |
-| `tasks/`, `stories/` | *qu'est-ce qu'on fait ?* |
-| `HANDOFF.md` | *où en est-on à l'instant ?* |
+| `reflexions/` | *what do we decide on this topic?* |
+| `tasks/`, `stories/` | *what do we do?* |
+| `HANDOFF.md` | *where are we right now?* |
 
-Une fiche de fil **pointe** vers eux et dit ce qui reste ouvert. Si tu te
-surprends à expliquer un raisonnement dans `sessions/`, il va dans `reflexions/`.
+A thread file **points** to them and says what remains open. If you catch
+yourself explaining reasoning in `sessions/`, it belongs in `reflexions/`.
 
-## La procédure
+## Procedure
 
-### 1. Situer
+### 1. Locate
 
-Lis `sessions/INDEX.md` du nœud concerné. S'il n'existe pas, va au point 5.
+Read the node's `sessions/INDEX.md`. If it does not exist, go to step 5.
 
-Détermine à quel fil appartient ce qui vient d'être fait. **Une conversation peut
-en toucher plusieurs** — c'est même le cas normal, et c'est précisément ce qu'il
-faut consigner séparément plutôt que d'écrire un résumé unique.
+Determine which thread what was just done belongs to. **A conversation can touch
+several** — that is the normal case, and it is exactly what must be recorded
+separately rather than as a single summary.
 
-### 2. Ranger ce qui a été tranché
+### 2. File what was settled
 
-Pour chaque fil touché, dans sa fiche :
+For each thread touched, in its file:
 
-- déplace en **« Ce qui est tranché »** ce qui l'a été, en une ligne, avec son
-  motif. Pas le raisonnement — le motif ;
-- retire de **« Ce qui reste ouvert »** ce qui ne l'est plus ;
-- ajoute ce qui s'est ouvert pendant la session ;
-- mets l'état à jour dans l'en-tête **et** dans le tableau de `INDEX.md`.
+- move to **"Settled"** what was settled, in one line, with its reason. Not the
+  reasoning — the reason;
+- remove from **"Still open"** what no longer is;
+- add what opened during the session;
+- update the state in the header **and** in the `INDEX.md` table.
 
-**Une décision qui a coûté cher à prendre mérite une ADR ou une réflexion, pas une
-ligne de fiche.** Écris-la là, et fais pointer la fiche vers elle.
+**A decision that was costly to reach deserves an ADR or a reflection, not a line
+in a thread file.** Write it there, and point the thread file to it.
 
-### 3. Vérifier les conditions d'archivage
+### 3. Check archiving conditions
 
-Chaque fiche porte une condition en dernière section. Elle doit être
-**vérifiable** : « les six écrans existent », pas « le design est fini ».
+Every thread file carries a condition in its last section. It must be
+**verifiable**: "the six screens exist", not "the design is done".
 
-Pour chaque fil, y compris ceux que la session n'a pas touchés : la condition
-est-elle remplie ? Si oui, **ne l'archive pas toi-même** — signale-le au
-propriétaire avec ce qui le prouve. L'archivage est une décision.
+For every thread, including those the session did not touch: is the condition
+met? If so, **do not archive it yourself** — report it to the owner with the
+evidence. Archiving is a decision.
 
-Quand il est décidé : la fiche part dans `archives/sessions/` du nœud, la ligne
-de l'`INDEX.md` la suit avec sa date. **Rien n'est supprimé.**
+Once decided: the file moves to the node's `archives/sessions/`, and its
+`INDEX.md` line follows with its date. **Nothing is deleted.**
 
-### 4. Repérer un fil qui aurait dû exister
+### 4. Spot a thread that should have existed
 
-Si la session a traité un sujet qui n'appartient à aucun fil, c'est le signal
-d'un fil manquant. **Le critère est unique :**
+If the session dealt with a topic that belongs to no thread, that signals a
+missing thread. **There is a single criterion:**
 
-> Un fil mérite d'exister quand **il peut avancer sans les autres**.
+> A thread deserves to exist when **it can move forward without the others**.
 
-Il se vérifie. Si ouvrir un sujet oblige à rouvrir un autre fil, les deux n'en
-font qu'un — n'en crée pas un second. Et une dépendance à sens unique n'est pas
-une fusion : un écran a besoin d'un modèle, un modèle n'a jamais besoin d'écran.
+It is verifiable. If opening a topic forces another thread to reopen, the two are
+one — do not create a second. And a one-way dependency is not a merge: a screen
+needs a model, a model never needs a screen.
 
-Propose le fil, ne le crée pas sans accord.
+Propose the thread; do not create it without agreement.
 
-### 5. Créer le dossier, s'il n'existe pas
+### 5. Create the directory if it does not exist
 
-`sessions/INDEX.md` avec le tableau des fils et la règle de séparation, puis une
-fiche par fil. Le gabarit d'une fiche :
+`sessions/INDEX.md` with the table of threads and the separation rule, then one
+file per thread. The thread file template:
 
 ```markdown
 ---
-node: <chemin/du/noeud>
+node: <path/of/the/node>
 ---
 
-# <Nom du fil>
+# <Thread name>
 
-> <état + date>. <une phrase qui dit pourquoi il est dans cet état>
+> <state + date>. <one sentence saying why it is in that state>
 
-## Ce qu'on y traite
-## Où vit le travail
-## Ce qui est tranché
-## Ce qui reste ouvert
-## Condition d'archivage
+## What it covers
+## Where the work lives
+## Settled
+## Still open
+## Archiving condition
 ```
 
-## Règles
+## Rules
 
-- **Ne rien inventer.** Ce qui n'a pas été tranché reste dans « ouvert ». Une
-  session qui n'a rien décidé ne produit aucune ligne de « tranché ».
-- **Écrire les blocages, pas seulement les avancées.** Un fil bloqué sur une
-  action du propriétaire doit le dire, et dire laquelle.
-- **Signaler ce qui n'a pas été vérifié.** Une décision prise sur un raisonnement
-  et non sur une mesure se marque comme telle.
-- **Une fiche courte.** Cinquante lignes. Au-delà, c'est qu'elle explique au lieu
-  de pointer.
-- Français. Les identifiants et les chemins restent tels qu'ils sont.
+- **Invent nothing.** What was not settled stays "open". A session that decided
+  nothing produces no "settled" line.
+- **Write down blockers, not only progress.** A thread blocked on an action by the
+  owner must say so, and say which action.
+- **Flag what was not verified.** A decision made on reasoning rather than on a
+  measurement is marked as such.
+- **Keep the file short.** Fifty lines. Beyond that, it explains instead of
+  pointing.
+- English. Identifiers and paths stay as they are.
