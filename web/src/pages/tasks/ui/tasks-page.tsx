@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
+import { useItems } from '@/entities/item'
 import { filterItems, ItemFiltersBar, useItemFilters } from '@/features/filter-items'
-import { useItems } from '../api/use-items'
 import { ItemsTable } from './items-table'
 
 export function TasksPage() {

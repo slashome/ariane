@@ -29,6 +29,7 @@ export interface NodeSummary {
   has_index: boolean
   items: number
   workflow: WorkflowStatus[]
+  last_change?: string | null
 }
 
 export interface SchemaKey {
@@ -54,4 +55,26 @@ export interface Repo {
   root: string
   branch: string | null
   uncommitted: UncommittedFile[]
+}
+
+export type EditableField = 'status' | 'size' | 'impact' | 'priority'
+
+export interface FieldChange {
+  from: string | null
+  to: string | null
+}
+
+export type ItemChanges = Partial<Record<EditableField, FieldChange>>
+
+export interface ItemPatch {
+  path: string
+  changes: ItemChanges
+}
+
+export interface Dashboard {
+  pinned: string[]
+}
+
+export interface CommitResult {
+  commit: string
 }

@@ -46,7 +46,7 @@ function renderPage(url: string) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string) => {
-      const body = input.endsWith('/api/schema') ? schema : items
+      const body = input.endsWith('/api/schema') ? schema : input.endsWith('/api/nodes') ? [] : items
       return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
     }),
   )

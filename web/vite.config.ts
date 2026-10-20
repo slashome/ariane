@@ -22,6 +22,7 @@ export default defineConfig({
             { name: 'react', test: /node_modules[\\/](react|react-dom|react-router|scheduler)[\\/]/ },
             { name: 'tanstack', test: /node_modules[\\/]@tanstack[\\/]/ },
             { name: 'radix', test: /node_modules[\\/]@radix-ui[\\/]/ },
+            { name: 'dnd', test: /node_modules[\\/](@dnd-kit|sonner)[\\/]/ },
           ],
         },
       },
