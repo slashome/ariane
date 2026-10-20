@@ -43,6 +43,8 @@ The `ariane` CLI ([ADR-0005](../../docs/adr/0005-write-ariane-in-rust.md)) is ho
 | `ariane migrate` | Bringing legacy items to the current header: dry run first, `--apply` to write. |
 | `ariane schema --json` | The core keys and vocabularies, when a value's validity is in doubt. |
 | `ariane serve` | The interface (dashboard, task list, kanban, size × impact) — she points the user to it. |
+| `ariane config` | `path`, `get`, `set`, `edit`, `init`: the configuration file. The content repository used from anywhere is set with `ariane config set repo <path>`. |
+| `ariane service` | `install`, `uninstall`, `status`, `logs`: keeps `ariane serve` running in the background (launchd on macOS, systemd on Linux). |
 
 ## Interaction sketch
 

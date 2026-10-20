@@ -37,6 +37,8 @@ The obvious answer — ship a `config.example.toml`, have `ariane config` copy i
 5. **What it holds, for now:** `dir_name` (§9); the server's address, default `127.0.0.1:4317`; the **pinned nodes of the dashboard and their order** — so reordering cards in the interface's edit mode writes `config.toml`, and the commit indicator lights up like for any other change; per-tracker, non-secret settings (ADR-0011).
 6. **Secrets never go in it.** The file is versioned in a repository, and the first secret in sight — a Monday API token — belongs to an employer's account while the repository is personal. Token storage is deferred to the connector's implementation (content task `slashome/ariane#T001`); the keychain is the candidate.
 
+> **Implemented on 2026-10-20, with these differences.** The file holds `version`, `repo` (the content repository, used when the current directory leads to none), `server.port` and `dashboard.pinned`. `dir_name` is not implemented yet, and the server's address is a port only: the host is always `127.0.0.1` (ADR-0012). `init` asks nothing; it takes `--repo`. The CI check of the example is a unit test, run by `cargo test`. Migrating the configuration through `ariane migrate` is not wired yet: the schema is still at version 1.
+
 ## Consequences
 
 - The schema, the validation, the documentation of each key and the example are one artifact. Adding a key is one change in one place, plus its migration.
