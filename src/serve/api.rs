@@ -21,7 +21,7 @@ use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use tokio_stream::wrappers::BroadcastStream;
+use tokio_stream::wrappers::{BroadcastStream, WatchStream};
 use tokio_stream::{Stream, StreamExt};
 
 use super::State;
@@ -145,11 +145,17 @@ pub async fn repo(Shared(state): Shared<Arc<State>>) -> Response {
 ///
 /// Each stream subscribes to the state's broadcast channel. A slow client that
 /// misses messages gets a lag error from the channel; it is turned into one more
-/// `changed` event, since all a client does with it is refetch.
+/// `changed` event, since all a client does with it is refetch. The stream ends
+/// when the server starts stopping: reloads become `Some`, the stop signal
+/// becomes `None`, and `take_while` cuts the merged stream at the first `None`.
 pub async fn events(
     Shared(state): Shared<Arc<State>>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let stream = BroadcastStream::new(state.changes.subscribe()).map(|_| {
+    let reloads = BroadcastStream::new(state.changes.subscribe()).map(|_| Some(()));
+    let stop = WatchStream::new(state.stopping.subscribe())
+        .filter(|stopping| *stopping)
+        .map(|_| None);
+    let stream = reloads.merge(stop).take_while(Option::is_some).map(|_| {
         Ok(Event::default()
             .event("changed")
             .data(r#"{"scope":"tree"}"#))

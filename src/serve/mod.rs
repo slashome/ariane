@@ -27,7 +27,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use anyhow::{Context, Result};
 use axum::Router;
 use axum::routing::{get, post};
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, watch as signal};
 
 use crate::cli::ServeArgs;
 use crate::tree::{NodePath, Tree};
@@ -53,6 +53,9 @@ pub struct State {
     pub busy: Mutex<()>,
     /// Sends one message per reload; each `/api/events` stream subscribes to it.
     pub changes: broadcast::Sender<()>,
+    /// Turns `true` when the server stops, which ends every `/api/events`
+    /// stream so the graceful shutdown is not held open by a browser tab.
+    pub stopping: signal::Sender<bool>,
 }
 
 impl State {
@@ -62,6 +65,7 @@ impl State {
     /// points to the same state, which is how axum hands it to each request.
     pub fn new(root: PathBuf, tree: Tree, config: PathBuf) -> Arc<State> {
         let (changes, _) = broadcast::channel(16);
+        let (stopping, _) = signal::channel(false);
         let last_change = RwLock::new(last_changes(&root, &tree));
         Arc::new(State {
             root,
@@ -70,6 +74,7 @@ impl State {
             config,
             busy: Mutex::new(()),
             changes,
+            stopping,
         })
     }
 
@@ -175,13 +180,34 @@ async fn serve(root: PathBuf, tree: Tree, config: PathBuf, port: u16, open: bool
     if open {
         open_browser(&url);
     }
+    let stopping = state.stopping.clone();
     axum::serve(listener, router(state))
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
-        })
+        .with_graceful_shutdown(stop_on_ctrl_c(stopping))
         .await
         .context("serving")
 }
+
+/// Waits for Ctrl-C, then asks every event stream to end so the graceful
+/// shutdown can complete.
+///
+/// A connection that still lingers must not keep the process alive: a second
+/// Ctrl-C, or [`FORCE_AFTER`] without one, exits the process with code 130,
+/// the conventional status of a process interrupted by `SIGINT`.
+async fn stop_on_ctrl_c(stopping: signal::Sender<bool>) {
+    let _ = tokio::signal::ctrl_c().await;
+    eprintln!("ariane serve: stopping");
+    let _ = stopping.send(true);
+    tokio::spawn(async {
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            () = tokio::time::sleep(FORCE_AFTER) => {}
+        }
+        std::process::exit(130);
+    });
+}
+
+/// How long the graceful shutdown may take before the process exits anyway.
+const FORCE_AFTER: std::time::Duration = std::time::Duration::from_secs(3);
 
 /// Opens `url` in the default browser: `open` on macOS, `xdg-open` elsewhere.
 ///
@@ -480,6 +506,30 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::CONFLICT);
+    }
+
+    #[tokio::test]
+    async fn the_event_stream_ends_when_the_server_stops() {
+        let repo = sample();
+        let state = State::new(
+            repo.root().to_path_buf(),
+            Tree::load(repo.root()).unwrap(),
+            repo.root().join("config.toml"),
+        );
+        let response = router(state.clone())
+            .oneshot(Request::get("/api/events").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        state.stopping.send(true).unwrap();
+        let body = tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            response.into_body().collect(),
+        )
+        .await;
+        assert!(
+            body.is_ok(),
+            "the event stream stayed open after the stop signal"
+        );
     }
 
     #[tokio::test]
