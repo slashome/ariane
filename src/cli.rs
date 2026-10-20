@@ -26,6 +26,8 @@ pub enum Command {
     Doctor(DoctorArgs),
     #[command(about = "Bring items to the current schema version")]
     Migrate(MigrateArgs),
+    #[command(about = "Print the item header schema")]
+    Schema(SchemaArgs),
 }
 
 #[derive(Args)]
@@ -63,6 +65,12 @@ pub struct MigrateArgs {
     )]
     pub apply: bool,
 
+    #[arg(long)]
+    pub json: bool,
+}
+
+#[derive(Args)]
+pub struct SchemaArgs {
     #[arg(long)]
     pub json: bool,
 }

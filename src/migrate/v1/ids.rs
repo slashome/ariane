@@ -1,9 +1,8 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
+use crate::schema::{id_prefix, is_valid_id};
 use crate::tree::{Item, NodePath, Tree};
-
-const ALLOCATED_PREFIX: char = 'T';
 
 #[derive(Debug, Default)]
 pub struct Allocations(HashMap<PathBuf, String>);
@@ -34,7 +33,7 @@ impl Allocations {
             .filter_map(|item| declared_id(item))
             .map(str::to_owned)
             .collect();
-        let mut pending = Vec::new();
+        let mut pending: BTreeMap<char, Vec<PathBuf>> = BTreeMap::new();
         for item in items {
             if let Some(id) = declared_id(item) {
                 self.0.insert(item.relative.clone(), id.to_owned());
@@ -44,34 +43,31 @@ impl Allocations {
                 Some(id) if taken.insert(id.clone()) => {
                     self.0.insert(item.relative.clone(), id);
                 }
-                _ => pending.push(item.relative.clone()),
+                _ => pending
+                    .entry(id_prefix(item.kind))
+                    .or_default()
+                    .push(item.relative.clone()),
             }
         }
-        let mut next = taken
-            .iter()
-            .filter_map(|id| allocated_number(id))
-            .max()
-            .unwrap_or(0)
-            + 1;
-        for relative in pending {
-            let mut id = format!("{ALLOCATED_PREFIX}{next:03}");
-            while taken.contains(&id) {
+        for (prefix, relatives) in pending {
+            let mut next = taken
+                .iter()
+                .filter_map(|id| allocated_number(id, prefix))
+                .max()
+                .unwrap_or(0)
+                + 1;
+            for relative in relatives {
+                let mut id = format!("{prefix}{next:03}");
+                while taken.contains(&id) {
+                    next += 1;
+                    id = format!("{prefix}{next:03}");
+                }
+                taken.insert(id.clone());
+                self.0.insert(relative, id);
                 next += 1;
-                id = format!("{ALLOCATED_PREFIX}{next:03}");
             }
-            taken.insert(id.clone());
-            self.0.insert(relative, id);
-            next += 1;
         }
     }
-}
-
-pub fn is_valid_id(id: &str) -> bool {
-    let mut chars = id.chars();
-    chars
-        .next()
-        .is_some_and(|first| first.is_ascii_alphabetic())
-        && chars.all(|c| c.is_ascii_alphanumeric() || c == '-')
 }
 
 fn declared_id(item: &Item) -> Option<&str> {
@@ -88,8 +84,8 @@ fn filename_id(relative: &Path) -> Option<String> {
     is_code.then(|| prefix.to_owned())
 }
 
-fn allocated_number(id: &str) -> Option<u32> {
-    id.strip_prefix(ALLOCATED_PREFIX)?.parse().ok()
+fn allocated_number(id: &str, prefix: char) -> Option<u32> {
+    id.strip_prefix(prefix)?.parse().ok()
 }
 
 #[cfg(test)]
@@ -140,5 +136,35 @@ mod tests {
         assert!(!is_valid_id("3b"));
         assert!(!is_valid_id(""));
         assert!(!is_valid_id("T 1"));
+    }
+
+    #[test]
+    fn each_kind_draws_from_its_own_prefix_sequence() {
+        let repo = Repo::new();
+        repo.write("a/tasks/T004-declared.md", "---\nid: T004\n---\n# A\n")
+            .write("a/tasks/plain.md", "# B\n")
+            .write("a/backlog/idea.md", "# C\n")
+            .write("a/stories/epic.md", "# D\n")
+            .write("a/reflexions/R002-old.md", "# E\n")
+            .write("a/reflexions/question.md", "# F\n")
+            .write("a/ressources/site.md", "# G\n")
+            .write("a/archives/stories/done.md", "# H\n")
+            .write("a/archives/loose.md", "# I\n");
+        let tree = crate::tree::Tree::load(repo.root()).unwrap();
+        let allocations = Allocations::plan(&tree, None);
+        let id = |relative: &str| {
+            allocations
+                .id_of(Path::new(&format!("tree/a/{relative}")))
+                .unwrap()
+                .to_owned()
+        };
+        assert_eq!(id("archives/loose.md"), "T005");
+        assert_eq!(id("backlog/idea.md"), "T006");
+        assert_eq!(id("tasks/plain.md"), "T007");
+        assert_eq!(id("archives/stories/done.md"), "S001");
+        assert_eq!(id("stories/epic.md"), "S002");
+        assert_eq!(id("reflexions/R002-old.md"), "R002");
+        assert_eq!(id("reflexions/question.md"), "R003");
+        assert_eq!(id("ressources/site.md"), "D001");
     }
 }

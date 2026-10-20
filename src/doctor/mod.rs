@@ -277,13 +277,40 @@ category = "done"
     }
 
     #[test]
+    fn a_reflexion_on_trial_is_live_but_not_closed() {
+        let repo = base();
+        let reflexion = "---\nariane: 1\nnode: p\nid: R1\ntitle: R\nstatus: trial\nmod: M\n---\n";
+        repo.write("p/reflexions/R1.md", reflexion);
+        assert_eq!(checks(&repo), vec![]);
+        repo.write(
+            "p/archives/reflexions/R2.md",
+            &reflexion.replace("R1", "R2"),
+        );
+        only(&repo, Check::OpenInArchives);
+    }
+
+    #[test]
+    fn core_keys_of_the_wrong_type_are_reported() {
+        let repo = base();
+        repo.write(
+            "p/tasks/T1.md",
+            &task(
+                "p",
+                "T1",
+                "release: 1.0\nrefs: ADR-0008\nexternal: [Monday 12]\n",
+            ),
+        );
+        assert_eq!(checks(&repo), vec![Check::WrongType; 3]);
+    }
+
+    #[test]
     fn a_status_on_a_ressource_is_reported() {
         let repo = base();
         repo.write(
             "p/ressources/S1.md",
             "---\nariane: 1\nnode: p\nid: S1\ntitle: S\nstatus: open\nmod: M\n---\n",
         );
-        only(&repo, Check::StatusOnRessource);
+        only(&repo, Check::ForbiddenKey);
     }
 
     #[test]

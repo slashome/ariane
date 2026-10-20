@@ -65,6 +65,8 @@ A child node inherits its ancestors' `node.toml`: fields accumulate, and a workf
 
 **7. Kinds without a lifecycle get their own vocabulary.** Reflexions use `open` and `settled`; ressources carry no status.
 
+> **Amended 2026-10-21.** Reflexions gain `trial`, for a decision applied on trial and not yet confirmed — the reference instance already wrote "en essai", and forcing it into `open` lost the nuance. Only `settled` counts as closed. Ids allocated by `ariane migrate` take the prefix of their kind: `T` tasks and backlog, `S` stories, `R` reflexions, `D` ressources. The core keys, their types, requirements and vocabularies are held in one table in the CLI (`src/schema.rs`), which `doctor` and `migrate` iterate and `ariane schema --json` exports, so no surface redeclares them.
+
 **8. Unknown keys are tolerated and preserved.** A tool reading a key it does not know keeps it byte for byte, so an older CLI never destroys what a newer one wrote. `doctor` reports an undeclared key as a warning, not an error.
 
 **9. The prose header disappears on migration.** One source per fact. Context that is not metadata — "validé par … le …" — moves into the body. git keeps the history of what the header said.

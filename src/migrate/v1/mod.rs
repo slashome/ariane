@@ -9,30 +9,12 @@ use yaml_serde::{Mapping, Value};
 
 use crate::item::{self, Document, Header, Kind};
 use crate::node::{Category, Effective};
+use crate::schema::{self, CORE_KEYS, ValueType};
 use crate::tree::{Item, NodePath, Tree};
 
 use super::{Migration, Step};
 use ids::Allocations;
 use prose::StatusValue;
-
-const CORE_ORDER: [&str; 16] = [
-    "ariane",
-    "node",
-    "id",
-    "title",
-    "status",
-    "type",
-    "parent",
-    "depends_on",
-    "size",
-    "impact",
-    "priority",
-    "created",
-    "release",
-    "milestone",
-    "refs",
-    "external",
-];
 
 const RENAMED: [(&str, &str); 4] = [
     ("titre", "title"),
@@ -40,8 +22,6 @@ const RENAMED: [(&str, &str); 4] = [
     ("jalon", "milestone"),
     ("depend", "depends_on"),
 ];
-
-const NAMES_AS_STRINGS: [&str; 2] = ["release", "milestone"];
 
 pub struct ZeroToOne<'a> {
     tree: &'a Tree,
@@ -166,7 +146,7 @@ impl Draft {
                     .push(format!("both `{name}` and `{target}` are present"));
                 continue;
             }
-            let value = if NAMES_AS_STRINGS.contains(&target) {
+            let value = if schema::keys_of_type(ValueType::Name).any(|key| key == target) {
                 as_name(value, raw.and_then(|raw| raw_scalar(raw, name)))
             } else {
                 value.clone()
@@ -230,6 +210,7 @@ impl Draft {
         }
         let resolved = match (item.kind, extracted) {
             (Kind::Reflexion, Some(StatusValue::Open)) => Some("open".to_owned()),
+            (Kind::Reflexion, Some(StatusValue::Trial)) => Some("trial".to_owned()),
             (Kind::Reflexion, Some(StatusValue::Settled)) => Some("settled".to_owned()),
             (Kind::Reflexion, Some(StatusValue::Category(category))) => {
                 self.inferred.push("status".to_owned());
@@ -255,6 +236,11 @@ impl Draft {
             (_, Some(StatusValue::Open)) => first_of(effective, Category::Todo).inspect(|_| {
                 self.inferred.push("status".to_owned());
             }),
+            (_, Some(StatusValue::Trial)) => {
+                first_of(effective, Category::InProgress).inspect(|_| {
+                    self.inferred.push("status".to_owned());
+                })
+            }
             (_, Some(StatusValue::Settled)) => first_of(effective, Category::Done).inspect(|_| {
                 self.inferred.push("status".to_owned());
             }),
@@ -306,9 +292,9 @@ fn as_name(value: &Value, raw: Option<&str>) -> Value {
 
 fn ordered(mut fields: Mapping) -> Mapping {
     let mut result = Mapping::new();
-    for key in CORE_ORDER {
-        if let Some(value) = fields.shift_remove(key) {
-            result.insert(Value::from(key), value);
+    for key in CORE_KEYS {
+        if let Some(value) = fields.shift_remove(key.name) {
+            result.insert(Value::from(key.name), value);
         }
     }
     for (key, value) in fields {
@@ -465,6 +451,20 @@ mod tests {
         assert_eq!(document.text("title"), Some("Voix : selon le rôle"));
         assert_eq!(document.text("status"), Some("todo"));
         assert_eq!(step.notes.len(), 1);
+    }
+
+    #[test]
+    fn a_reflexion_on_trial_migrates_to_trial_with_a_reflexion_id() {
+        let repo = Repo::new();
+        repo.write(
+            "game/reflexions/forme.md",
+            "# Une forme à l'épreuve\n\n> Ouverte le 2030-01-02. **Statut : 🟡 en essai**\n\nTexte.\n",
+        );
+        let step = migrate(&repo, "forme.md").unwrap();
+        let document = Document::parse(&step.text);
+        assert_eq!(document.text("status"), Some("trial"));
+        assert_eq!(document.text("id"), Some("R001"));
+        assert!(!step.inferred.contains(&"status".to_owned()));
     }
 
     #[test]

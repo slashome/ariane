@@ -2,6 +2,8 @@
 
 > This document states what the method **requires**. It progressively supersedes [`PLAN.md`](PLAN.md), one concept at a time, starting with the item header. Where the two disagree on a concept specified here, this document is authoritative. The reasons behind each rule live in [`docs/adr/`](docs/adr/).
 
+The core keys of this section are also published by `ariane schema --json`, generated from the same table the CLI validates against.
+
 The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT** and **MAY** are to be interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 
 ## 1. Item header
@@ -28,7 +30,7 @@ Keys MUST be written in English, in lower case, with `_` as the word separator. 
 | `node` | string | **MUST** | The logical path of the node holding the file, e.g. `cmc/cmc-lib`. MUST equal the file's location under `tree/`. |
 | `id` | string | **MUST** | Matches `^[A-Za-z][A-Za-z0-9-]*$`. Unique within the node. |
 | `title` | string | **MUST** | Non-empty. |
-| `status` | string | MUST for tasks, stories and backlog items; MUST for reflexions; MUST NOT for ressources | A status id from the node's workflow (§1.5). Reflexions use `open` or `settled`. |
+| `status` | string | MUST for tasks, stories and backlog items; MUST for reflexions; MUST NOT for ressources | A status id from the node's workflow (§1.5). Reflexions use `open`, `trial` (a decision applied on trial, not yet confirmed) or `settled`. |
 | `type` | string | MAY | A classification declared by the node (`[fields.type]` in `node.toml`); free when undeclared. |
 | `parent` | reference | MAY | One item reference (§1.4). |
 | `depends_on` | list of references | MAY | Item references (§1.4). |
@@ -51,6 +53,7 @@ The body of the item MUST NOT restate in prose a fact the header carries.
 - Inside the same node, an item is referenced by its bare id: `T022`.
 - Across nodes, an item is referenced as `<node>#<id>`: `slashome/pharmakon#T022`.
 - A file name SHOULD begin with the item's id followed by `-` and a slug: `T022-tirage-du-temperament.md`.
+- An id SHOULD start with the prefix of its kind followed by a number: `T` for tasks and backlog items, `S` for stories, `R` for reflexions, `D` for ressources (`T038`, `S004`, `R012`, `D002`). `ariane migrate` allocates ids this way, per node and per prefix.
 
 ### 1.5 `node.toml`
 
@@ -90,11 +93,12 @@ The order of entries is the display order.
 | `ariane` lower than the version the CLI implements | error — remedy: `ariane migrate` |
 | `ariane` higher than the version the CLI implements | error — the CLI is outdated |
 | A required core key is missing | error |
+| A core key has a value of the wrong type (`release` or `milestone` not a string, `refs` not a list, an `external` entry not `<connector>:<id>`) | error |
 | `node` does not match the file's location | error |
 | `id` duplicated within the node | error |
 | `status` not in the node's effective workflow | error |
 | A status present on a ressource | error |
-| An item in `archives/` whose status category is neither `done` nor `dropped` | error |
+| An item in `archives/` whose status category is neither `done` nor `dropped`, or a reflexion in `archives/` that is not `settled` | error |
 | `parent` or `depends_on` points to an item that does not exist | error |
 | `size`, `impact`, `priority` or `created` outside its vocabulary or format | error |
 | A custom key declared in `node.toml` has a value of the wrong type | error |

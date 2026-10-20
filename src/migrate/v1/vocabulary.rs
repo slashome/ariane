@@ -84,7 +84,10 @@ const REFLEXION_STATUSES: &[(&str, StatusValue, bool)] = &[
     ("partiellement tranché", StatusValue::Open, true),
     ("ouverte", StatusValue::Open, false),
     ("ouvert", StatusValue::Open, false),
-    ("en essai", StatusValue::Open, true),
+    ("en essai", StatusValue::Trial, false),
+    ("à l'essai", StatusValue::Trial, false),
+    ("a l'essai", StatusValue::Trial, false),
+    ("à l’essai", StatusValue::Trial, false),
     ("r&d", StatusValue::Open, true),
     ("en cours", StatusValue::Open, false),
     ("à trancher", StatusValue::Open, false),
@@ -236,6 +239,17 @@ mod tests {
         ));
         assert_eq!(partial.value, StatusValue::Open);
         assert!(partial.inferred);
+    }
+
+    #[test]
+    fn a_reflexion_on_trial_reads_trial() {
+        let trial = found(status(Kind::Reflexion, "🟡 en essai — la forme tient"));
+        assert_eq!(trial.value, StatusValue::Trial);
+        assert!(!trial.inferred);
+        assert_eq!(
+            found(status(Kind::Reflexion, "à l'essai")).value,
+            StatusValue::Trial
+        );
     }
 
     #[test]

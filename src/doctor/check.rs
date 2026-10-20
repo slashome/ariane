@@ -4,31 +4,13 @@ use std::path::Path;
 use yaml_serde::{Mapping, Value};
 
 use super::finding::{Check, Finding, Remedy, Severity};
-use crate::item::{Header, Kind, SCHEMA_VERSION};
+use crate::item::{Header, SCHEMA_VERSION};
 use crate::node::{Effective, FILE as NODE_FILE, FieldDecl, FieldType};
+use crate::schema::{
+    self, CORE_KEYS, CoreKey, REFLEXION_CLOSED, REFLEXION_STATUSES, Requirement, ValueType,
+    is_date, is_external, is_valid_id,
+};
 use crate::tree::{Item, NodePath, Tree};
-
-const SIZES: [&str; 5] = ["XS", "S", "M", "L", "XL"];
-const LEVELS: [&str; 3] = ["low", "medium", "high"];
-const REFLEXION_STATUSES: [&str; 2] = ["open", "settled"];
-const CORE_KEYS: [&str; 16] = [
-    "ariane",
-    "node",
-    "id",
-    "title",
-    "status",
-    "type",
-    "parent",
-    "depends_on",
-    "size",
-    "impact",
-    "priority",
-    "created",
-    "release",
-    "milestone",
-    "refs",
-    "external",
-];
 
 pub fn findings(tree: &Tree, scope: Option<&NodePath>) -> Vec<Finding> {
     let mut found = Vec::new();
@@ -159,13 +141,14 @@ fn check_item(
         },
     }
     let effective = tree.configs.effective(&item.node);
-    report.required(mapping);
+    for key in CORE_KEYS
+        .iter()
+        .filter(|key| key.value != ValueType::Version)
+    {
+        report.core_key(key, mapping, known);
+    }
     report.node(mapping);
-    report.id(mapping);
     report.status(mapping, &effective);
-    report.references(mapping, known);
-    report.vocabulary(mapping);
-    report.core_types(mapping);
     report.custom(mapping, &effective);
 }
 
@@ -197,37 +180,120 @@ impl Reporter<'_> {
         self.push(check, Severity::Error, message, remedy);
     }
 
-    fn requires_status(&self) -> bool {
-        matches!(
-            self.item.kind,
-            Kind::Task | Kind::Story | Kind::Backlog | Kind::Reflexion
-        )
-    }
-
-    fn required(&mut self, mapping: &Mapping) {
-        let mut keys = vec!["node", "id", "title"];
-        if self.requires_status() {
-            keys.push("status");
-        }
-        for key in keys {
-            if mapping.get(key).is_none() {
+    fn core_key(&mut self, key: &CoreKey, mapping: &Mapping, known: &HashSet<(NodePath, String)>) {
+        let requirement = key.requirement_for(self.item.kind);
+        let Some(value) = mapping.get(key.name) else {
+            if requirement == Requirement::Must {
                 self.error(
                     Check::MissingKey,
-                    format!("the required key `{key}` is missing"),
-                    Remedy::human([format!("add `{key}` to the front-matter")]),
-                );
-            } else if mapping
-                .get(key)
-                .and_then(Value::as_str)
-                .is_none_or(|text| text.trim().is_empty())
-            {
-                self.error(
-                    Check::WrongType,
-                    format!("`{key}` must be a non-empty string"),
-                    Remedy::human([format!("write `{key}` as a non-empty string")]),
+                    format!("the required key `{}` is missing", key.name),
+                    Remedy::human([format!("add `{}` to the front-matter", key.name)]),
                 );
             }
+            return;
+        };
+        if requirement == Requirement::MustNot {
+            self.forbidden(key.name);
+            return;
         }
+        self.value(key, value, known);
+    }
+
+    fn forbidden(&mut self, name: &str) {
+        let kind = kind_label(self.item);
+        self.error(
+            Check::ForbiddenKey,
+            format!("a {kind} carries `{name}`, which its kind does not allow"),
+            Remedy::human([
+                format!("remove `{name}` from the front-matter"),
+                format!("move the file to the directory of a kind that allows `{name}`"),
+            ]),
+        );
+    }
+
+    fn value(&mut self, key: &CoreKey, value: &Value, known: &HashSet<(NodePath, String)>) {
+        let name = key.name;
+        match key.value {
+            ValueType::Version => {}
+            ValueType::Text | ValueType::Status => {
+                if non_empty(value).is_none() {
+                    self.non_empty(name);
+                }
+            }
+            ValueType::Id => match non_empty(value) {
+                None => self.non_empty(name),
+                Some(id) if !is_valid_id(id) => self.error(
+                    Check::InvalidId,
+                    format!("`id: {id}` does not match ^[A-Za-z][A-Za-z0-9-]*$"),
+                    Remedy::human(["choose an id that starts with a letter and contains only letters, digits and `-`"]),
+                ),
+                Some(_) => {}
+            },
+            ValueType::Name | ValueType::Texts => {
+                let ok = match key.value {
+                    ValueType::Name => value.is_string(),
+                    _ => string_list(value).is_some(),
+                };
+                if !ok {
+                    self.wrong_type(name, key.value.expected());
+                }
+            }
+            ValueType::Date => {
+                if value.as_str().is_none_or(|text| !is_date(text)) {
+                    self.out_of_vocabulary(
+                        format!("`{name}: {}` is not a YYYY-MM-DD date", display(value)),
+                        [format!("write `{name}` as YYYY-MM-DD"), format!("remove `{name}`")],
+                    );
+                }
+            }
+            ValueType::Enum(allowed) => {
+                if value.as_str().is_none_or(|text| !allowed.contains(&text)) {
+                    self.out_of_vocabulary(
+                        format!("`{name}: {}` is outside {}", display(value), allowed.join(", ")),
+                        [
+                            format!("set `{name}` to one of: {}", allowed.join(", ")),
+                            format!("remove `{name}`"),
+                        ],
+                    );
+                }
+            }
+            ValueType::Reference => match value.as_str() {
+                Some(raw) => self.reference(name, raw, known),
+                None => self.wrong_type(name, key.value.expected()),
+            },
+            ValueType::References => match string_list(value) {
+                Some(list) => {
+                    for raw in list {
+                        self.reference(name, raw, known);
+                    }
+                }
+                None => self.wrong_type(name, key.value.expected()),
+            },
+            ValueType::External => match string_list(value) {
+                None => self.wrong_type(name, key.value.expected()),
+                Some(list) => {
+                    for entry in list.into_iter().filter(|entry| !is_external(entry)) {
+                        self.error(
+                            Check::WrongType,
+                            format!("`{name}` entry `{entry}` is not of the form `<connector>:<id>`"),
+                            Remedy::human(["write it as `<connector>:<id>`, e.g. `monday:2955884643`"]),
+                        );
+                    }
+                }
+            },
+        }
+    }
+
+    fn non_empty(&mut self, name: &str) {
+        self.error(
+            Check::WrongType,
+            format!("`{name}` must be a non-empty string"),
+            Remedy::human([format!("write `{name}` as a non-empty string")]),
+        );
+    }
+
+    fn out_of_vocabulary<const N: usize>(&mut self, message: String, resolutions: [String; N]) {
+        self.error(Check::OutOfVocabulary, message, Remedy::human(resolutions));
     }
 
     fn node(&mut self, mapping: &Mapping) {
@@ -250,45 +316,27 @@ impl Reporter<'_> {
         }
     }
 
-    fn id(&mut self, mapping: &Mapping) {
-        let Some(id) = mapping.get("id").and_then(Value::as_str) else {
-            return;
-        };
-        if !id.trim().is_empty() && !is_valid_id(id) {
-            self.error(
-                Check::InvalidId,
-                format!("`id: {id}` does not match ^[A-Za-z][A-Za-z0-9-]*$"),
-                Remedy::human(["choose an id that starts with a letter and contains only letters, digits and `-`"]),
-            );
-        }
-    }
-
     fn status(&mut self, mapping: &Mapping, effective: &Effective) {
-        let status = mapping.get("status");
-        if self.item.kind == Kind::Ressource {
-            if status.is_some() {
-                self.error(
-                    Check::StatusOnRessource,
-                    "a ressource carries a `status`",
-                    Remedy::human([
-                        "remove `status` from the front-matter",
-                        "move the file out of ressources/ if it is work to do",
-                    ]),
-                );
-            }
+        let status_key = schema::core_key("status");
+        if status_key.is_some_and(|key| key.requirement_for(self.item.kind) == Requirement::MustNot)
+        {
             return;
         }
-        let Some(status) = status.and_then(Value::as_str) else {
+        let Some(status) = mapping.get("status").and_then(Value::as_str) else {
             return;
         };
-        if self.item.kind == Kind::Reflexion {
+        if self.item.kind == crate::item::Kind::Reflexion {
             if !REFLEXION_STATUSES.contains(&status) {
                 self.error(
                     Check::UnknownStatus,
                     format!("`status: {status}` is not a reflexion status"),
-                    Remedy::human(["set `status: open`", "set `status: settled`"]),
+                    Remedy::human(
+                        REFLEXION_STATUSES
+                            .iter()
+                            .map(|allowed| format!("set `status: {allowed}`")),
+                    ),
                 );
-            } else if self.item.archived && status != "settled" {
+            } else if self.item.archived && status != REFLEXION_CLOSED {
                 self.open_in_archives(status);
             }
             return;
@@ -334,25 +382,6 @@ impl Reporter<'_> {
         );
     }
 
-    fn references(&mut self, mapping: &Mapping, known: &HashSet<(NodePath, String)>) {
-        if let Some(parent) = mapping.get("parent") {
-            match parent.as_str() {
-                Some(raw) => self.reference("parent", raw, known),
-                None => self.wrong_type("parent", "a reference string"),
-            }
-        }
-        if let Some(depends_on) = mapping.get("depends_on") {
-            match string_list(depends_on) {
-                Some(list) => {
-                    for raw in list {
-                        self.reference("depends_on", raw, known);
-                    }
-                }
-                None => self.wrong_type("depends_on", "a list of reference strings"),
-            }
-        }
-    }
-
     fn reference(&mut self, key: &str, raw: &str, known: &HashSet<(NodePath, String)>) {
         let Some(target) = parse_reference(raw, &self.item.node) else {
             self.error(
@@ -371,71 +400,6 @@ impl Reporter<'_> {
                     format!("remove it from `{key}`"),
                 ]),
             );
-        }
-    }
-
-    fn vocabulary(&mut self, mapping: &Mapping) {
-        for (key, allowed) in [
-            ("size", &SIZES[..]),
-            ("impact", &LEVELS[..]),
-            ("priority", &LEVELS[..]),
-        ] {
-            let Some(value) = mapping.get(key) else {
-                continue;
-            };
-            if value.as_str().is_none_or(|text| !allowed.contains(&text)) {
-                self.error(
-                    Check::OutOfVocabulary,
-                    format!(
-                        "`{key}: {}` is outside {}",
-                        display(value),
-                        allowed.join(", ")
-                    ),
-                    Remedy::human([
-                        format!("set `{key}` to one of: {}", allowed.join(", ")),
-                        format!("remove `{key}`"),
-                    ]),
-                );
-            }
-        }
-        if let Some(created) = mapping.get("created")
-            && created.as_str().is_none_or(|text| !is_date(text))
-        {
-            self.error(
-                Check::OutOfVocabulary,
-                format!("`created: {}` is not a YYYY-MM-DD date", display(created)),
-                Remedy::human(["write `created` as YYYY-MM-DD", "remove `created`"]),
-            );
-        }
-    }
-
-    fn core_types(&mut self, mapping: &Mapping) {
-        for key in ["release", "milestone"] {
-            if mapping.get(key).is_some_and(|value| !value.is_string()) {
-                self.wrong_type(key, "a string (quote numbers such as \"1.0\")");
-            }
-        }
-        if mapping
-            .get("refs")
-            .is_some_and(|value| string_list(value).is_none())
-        {
-            self.wrong_type("refs", "a list of strings");
-        }
-        if let Some(external) = mapping.get("external") {
-            match string_list(external) {
-                None => self.wrong_type("external", "a list of `<connector>:<id>` strings"),
-                Some(list) => {
-                    for entry in list {
-                        if !is_external(entry) {
-                            self.error(
-                                Check::WrongType,
-                                format!("`external` entry `{entry}` is not of the form `<connector>:<id>`"),
-                                Remedy::human(["write it as `<connector>:<id>`, e.g. `monday:2955884643`"]),
-                            );
-                        }
-                    }
-                }
-            }
         }
     }
 
@@ -463,7 +427,7 @@ impl Reporter<'_> {
                         );
                     }
                 }
-                None if !CORE_KEYS.contains(&key) => self.push(
+                None if !schema::is_core(key) => self.push(
                     Check::UndeclaredKey,
                     Severity::Warning,
                     format!("`{key}` is not declared in any applicable {NODE_FILE}"),
@@ -580,36 +544,15 @@ pub fn parse_reference(raw: &str, current: &NodePath) -> Option<(NodePath, Strin
     is_valid_id(id).then(|| (node, id.to_owned()))
 }
 
-pub fn is_valid_id(id: &str) -> bool {
-    let mut chars = id.chars();
-    chars
-        .next()
-        .is_some_and(|first| first.is_ascii_alphabetic())
-        && chars.all(|c| c.is_ascii_alphanumeric() || c == '-')
+fn non_empty(value: &Value) -> Option<&str> {
+    value.as_str().filter(|text| !text.trim().is_empty())
 }
 
-fn is_date(text: &str) -> bool {
-    let bytes = text.as_bytes();
-    if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
-        return false;
-    }
-    let digits = |range: std::ops::Range<usize>| text[range].parse::<u32>().ok();
-    let (Some(_), Some(month), Some(day)) = (digits(0..4), digits(5..7), digits(8..10)) else {
-        return false;
-    };
-    text[..4].bytes().all(|b| b.is_ascii_digit())
-        && (1..=12).contains(&month)
-        && (1..=31).contains(&day)
-}
-
-fn is_external(entry: &str) -> bool {
-    entry.split_once(':').is_some_and(|(connector, id)| {
-        !connector.is_empty()
-            && !id.is_empty()
-            && connector
-                .bytes()
-                .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
-    })
+fn kind_label(item: &Item) -> String {
+    serde_json::to_value(item.kind)
+        .ok()
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .unwrap_or_else(|| "item".to_owned())
 }
 
 fn string_list(value: &Value) -> Option<Vec<&str>> {

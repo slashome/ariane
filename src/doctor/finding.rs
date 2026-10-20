@@ -66,7 +66,7 @@ pub enum Check {
     InvalidId,
     DuplicateId,
     UnknownStatus,
-    StatusOnRessource,
+    ForbiddenKey,
     OpenInArchives,
     DanglingReference,
     OutOfVocabulary,

@@ -9,6 +9,7 @@ use super::vocabulary::{self, Reading};
 pub enum StatusValue {
     Category(Category),
     Open,
+    Trial,
     Settled,
 }
 
