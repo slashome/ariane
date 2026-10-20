@@ -226,6 +226,16 @@ category = "done"
     }
 
     #[test]
+    fn an_item_of_the_home_node_carries_an_empty_node() {
+        let repo = Repo::new();
+        repo.write(
+            "reflexions/R1.md",
+            "---\nariane: 1\nnode: ''\nid: R1\ntitle: R\nstatus: open\n---\n",
+        );
+        assert_eq!(checks(&repo), vec![]);
+    }
+
+    #[test]
     fn no_front_matter_needs_migrate_and_nothing_else() {
         let repo = base();
         repo.write("p/tasks/x.md", "# x\n\n- **État** : ouvert\n");

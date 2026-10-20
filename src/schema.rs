@@ -49,6 +49,8 @@ pub enum ValueType {
     Version,
     /// A non-empty string.
     Text,
+    /// The logical path of a node: a string, empty for the home node.
+    Node,
     /// A string that YAML could read as a number, such as `"1.0"`; it must be quoted.
     Name,
     /// An item identifier such as `T038`.
@@ -76,6 +78,7 @@ impl ValueType {
         match self {
             ValueType::Version => "integer",
             ValueType::Text => "text",
+            ValueType::Node => "node",
             ValueType::Name => "name",
             ValueType::Id => "id",
             ValueType::Status => "status",
@@ -92,6 +95,7 @@ impl ValueType {
     pub fn expected(self) -> &'static str {
         match self {
             ValueType::Version => "a non-negative integer",
+            ValueType::Node => "a string, empty for the home node",
             ValueType::Text | ValueType::Id | ValueType::Status => "a non-empty string",
             ValueType::Name => "a string (quote numbers such as \"1.0\")",
             ValueType::Date => "a YYYY-MM-DD date",
@@ -141,7 +145,7 @@ const fn key(name: &'static str, value: ValueType, requirement: Requirement) -> 
 /// Every core key, in the canonical order in which `migrate` writes them.
 pub const CORE_KEYS: &[CoreKey] = &[
     key("ariane", ValueType::Version, Requirement::Must),
-    key("node", ValueType::Text, Requirement::Must),
+    key("node", ValueType::Node, Requirement::Must),
     key("id", ValueType::Id, Requirement::Must),
     key("title", ValueType::Text, Requirement::Must),
     CoreKey {
