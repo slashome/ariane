@@ -12,8 +12,9 @@
 //!
 //! In the last two cases [`prose::extract`](crate::migrate::v1::prose::extract) reads the legacy prose header. Then
 //! the missing pieces are filled in: `id` from `ids`, `title` from the first
-//! `# ` heading, `status` mapped onto the node's workflow, `created` from the
-//! commit that added the file. Keys are written in the canonical order of
+//! `# ` heading, `status` mapped onto the node's workflow. `created` is kept only when the
+//! header or the prose states it: the commit that added a file dates an import,
+//! not the item, so it is never used. Keys are written in the canonical order of
 //! [`CORE_KEYS`](crate::schema::CORE_KEYS), custom keys after them. When a value cannot be decided, the
 //! file is left to a human with the reasons, never guessed silently.
 
@@ -23,9 +24,6 @@ mod ids;
 pub mod prose;
 /// The legacy status and priority vocabularies.
 mod vocabulary;
-
-use std::path::Path;
-use std::process::Command;
 
 use yaml_serde::{Mapping, Value};
 
@@ -118,12 +116,7 @@ impl Migration for ZeroToOne<'_> {
         let title = draft.title(&fields, &body, id.as_deref());
         let effective = self.tree.configs.effective(&item.node);
         let status = draft.status(&fields, item, extracted_status, &effective);
-        let created = match text_of(&fields, "created") {
-            Some(created) => Some(created.to_owned()),
-            None => added_on(&self.tree.root, &item.relative).inspect(|_| {
-                draft.inferred.push("created".to_owned());
-            }),
-        };
+        let created = text_of(&fields, "created").map(str::to_owned);
         if !draft.reasons.is_empty() {
             return Err(draft.reasons);
         }
@@ -409,32 +402,6 @@ fn raw_scalar<'a>(front_matter: &'a str, key: &str) -> Option<&'a str> {
     })
 }
 
-/// The date of the commit that added the file, as `YYYY-MM-DD`, asked to
-/// `git log --diff-filter=A --follow`. The path is passed to git as a raw path,
-/// not as UTF-8 text (ADR-0005). `None` when git fails or knows no such commit.
-fn added_on(root: &Path, relative: &Path) -> Option<String> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args([
-            "log",
-            "--diff-filter=A",
-            "--follow",
-            "--format=%as",
-            "-1",
-            "--",
-        ])
-        .arg(relative)
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let date = String::from_utf8(output.stdout).ok()?;
-    let date = date.trim();
-    (!date.is_empty()).then(|| date.to_owned())
-}
-
 /// Unit tests of migration 0 → 1.
 #[cfg(test)]
 mod tests {
@@ -484,6 +451,32 @@ mod tests {
         assert_eq!(document.text("title"), Some("Polir la garde"));
         assert_eq!(document.text("status"), Some("done"));
         assert_eq!(step.inferred, vec!["status"]);
+    }
+
+    #[test]
+    fn the_commit_that_added_a_file_never_becomes_its_creation_date() {
+        let repo = Repo::new();
+        repo.write("game/archives/tasks/old.md", "# Polir la garde\n");
+        let git = |args: &[&str]| {
+            let status = std::process::Command::new("git")
+                .arg("-C")
+                .arg(repo.root())
+                .args(args)
+                .env("GIT_AUTHOR_NAME", "test")
+                .env("GIT_AUTHOR_EMAIL", "test@example.com")
+                .env("GIT_COMMITTER_NAME", "test")
+                .env("GIT_COMMITTER_EMAIL", "test@example.com")
+                .status()
+                .unwrap();
+            assert!(status.success());
+        };
+        std::fs::remove_dir_all(repo.root().join(".git")).unwrap();
+        git(&["init", "-q"]);
+        git(&["add", "."]);
+        git(&["commit", "-q", "-m", "import"]);
+        let step = migrate(&repo, "old.md").unwrap();
+        assert_eq!(Document::parse(&step.text).text("created"), None);
+        assert!(!step.inferred.contains(&"created".to_owned()));
     }
 
     #[test]
