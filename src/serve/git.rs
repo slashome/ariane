@@ -4,6 +4,11 @@
 //! `--porcelain=v1 -z`, whose records are separated by NUL bytes and whose paths
 //! are never quoted, so a path is kept as raw bytes and turned into an
 //! [`OsString`] without assuming UTF-8 (ADR-0005).
+//!
+//! It also dates each node by its latest commit, and runs the two git actions
+//! the interface offers: commit what changed under `tree/`, and push. Both use
+//! the machine's own git identity and configured upstream; nothing here sets
+//! an author or a remote.
 
 use std::ffi::OsString;
 use std::os::unix::ffi::OsStringExt;
@@ -49,6 +54,85 @@ pub fn status(root: &Path) -> Result<Status> {
         );
     }
     Ok(parse(&output.stdout))
+}
+
+/// The date (`YYYY-MM-DD`) of the latest commit that touched `relative`, a
+/// path under the repository root; `None` when git fails or no commit touched it.
+pub fn last_change(root: &Path, relative: &Path) -> Option<String> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["log", "-1", "--format=%cs", "--"])
+        .arg(relative)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let date = String::from_utf8(output.stdout).ok()?;
+    let date = date.trim();
+    (!date.is_empty()).then(|| date.to_owned())
+}
+
+/// What a commit request came to.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Committed {
+    /// A commit was made; its abbreviated hash.
+    Commit(String),
+    /// Nothing under `tree/` differed from `HEAD`.
+    NothingToCommit,
+}
+
+/// Stages every change under `tree/` and commits it with `message`.
+///
+/// Staging is limited to `tree/`, the content the interface edits. Whether
+/// anything is staged is asked to `git diff --cached --quiet`, which exits `1`
+/// when there is something to commit.
+///
+/// # Errors
+///
+/// Fails when a git command cannot run or reports an error.
+pub fn commit(root: &Path, message: &str) -> Result<Committed> {
+    run(root, &["add", "-A", "--", "tree"])?;
+    let staged = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["diff", "--cached", "--quiet"])
+        .status()
+        .context("running git diff")?;
+    if staged.success() {
+        return Ok(Committed::NothingToCommit);
+    }
+    run(root, &["commit", "-q", "-m", message])?;
+    let hash = run(root, &["rev-parse", "--short", "HEAD"])?;
+    Ok(Committed::Commit(hash.trim().to_owned()))
+}
+
+/// Pushes the current branch to its configured upstream.
+///
+/// # Errors
+///
+/// Fails with git's own message when the push is refused or impossible.
+pub fn push(root: &Path) -> Result<()> {
+    run(root, &["push", "-q"]).map(|_| ())
+}
+
+/// Runs `git -C root <args>` and returns its standard output.
+///
+/// # Errors
+///
+/// Fails when git cannot be started, or exits with an error, carrying its stderr.
+fn run(root: &Path, args: &[&str]) -> Result<String> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(args)
+        .output()
+        .with_context(|| format!("running git {}", args[0]))?;
+    if !output.status.success() {
+        bail!("{}", String::from_utf8_lossy(&output.stderr).trim());
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
 /// Parses the NUL-separated porcelain output.
@@ -136,6 +220,77 @@ mod tests {
             parse(b"## No commits yet on main\0").branch.as_deref(),
             Some("main")
         );
+    }
+
+    /// A real repository with one committed file under `tree/`. Its identity is
+    /// set in the repository's own configuration, so [`commit`] runs exactly as
+    /// it does in production, and no configuration of the machine is touched.
+    fn repository() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        git(dir.path(), &["init", "-q"]);
+        git(dir.path(), &["config", "user.name", "test"]);
+        git(dir.path(), &["config", "user.email", "test@example.com"]);
+        std::fs::create_dir_all(dir.path().join("tree")).unwrap();
+        std::fs::write(dir.path().join("tree/a.md"), "a\n").unwrap();
+        git(dir.path(), &["add", "."]);
+        git(dir.path(), &["commit", "-q", "-m", "first"]);
+        dir
+    }
+
+    /// Runs git in `root` and asserts it succeeded.
+    fn git(root: &Path, args: &[&str]) {
+        let status = Command::new("git")
+            .arg("-C")
+            .arg(root)
+            .args(args)
+            .status()
+            .unwrap();
+        assert!(status.success());
+    }
+
+    #[test]
+    fn a_node_is_dated_by_its_latest_commit() {
+        let dir = repository();
+        let date = last_change(dir.path(), Path::new("tree")).unwrap();
+        assert!(crate::schema::is_date(&date));
+        assert_eq!(last_change(dir.path(), Path::new("tree/none")), None);
+    }
+
+    #[test]
+    fn commits_changes_under_tree_and_reports_when_there_is_nothing_left() {
+        let dir = repository();
+        std::fs::write(dir.path().join("tree/a.md"), "changed\n").unwrap();
+        std::fs::write(dir.path().join("outside.md"), "not staged\n").unwrap();
+        let Committed::Commit(hash) = commit(dir.path(), "edit a").unwrap() else {
+            panic!("expected a commit");
+        };
+        assert!(!hash.is_empty());
+        assert_eq!(
+            commit(dir.path(), "again").unwrap(),
+            Committed::NothingToCommit
+        );
+        let untracked = status(dir.path()).unwrap();
+        assert_eq!(untracked.entries.len(), 1);
+        assert_eq!(untracked.entries[0].path, OsString::from("outside.md"));
+    }
+
+    #[test]
+    fn pushing_needs_an_upstream_and_then_sends_the_branch() {
+        let dir = repository();
+        assert!(push(dir.path()).is_err());
+        let remote = tempfile::tempdir().unwrap();
+        git(remote.path(), &["init", "-q", "--bare"]);
+        git(
+            dir.path(),
+            &["remote", "add", "origin", remote.path().to_str().unwrap()],
+        );
+        git(dir.path(), &["push", "-q", "-u", "origin", "HEAD"]);
+        std::fs::write(dir.path().join("tree/a.md"), "pushed\n").unwrap();
+        commit(dir.path(), "to push").unwrap();
+        push(dir.path()).unwrap();
+        let local = run(dir.path(), &["rev-parse", "HEAD"]).unwrap();
+        let pushed = run(remote.path(), &["rev-parse", "HEAD"]).unwrap();
+        assert_eq!(local, pushed);
     }
 
     #[test]

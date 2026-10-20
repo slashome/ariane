@@ -118,7 +118,7 @@ fn node_of(root: &Path, dir: &Path) -> Option<NodePath> {
 
 /// Path of `config.toml`: `$XDG_CONFIG_HOME/ariane/config.toml`, falling back
 /// to `~/.config/ariane/config.toml` (PLAN §9).
-fn config_file() -> PathBuf {
+pub fn config_file() -> PathBuf {
     let base = std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))

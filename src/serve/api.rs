@@ -5,6 +5,10 @@
 //! --archived --json`, `/api/schema` is `ariane schema --json`, `/api/doctor` is
 //! `ariane doctor --all --json`. Responses are built under a short read lock on
 //! the tree, released before anything is sent.
+//!
+//! The writing endpoints — `PATCH /api/items`, `PUT /api/dashboard`,
+//! `POST /api/commit`, `POST /api/push` — run on the blocking pool under the
+//! state's `busy` lock, one at a time, and never commit unless asked.
 
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -15,12 +19,14 @@ use axum::extract::State as Shared;
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
+use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::{Stream, StreamExt};
 
 use super::State;
-use super::git;
+use super::write::{self, Patch, Refusal};
+use super::{dashboard as pins, git};
 use crate::tree::Tree;
 
 /// Interval between the keep-alive comments of an event stream.
@@ -58,9 +64,19 @@ pub async fn items(Shared(state): Shared<Arc<State>>) -> Response {
     })
 }
 
-/// `GET /api/nodes`: every node with its entry point, item count and effective
-/// workflow (after `node.toml` inheritance, ADR-0008).
+/// `GET /api/nodes`: every node with its entry point, item count, effective
+/// workflow (after `node.toml` inheritance, ADR-0008) and the date of its latest
+/// commit, computed when the tree was loaded.
 pub async fn nodes(Shared(state): Shared<Arc<State>>) -> Response {
+    let dates = match state.last_change.read() {
+        Ok(dates) => dates.clone(),
+        Err(_) => {
+            return error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "the date lock is poisoned",
+            );
+        }
+    };
     with_tree(&state, |tree| {
         let nodes: Vec<Value> = tree
             .nodes
@@ -76,6 +92,7 @@ pub async fn nodes(Shared(state): Shared<Arc<State>>) -> Response {
                     "has_index": node.has_index,
                     "items": items,
                     "workflow": tree.configs.effective(&node.path).workflow,
+                    "last_change": dates.get(&node.path).cloned().flatten(),
                 })
             })
             .collect();
@@ -136,6 +153,173 @@ pub async fn events(
             .data(r#"{"scope":"tree"}"#))
     });
     Sse::new(stream).keep_alive(KeepAlive::new().interval(KEEP_ALIVE).text("keep-alive"))
+}
+
+/// Runs `work` on the blocking pool while holding the state's `busy` lock, so
+/// that writes and git actions never interleave, and turns a panic of the task
+/// into a `500`.
+async fn exclusive(
+    state: Arc<State>,
+    work: impl FnOnce(&State) -> Response + Send + 'static,
+) -> Response {
+    let done = tokio::task::spawn_blocking(move || match state.busy.lock() {
+        Ok(_guard) => work(&state),
+        Err(_) => error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "the write lock is poisoned",
+        ),
+    })
+    .await;
+    done.unwrap_or_else(|_| {
+        error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "the write did not finish",
+        )
+    })
+}
+
+/// `PATCH /api/items`: changes `status`, `size`, `impact` or `priority` of one
+/// item, refusing a stale `from` with `409` and the current values.
+///
+/// After writing, the tree is reloaded at once so the response carries the
+/// updated row; the watcher will reload again and notify the browsers.
+pub async fn patch_item(Shared(state): Shared<Arc<State>>, Json(patch): Json<Patch>) -> Response {
+    exclusive(state, move |state| {
+        let applied = match state.tree.read() {
+            Ok(tree) => write::apply(&tree, &patch),
+            Err(_) => {
+                return error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "the tree lock is poisoned",
+                );
+            }
+        };
+        match applied {
+            Ok(_) => {}
+            Err(Refusal::BadRequest(message)) => return error(StatusCode::BAD_REQUEST, &message),
+            Err(Refusal::Invalid(message)) => {
+                return error(StatusCode::UNPROCESSABLE_ENTITY, &message);
+            }
+            Err(Refusal::Failed(message)) => {
+                return error(StatusCode::INTERNAL_SERVER_ERROR, &message);
+            }
+            Err(Refusal::Conflict(current)) => {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(json!({
+                        "error": "the item changed since it was read",
+                        "current": current,
+                    })),
+                )
+                    .into_response();
+            }
+        }
+        if let Err(failure) = state.reload() {
+            return error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}"));
+        }
+        with_tree(state, |tree| {
+            tree.items
+                .iter()
+                .find(|item| item.relative == std::path::Path::new(&patch.path))
+                .map(|item| {
+                    serde_json::to_value(crate::tasks::row(tree, item)).unwrap_or(Value::Null)
+                })
+                .unwrap_or(Value::Null)
+        })
+    })
+    .await
+}
+
+/// The body of `GET` and `PUT /api/dashboard`.
+#[derive(Debug, Deserialize)]
+pub struct Pins {
+    /// Node paths, in card order.
+    pub pinned: Vec<String>,
+}
+
+/// `GET /api/dashboard`: the pinned nodes, in card order.
+pub async fn dashboard(Shared(state): Shared<Arc<State>>) -> Response {
+    match pins::read(&state.config) {
+        Ok(pinned) => Json(json!({ "pinned": pinned })).into_response(),
+        Err(failure) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
+    }
+}
+
+/// `PUT /api/dashboard`: replaces the pinned nodes; every path must be a node.
+pub async fn pin(Shared(state): Shared<Arc<State>>, Json(body): Json<Pins>) -> Response {
+    exclusive(state, move |state| {
+        let unknown: Vec<String> = match state.tree.read() {
+            Ok(tree) => body
+                .pinned
+                .iter()
+                .filter(|path| {
+                    !tree
+                        .nodes
+                        .iter()
+                        .any(|node| node.path.as_str() == path.as_str())
+                })
+                .cloned()
+                .collect(),
+            Err(_) => {
+                return error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "the tree lock is poisoned",
+                );
+            }
+        };
+        if !unknown.is_empty() {
+            return error(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                &format!("not nodes of the tree: {}", unknown.join(", ")),
+            );
+        }
+        match pins::write(&state.config, &body.pinned) {
+            Ok(()) => Json(json!({ "pinned": body.pinned })).into_response(),
+            Err(failure) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
+        }
+    })
+    .await
+}
+
+/// The body of `POST /api/commit`.
+#[derive(Debug, Deserialize)]
+pub struct CommitRequest {
+    /// The commit message; it must not be blank.
+    pub message: String,
+}
+
+/// `POST /api/commit`: stages everything under `tree/` and commits it with the
+/// owner's message and the machine's git identity; `409` when nothing changed.
+pub async fn commit(
+    Shared(state): Shared<Arc<State>>,
+    Json(request): Json<CommitRequest>,
+) -> Response {
+    if request.message.trim().is_empty() {
+        return error(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            "the commit message is empty",
+        );
+    }
+    exclusive(state, move |state| {
+        match git::commit(&state.root, &request.message) {
+            Ok(git::Committed::Commit(hash)) => Json(json!({ "commit": hash })).into_response(),
+            Ok(git::Committed::NothingToCommit) => {
+                error(StatusCode::CONFLICT, "nothing to commit under tree/")
+            }
+            Err(failure) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
+        }
+    })
+    .await
+}
+
+/// `POST /api/push`: pushes the current branch to its upstream; `502` with
+/// git's message when the push fails.
+pub async fn push(Shared(state): Shared<Arc<State>>) -> Response {
+    exclusive(state, |state| match git::push(&state.root) {
+        Ok(()) => Json(json!({ "ok": true })).into_response(),
+        Err(failure) => error(StatusCode::BAD_GATEWAY, &format!("{failure:#}")),
+    })
+    .await
 }
 
 /// Any `/api/…` path that is not an endpoint: a JSON `404`.
