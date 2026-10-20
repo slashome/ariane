@@ -251,6 +251,11 @@ impl Reporter<'_> {
         let name = key.name;
         match key.value {
             ValueType::Version => {}
+            ValueType::Node => {
+                if !value.is_string() {
+                    self.wrong_type(name, key.value.expected());
+                }
+            }
             ValueType::Text | ValueType::Status => {
                 if non_empty(value).is_none() {
                     self.non_empty(name);

@@ -27,7 +27,7 @@ Keys MUST be written in English, in lower case, with `_` as the word separator. 
 | Key | Type | Required | Values |
 |---|---|---|---|
 | `ariane` | integer | **MUST** | The schema version of this file. This specification defines version `1`. |
-| `node` | string | **MUST** | The logical path of the node holding the file, e.g. `cmc/cmc-lib`. MUST equal the file's location under `tree/`. |
+| `node` | string | **MUST** | The logical path of the node holding the file, e.g. `cmc/cmc-lib`. MUST equal the file's location under `tree/`; for an item of the home node, directly under `tree/`, it is the empty string `''`. |
 | `id` | string | **MUST** | Matches `^[A-Za-z][A-Za-z0-9-]*$`. Unique within the node. |
 | `title` | string | **MUST** | Non-empty. |
 | `status` | string | MUST for tasks, stories and backlog items; MUST for reflexions; MUST NOT for ressources | A status id from the node's workflow (§1.5). Reflexions use `open`, `trial` (a decision applied on trial, not yet confirmed) or `settled`. |
