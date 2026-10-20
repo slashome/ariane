@@ -1,5 +1,6 @@
 mod ids;
 pub mod prose;
+mod vocabulary;
 
 use std::path::Path;
 use std::process::Command;

@@ -72,7 +72,6 @@ impl fmt::Display for NodePath {
 #[derive(Debug)]
 pub struct Node {
     pub path: NodePath,
-    pub dir: PathBuf,
     pub has_index: bool,
 }
 
@@ -161,11 +160,7 @@ impl Tree {
             }
         }
         if has_index || has_items {
-            self.nodes.push(Node {
-                path,
-                dir: dir.to_path_buf(),
-                has_index,
-            });
+            self.nodes.push(Node { path, has_index });
         }
         Ok(())
     }
