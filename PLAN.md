@@ -56,7 +56,7 @@ _ariane/
   archives/
 ```
 
-Changing state means moving the file and updating the node's `INDEX.md`. Nothing is ever deleted: completed and abandoned items alike end up in `archives/`, and the trail stays in git.
+Changing state means moving the file and updating the node's `INDEX.md`. [ADR-0010](docs/adr/0010-keep-only-judgment-in-index-files.md) (proposed) drops the second half: item state lives in the item header ([ADR-0008](docs/adr/0008-give-every-item-a-versioned-front-matter.md)) and indexes stop listing items. Nothing is ever deleted: completed and abandoned items alike end up in `archives/`, and the trail stays in git.
 
 > **Status: state of the art, not a decision.** The lifecycle above is transcribed from a project-management directory in production use, where it governs the work of many repositories at once. It is the one part of the method proven by daily practice rather than designed, and it is recorded here so that the step 2 workshop challenges something real instead of starting from a blank page — not because it is settled.
 >
@@ -81,7 +81,7 @@ Ariane defines a **logical contract**: its configuration is a TOML file at the X
 - **Default**: the file is versioned in the user's content repository (`<central>/config/`) and `~/.config/ariane` is a symlink into it — set up by `ariane init`.
 - **Delegated**: users who manage their configurations with a dedicated tool (a dotfiles manager such as dotflies — Ariane's sibling project —, GNU stow, chezmoi…) own that path themselves; Ariane suggests this but never requires it.
 
-Either way, `ariane doctor` only checks that the file exists and parses.
+Either way, `ariane doctor` only checks that the file exists and parses. Its schema is defined in code, and `config.example.toml` is generated from it ([ADR-0013](docs/adr/0013-define-the-configuration-schema-in-code.md)).
 
 ### 10. Tooling: the `ariane` CLI
 
@@ -95,6 +95,11 @@ Core commands:
 - **`ariane init`** — bootstraps a machine: clones the user's content repository, creates the symlinks, adds `dir_name` to the global git excludes, materializes the config, and installs the registered skill packs.
 - **`ariane update`** — re-syncs an existing setup: refreshes links for new nodes and updates skill packs to their registered versions.
 - **`ariane tasks`** — the one read command: every item of the tree in a single cross-cutting view, which no `INDEX.md` can give. Each index answers for its own node — that is §2 working as designed — but *"what is on my plate, everywhere at once"* crosses them all, and nothing in the method answers it today. A throwaway prototype lives in [`tools/`](tools/) until this ships, and it is deleted when it does.
+- **`ariane migrate`** — brings items and configuration to the current schema version through ordered, idempotent migrations; dry-run by default ([ADR-0009](docs/adr/0009-migrate-content-with-versioned-migrations.md)).
+- **`ariane serve`** — serves the interface (dashboard, task list, kanban, size × impact matrix) on `127.0.0.1:4317`; it writes items, never commits. **`ariane service install`** keeps it running through launchd or systemd ([ADR-0012](docs/adr/0012-serve-the-interface-from-the-binary.md)).
+- **`ariane config`** — creates and edits `config.toml` from the schema defined in code ([ADR-0013](docs/adr/0013-define-the-configuration-schema-in-code.md)).
+- **`ariane status`** — renames or removes a workflow status in `node.toml` and rewrites the items that use it ([ADR-0008](docs/adr/0008-give-every-item-a-versioned-front-matter.md)).
+- **`ariane sync <connector>`** — bidirectional sync with an external tracker; conflicts are reported, never guessed ([ADR-0011](docs/adr/0011-sync-external-trackers-through-connectors.md)).
 
 ### 11. `HANDOFF.md` — passing the work on
 
@@ -164,7 +169,7 @@ Each step is one reviewable PR:
 4. `templates/` — `INDEX.md`, `HANDOFF.md` (§11), `story.md`, `task.md`, `conventions.md`, `config.toml`
 5. `agents/ariane/AGENT.md` + `adapters/claude/skills/ariane/SKILL.md` — the Ariane agent
 6. Reference instance — a documented walkthrough of bootstrapping a user's `_ariane` repository
-7. `ariane` CLI (Go, single static binary) — `doctor` first, then `init` and `update`
+7. `ariane` CLI (Rust, single static binary, [ADR-0005](docs/adr/0005-write-ariane-in-rust.md)) — the item header and `migrate` first ([ADR-0008](docs/adr/0008-give-every-item-a-versioned-front-matter.md), [ADR-0009](docs/adr/0009-migrate-content-with-versioned-migrations.md)), then `serve` ([ADR-0012](docs/adr/0012-serve-the-interface-from-the-binary.md)), then `doctor`, `init`, `update`, `config` and `service`, then tracker sync ([ADR-0011](docs/adr/0011-sync-external-trackers-through-connectors.md))
 
 Later: more CLI commands (`ariane link` to materialize a new node), more adapters (AGENTS.md, Cursor, subagents), multi-user projects, migration guides.
 

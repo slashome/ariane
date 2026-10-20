@@ -42,6 +42,12 @@ A closing *Revisit if* section names the conditions under which the decision wou
 | [0005](0005-write-ariane-in-rust.md) | Write the `ariane` CLI in Rust | Accepted | 2026-08-15 |
 | [0006](0006-skill-pack-placement.md) | Declare skill packs per node, install them once at user level | Accepted | 2026-08-15 |
 | [0007](0007-write-the-handoff-on-request.md) | Write `HANDOFF.md` on explicit request, never on session end | Accepted | 2026-08-20 |
+| [0008](0008-give-every-item-a-versioned-front-matter.md) | Give every item a versioned front-matter, extended per node | Proposed | 2026-10-20 |
+| [0009](0009-migrate-content-with-versioned-migrations.md) | Migrate content and configuration with versioned migrations | Proposed | 2026-10-20 |
+| [0010](0010-keep-only-judgment-in-index-files.md) | Keep only judgment in `INDEX.md`, compute aggregates on demand | Proposed | 2026-10-20 |
+| [0011](0011-sync-external-trackers-through-connectors.md) | Sync external trackers through per-node connectors | Proposed | 2026-10-20 |
+| [0012](0012-serve-the-interface-from-the-binary.md) | Serve the interface from the `ariane` binary | Proposed | 2026-10-20 |
+| [0013](0013-define-the-configuration-schema-in-code.md) | Define the configuration schema in code | Proposed | 2026-10-20 |
 
 ## Adding one
 
