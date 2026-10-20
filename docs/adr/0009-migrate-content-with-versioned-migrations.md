@@ -1,6 +1,6 @@
 # ADR-0009 — Migrate content with versioned migrations shipped in the CLI
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-20
 - **Concerns:** PLAN §6, §9, §10, roadmap steps 3–4
 - **Depends on:** [ADR-0008](0008-give-every-item-a-versioned-front-matter.md) (the item header and its `ariane` version key), [ADR-0004](0004-write-or-judge.md) (a command writes or judges)

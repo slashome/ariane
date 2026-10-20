@@ -1,6 +1,6 @@
 # ADR-0013 — Define the configuration schema in code, and generate the example from it
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-20
 - **Concerns:** PLAN §9, §10
 - **Depends on:** [ADR-0009](0009-migrate-content-with-versioned-migrations.md) (versioned migrations), [ADR-0005](0005-write-ariane-in-rust.md) (Rust)

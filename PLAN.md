@@ -56,7 +56,7 @@ _ariane/
   archives/
 ```
 
-Changing state means moving the file and updating the node's `INDEX.md`. [ADR-0010](docs/adr/0010-keep-only-judgment-in-index-files.md) (proposed) drops the second half: item state lives in the item header ([ADR-0008](docs/adr/0008-give-every-item-a-versioned-front-matter.md)) and indexes stop listing items. Nothing is ever deleted: completed and abandoned items alike end up in `archives/`, and the trail stays in git.
+Changing state means moving the file and updating the node's `INDEX.md`. [ADR-0010](docs/adr/0010-keep-only-judgment-in-index-files.md) drops the second half: item state lives in the item header ([ADR-0008](docs/adr/0008-give-every-item-a-versioned-front-matter.md)) and indexes stop listing items. Nothing is ever deleted: completed and abandoned items alike end up in `archives/`, and the trail stays in git.
 
 > **Status: state of the art, not a decision.** The lifecycle above is transcribed from a project-management directory in production use, where it governs the work of many repositories at once. It is the one part of the method proven by daily practice rather than designed, and it is recorded here so that the step 2 workshop challenges something real instead of starting from a blank page — not because it is settled.
 >

@@ -38,16 +38,16 @@ A closing *Revisit if* section names the conditions under which the decision wou
 | [0001](0001-central-repository-layout.md) | Mirror the logical tree in the central repository, under a reserved prefix | Accepted | 2026-08-15 |
 | [0002](0002-handoff-hosting.md) | Host `HANDOFF.md` centrally, not in the host repository | Accepted | 2026-08-15 |
 | [0003](0003-no-git-hooks.md) | Use no git hooks, and enumerate worktrees on demand | Accepted | 2026-08-15 |
-| [0004](0004-write-or-judge.md) | Separate the commands that write from the command that judges | Proposed | 2026-08-15 |
+| [0004](0004-write-or-judge.md) | Separate the commands that write from the command that judges | Accepted | 2026-08-15 |
 | [0005](0005-write-ariane-in-rust.md) | Write the `ariane` CLI in Rust | Accepted | 2026-08-15 |
 | [0006](0006-skill-pack-placement.md) | Declare skill packs per node, install them once at user level | Accepted | 2026-08-15 |
 | [0007](0007-write-the-handoff-on-request.md) | Write `HANDOFF.md` on explicit request, never on session end | Accepted | 2026-08-20 |
-| [0008](0008-give-every-item-a-versioned-front-matter.md) | Give every item a versioned front-matter, extended per node | Proposed | 2026-10-20 |
-| [0009](0009-migrate-content-with-versioned-migrations.md) | Migrate content and configuration with versioned migrations | Proposed | 2026-10-20 |
-| [0010](0010-keep-only-judgment-in-index-files.md) | Keep only judgment in `INDEX.md`, compute aggregates on demand | Proposed | 2026-10-20 |
-| [0011](0011-sync-external-trackers-through-connectors.md) | Sync external trackers through per-node connectors | Proposed | 2026-10-20 |
-| [0012](0012-serve-the-interface-from-the-binary.md) | Serve the interface from the `ariane` binary | Proposed | 2026-10-20 |
-| [0013](0013-define-the-configuration-schema-in-code.md) | Define the configuration schema in code | Proposed | 2026-10-20 |
+| [0008](0008-give-every-item-a-versioned-front-matter.md) | Give every item a versioned front-matter, extended per node | Accepted | 2026-10-20 |
+| [0009](0009-migrate-content-with-versioned-migrations.md) | Migrate content and configuration with versioned migrations | Accepted | 2026-10-20 |
+| [0010](0010-keep-only-judgment-in-index-files.md) | Keep only judgment in `INDEX.md`, compute aggregates on demand | Accepted | 2026-10-20 |
+| [0011](0011-sync-external-trackers-through-connectors.md) | Sync external trackers through per-node connectors | Accepted | 2026-10-20 |
+| [0012](0012-serve-the-interface-from-the-binary.md) | Serve the interface from the `ariane` binary | Accepted | 2026-10-20 |
+| [0013](0013-define-the-configuration-schema-in-code.md) | Define the configuration schema in code | Accepted | 2026-10-20 |
 
 ## Adding one
 

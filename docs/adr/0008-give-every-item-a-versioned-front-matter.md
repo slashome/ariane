@@ -1,6 +1,6 @@
 # ADR-0008 — Give every item a versioned front-matter, extended per node
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-20
 - **Concerns:** PLAN §2, §6, §10
 

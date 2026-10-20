@@ -1,6 +1,6 @@
 # ADR-0011 — Sync external trackers through per-node connectors
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-10-20
 - **Concerns:** PLAN §9, §10; [ADR-0004](0004-write-or-judge.md), [ADR-0008](0008-give-every-item-a-versioned-front-matter.md), [ADR-0012](0012-serve-the-interface-from-the-binary.md)
 

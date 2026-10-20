@@ -1,6 +1,6 @@
 # ADR-0004 — A command writes, or a command judges — never both
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-15
 - **Concerns:** PLAN §4, §9, §10
 
