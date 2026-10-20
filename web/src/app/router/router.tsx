@@ -9,12 +9,12 @@ export const router = createBrowserRouter([
   {
     element: <AppLayout />,
     children: [
-      { index: true, element: <Navigate to="/tasks" replace /> },
+      { index: true, element: <DashboardPage /> },
       { path: 'dashboard', element: <DashboardPage /> },
       { path: 'tasks', element: <TasksPage /> },
       { path: 'kanban', element: <KanbanPage /> },
       { path: 'matrix', element: <MatrixPage /> },
-      { path: '*', element: <Navigate to="/tasks" replace /> },
+      { path: '*', element: <Navigate to="/" replace /> },
     ],
   },
 ])

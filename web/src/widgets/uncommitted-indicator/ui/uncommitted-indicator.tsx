@@ -1,7 +1,10 @@
-import { GitCommitHorizontal } from 'lucide-react'
+import { GitCommitHorizontal, Upload } from 'lucide-react'
+import { useState } from 'react'
 import { useRepo } from '@/entities/repo'
 import type { UncommittedFile } from '@/shared/api'
 import { Button, HoverCard, HoverCardContent, HoverCardTrigger } from '@/shared/ui'
+import { usePush } from '../api/use-git-actions'
+import { CommitForm } from './commit-form'
 
 export function UncommittedList({ files }: { files: UncommittedFile[] }) {
   return (
@@ -20,13 +23,15 @@ export function UncommittedList({ files }: { files: UncommittedFile[] }) {
 
 export function UncommittedIndicator() {
   const { data: repo } = useRepo()
+  const push = usePush()
+  const [composing, setComposing] = useState(false)
   const files = repo?.uncommitted ?? []
   if (files.length === 0) {
     return null
   }
   const label = `${files.length} uncommitted ${files.length === 1 ? 'file' : 'files'}`
   return (
-    <HoverCard openDelay={100}>
+    <HoverCard openDelay={100} open={composing ? true : undefined}>
       <HoverCardTrigger asChild>
         <button
           type="button"
@@ -37,17 +42,24 @@ export function UncommittedIndicator() {
           {files.length}
         </button>
       </HoverCardTrigger>
-      <HoverCardContent>
+      <HoverCardContent onEscapeKeyDown={() => setComposing(false)}>
         <p className="mb-2 font-medium">{label}</p>
         <UncommittedList files={files} />
-        <div className="mt-3 flex gap-2 border-t border-border pt-3">
-          <Button size="sm" disabled title="Coming soon">
-            Commit all
-          </Button>
-          <Button size="sm" variant="outline" disabled title="Coming soon">
-            Commit per node
-          </Button>
-          <span className="self-center text-xs text-muted-foreground">coming soon</span>
+        <div className="mt-3 border-t border-border pt-3">
+          {composing ? (
+            <CommitForm files={files} onDone={() => setComposing(false)} />
+          ) : (
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => setComposing(true)}>
+                <GitCommitHorizontal className="size-3.5" aria-hidden />
+                Commit all
+              </Button>
+              <Button size="sm" variant="outline" disabled={push.isPending} onClick={() => push.mutate()}>
+                <Upload className="size-3.5" aria-hidden />
+                {push.isPending ? 'Pushing…' : 'Push'}
+              </Button>
+            </div>
+          )}
         </div>
       </HoverCardContent>
     </HoverCard>

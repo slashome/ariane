@@ -1,23 +1,57 @@
-import type { Item, NodeSummary, Repo, Schema } from './types'
+import type { CommitResult, Dashboard, Item, ItemPatch, NodeSummary, Repo, Schema } from './types'
 
 export class ApiError extends Error {
   constructor(
     readonly url: string,
     readonly status: number,
+    readonly body: unknown = null,
   ) {
-    super(`GET ${url} answered ${status}`)
+    super(messageOf(body) ?? `${url} answered ${status}`)
   }
 }
 
-async function getJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { headers: { Accept: 'application/json' } })
+function messageOf(body: unknown): string | null {
+  if (typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string') {
+    return body.error
+  }
+  return null
+}
+
+async function readBody(response: Response): Promise<unknown> {
+  const text = await response.text()
+  if (text === '') {
+    return null
+  }
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    return text
+  }
+}
+
+async function request<T>(method: string, url: string, payload?: unknown): Promise<T> {
+  const response = await fetch(url, {
+    method,
+    headers:
+      payload === undefined
+        ? { Accept: 'application/json' }
+        : { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: payload === undefined ? undefined : JSON.stringify(payload),
+  })
+  const body = await readBody(response)
   if (!response.ok) {
-    throw new ApiError(url, response.status)
+    throw new ApiError(url, response.status, body)
   }
-  return (await response.json()) as T
+  return body as T
 }
 
-export const fetchItems = () => getJson<Item[]>('/api/items')
-export const fetchNodes = () => getJson<NodeSummary[]>('/api/nodes')
-export const fetchSchema = () => getJson<Schema>('/api/schema')
-export const fetchRepo = () => getJson<Repo>('/api/repo')
+export const fetchItems = () => request<Item[]>('GET', '/api/items')
+export const fetchNodes = () => request<NodeSummary[]>('GET', '/api/nodes')
+export const fetchSchema = () => request<Schema>('GET', '/api/schema')
+export const fetchRepo = () => request<Repo>('GET', '/api/repo')
+export const fetchDashboard = () => request<Dashboard>('GET', '/api/dashboard')
+
+export const patchItem = (patch: ItemPatch) => request<Item>('PATCH', '/api/items', patch)
+export const saveDashboard = (dashboard: Dashboard) => request<Dashboard>('PUT', '/api/dashboard', dashboard)
+export const commitChanges = (message: string) => request<CommitResult>('POST', '/api/commit', { message })
+export const pushChanges = () => request<{ ok: boolean }>('POST', '/api/push', {})

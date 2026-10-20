@@ -9,11 +9,12 @@ import {
 } from '@tanstack/react-table'
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { StatusBadge } from '@/entities/item'
+import { statusLabel, useNodes } from '@/entities/node'
 import { enumValues, kindLabel, useSchema } from '@/entities/schema'
-import type { Item, Schema } from '@/shared/api'
+import type { Item, NodeSummary, Schema } from '@/shared/api'
 import { cn, displayNode } from '@/shared/lib'
 import { ItemDetails } from './item-details'
-import { StatusBadge } from './status-badge'
 
 const features = tableFeatures({
   rowSortingFeature,
@@ -28,7 +29,7 @@ function rank(schema: Schema | undefined, key: string, value: string | null): nu
   return index < 0 ? undefined : index
 }
 
-function buildColumns(schema: Schema | undefined) {
+function buildColumns(schema: Schema | undefined, nodes: NodeSummary[]) {
   const text = (value: string | null) => value ?? undefined
   const ranked = (key: 'priority' | 'size' | 'impact', header: string) =>
     helper.accessor((item) => rank(schema, key, item[key]), {
@@ -74,7 +75,13 @@ function buildColumns(schema: Schema | undefined) {
       header: 'Status',
       sortFn: 'alphanumeric',
       sortUndefined: 'last',
-      cell: ({ row }) => <StatusBadge status={row.original.status} category={row.original.category} />,
+      cell: ({ row }) => (
+        <StatusBadge
+          status={row.original.status}
+          category={row.original.category}
+          label={statusLabel(nodes, row.original.node, row.original.status)}
+        />
+      ),
     }),
     ranked('priority', 'Priority'),
     ranked('size', 'Size'),
@@ -91,7 +98,8 @@ function buildColumns(schema: Schema | undefined) {
 
 export function ItemsTable({ items }: { items: Item[] }) {
   const { data: schema } = useSchema()
-  const columns = useMemo(() => buildColumns(schema), [schema])
+  const { data: nodes = [] } = useNodes()
+  const columns = useMemo(() => buildColumns(schema, nodes), [schema, nodes])
   const [selected, setSelected] = useState<Item | null>(null)
   const table = useTable({ features, columns, data: items, getRowId: (item) => item.path })
 

@@ -1,9 +1,8 @@
 import { useSearchParams } from 'react-router'
+import { sortNodes, useNodes } from '@/entities/node'
 import { searchParamKeys } from '@/shared/config'
 import { displayNode } from '@/shared/lib'
 import { NativeSelect } from '@/shared/ui'
-import { useNodes } from '../api/use-nodes'
-import { sortNodes } from '../lib/sort-nodes'
 
 const allNodes = '*'
 

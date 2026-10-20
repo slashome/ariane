@@ -3,4 +3,5 @@ export const queryKeys = {
   nodes: ['nodes'],
   schema: ['schema'],
   repo: ['repo'],
+  dashboard: ['dashboard'],
 } as const

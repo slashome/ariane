@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react'
+import { StatusBadge } from '@/entities/item'
+import { statusLabel, useNodes } from '@/entities/node'
 import { kindLabel } from '@/entities/schema'
 import type { Item } from '@/shared/api'
 import { displayNode } from '@/shared/lib'
 import { Sheet } from '@/shared/ui'
-import { StatusBadge } from './status-badge'
 
 function Field({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -15,6 +16,7 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
 }
 
 export function ItemDetails({ item, onClose }: { item: Item | null; onClose: () => void }) {
+  const { data: nodes = [] } = useNodes()
   return (
     <Sheet
       open={item !== null}
@@ -24,7 +26,7 @@ export function ItemDetails({ item, onClose }: { item: Item | null; onClose: () 
     >
       {item && (
         <dl className="space-y-2">
-          <Field label="Status" value={<StatusBadge status={item.status} category={item.category} />} />
+          <Field label="Status" value={<StatusBadge status={item.status} category={item.category} label={statusLabel(nodes, item.node, item.status)} />} />
           <Field label="Kind" value={kindLabel(item.kind)} />
           <Field label="Archived" value={item.archived ? 'yes' : 'no'} />
           <Field label="Priority" value={item.priority} />
