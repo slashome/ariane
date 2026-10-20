@@ -30,9 +30,8 @@ use finding::{Finding, Remedy, Severity};
 /// # Errors
 ///
 /// Fails only if the findings cannot be serialized to JSON.
-pub fn run(tree: &Tree, args: &DoctorArgs) -> Result<ExitCode> {
-    let scope = args.node.as_deref().map(NodePath::new);
-    let findings = diagnose(tree, scope.as_ref(), args.strict);
+pub fn run(tree: &Tree, args: &DoctorArgs, scope: Option<&NodePath>) -> Result<ExitCode> {
+    let findings = diagnose(tree, scope, args.strict);
     if args.json {
         println!("{}", serde_json::to_string_pretty(&findings)?);
     } else {

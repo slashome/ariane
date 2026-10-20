@@ -47,10 +47,9 @@ pub struct Row<'a> {
 /// # Errors
 ///
 /// Fails only if the rows cannot be serialized to JSON.
-pub fn run(tree: &Tree, args: &TasksArgs) -> Result<ExitCode> {
-    let scope = args.node.as_deref().map(NodePath::new);
+pub fn run(tree: &Tree, args: &TasksArgs, scope: Option<&NodePath>) -> Result<ExitCode> {
     let rows: Vec<Row> = tree
-        .items_within(scope.as_ref())
+        .items_within(scope)
         .filter(|item| args.archived || !item.archived)
         .map(|item| row(tree, item))
         .collect();

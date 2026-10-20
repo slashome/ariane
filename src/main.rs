@@ -70,12 +70,22 @@ fn run() -> Result<ExitCode> {
     if let cli::Command::Schema(args) = &cli.command {
         return schema_command(args);
     }
-    let root = repo::discover(cli.repo.as_deref())?;
-    let tree = tree::Tree::load(&root)?;
+    let location = repo::discover(cli.repo.as_deref())?;
+    let tree = tree::Tree::load(&location.root)?;
+    let here = location.here.as_ref();
     match cli.command {
-        cli::Command::Tasks(args) => tasks::run(&tree, &args),
-        cli::Command::Doctor(args) => doctor::run(&tree, &args),
-        cli::Command::Migrate(args) => migrate::run(&tree, &args),
+        cli::Command::Tasks(args) => {
+            let scope = scope(args.node.as_deref(), args.all, here);
+            tasks::run(&tree, &args, scope.as_ref())
+        }
+        cli::Command::Doctor(args) => {
+            let scope = scope(args.node.as_deref(), args.all, here);
+            doctor::run(&tree, &args, scope.as_ref())
+        }
+        cli::Command::Migrate(args) => {
+            let scope = scope(args.node.as_deref(), args.all, here);
+            migrate::run(&tree, &args, scope.as_ref())
+        }
         cli::Command::Schema(args) => schema_command(&args),
     }
 }
@@ -101,4 +111,47 @@ fn schema_command(args: &cli::SchemaArgs) -> Result<ExitCode> {
         println!("{:<11} {}{values}", key.name, key.value.id());
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// Chooses the node a command covers (PLAN §10).
+///
+/// An explicit `--node` wins; `--all` covers the whole tree (`None`); otherwise
+/// the command focuses on the node of the current directory, and covers the
+/// whole tree when the current directory stands in no node. The home node also
+/// means the whole tree, since every node descends from it.
+fn scope(node: Option<&str>, all: bool, here: Option<&tree::NodePath>) -> Option<tree::NodePath> {
+    match (node, all) {
+        (Some(node), _) => Some(tree::NodePath::new(node)),
+        (None, true) => None,
+        (None, false) => here.filter(|node| !node.is_home()).cloned(),
+    }
+}
+
+/// Unit tests of the scope chosen for a command.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tree::NodePath;
+
+    #[test]
+    fn an_explicit_node_wins_over_the_current_directory() {
+        let here = NodePath::new("cmc");
+        assert_eq!(
+            scope(Some("slashome/me"), false, Some(&here)),
+            Some(NodePath::new("slashome/me"))
+        );
+    }
+
+    #[test]
+    fn all_covers_the_whole_tree_even_inside_a_node() {
+        assert_eq!(scope(None, true, Some(&NodePath::new("cmc"))), None);
+    }
+
+    #[test]
+    fn without_flags_the_command_focuses_on_the_current_node() {
+        let here = NodePath::new("cmc/cmc-lib");
+        assert_eq!(scope(None, false, Some(&here)), Some(here.clone()));
+        assert_eq!(scope(None, false, Some(&NodePath::new(""))), None);
+        assert_eq!(scope(None, false, None), None);
+    }
 }

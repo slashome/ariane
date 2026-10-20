@@ -50,8 +50,18 @@ pub enum Command {
 /// archived items, and `json` to print JSON instead of a table.
 #[derive(Args)]
 pub struct TasksArgs {
-    #[arg(long, help = "Only the items of this node and its descendants")]
+    #[arg(
+        long,
+        help = "Only the items of this node and its descendants (default: the node of the current directory)"
+    )]
     pub node: Option<String>,
+
+    #[arg(
+        long,
+        conflicts_with = "node",
+        help = "Cover the whole tree, wherever the command runs"
+    )]
+    pub all: bool,
 
     #[arg(long, help = "Include archived items")]
     pub archived: bool,
@@ -64,8 +74,18 @@ pub struct TasksArgs {
 /// warnings, and `json` to print the findings as JSON.
 #[derive(Args)]
 pub struct DoctorArgs {
-    #[arg(long, help = "Only check this node and its descendants")]
+    #[arg(
+        long,
+        help = "Only check this node and its descendants (default: the node of the current directory)"
+    )]
     pub node: Option<String>,
+
+    #[arg(
+        long,
+        conflicts_with = "node",
+        help = "Cover the whole tree, wherever the command runs"
+    )]
+    pub all: bool,
 
     #[arg(long, help = "Treat warnings as errors")]
     pub strict: bool,
@@ -78,8 +98,18 @@ pub struct DoctorArgs {
 /// files (a dry run otherwise), and `json` to print the plan as JSON.
 #[derive(Args)]
 pub struct MigrateArgs {
-    #[arg(long, help = "Only migrate this node and its descendants")]
+    #[arg(
+        long,
+        help = "Only migrate this node and its descendants (default: the node of the current directory)"
+    )]
     pub node: Option<String>,
+
+    #[arg(
+        long,
+        conflicts_with = "node",
+        help = "Cover the whole tree, wherever the command runs"
+    )]
+    pub all: bool,
 
     #[arg(
         long,

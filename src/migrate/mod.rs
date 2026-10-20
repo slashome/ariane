@@ -95,9 +95,8 @@ pub struct Entry {
 ///
 /// Fails when a file cannot be read or written, or when the plan cannot be
 /// serialized to JSON.
-pub fn run(tree: &Tree, args: &MigrateArgs) -> Result<ExitCode> {
-    let scope = args.node.as_deref().map(NodePath::new);
-    let entries = plan(tree, scope.as_ref())?;
+pub fn run(tree: &Tree, args: &MigrateArgs, scope: Option<&NodePath>) -> Result<ExitCode> {
+    let entries = plan(tree, scope)?;
     if args.apply {
         for entry in entries
             .iter()
@@ -276,6 +275,7 @@ mod tests {
     fn args(apply: bool) -> MigrateArgs {
         MigrateArgs {
             node: None,
+            all: false,
             apply,
             json: false,
         }
@@ -297,7 +297,7 @@ mod tests {
         let path = repo.root().join("tree/game/tasks/T001-forge.md");
         let before = std::fs::read_to_string(&path).unwrap();
         let tree = Tree::load(repo.root()).unwrap();
-        let code = run(&tree, &args(false)).unwrap();
+        let code = run(&tree, &args(false), None).unwrap();
         assert_eq!(code, ExitCode::SUCCESS);
         assert_eq!(std::fs::read_to_string(&path).unwrap(), before);
     }
@@ -306,12 +306,12 @@ mod tests {
     fn applying_writes_and_a_second_run_changes_nothing() {
         let repo = sample();
         let path = repo.root().join("tree/game/tasks/T001-forge.md");
-        run(&Tree::load(repo.root()).unwrap(), &args(true)).unwrap();
+        run(&Tree::load(repo.root()).unwrap(), &args(true), None).unwrap();
         let migrated = std::fs::read_to_string(&path).unwrap();
         assert!(migrated.starts_with("---\nariane: 1\nnode: game\nid: T001\ntitle: Forger\nstatus: todo\nmod: Smithing\n---\n"));
         let entries = plan(&Tree::load(repo.root()).unwrap(), None).unwrap();
         assert_eq!(entries[0].outcome, Outcome::Unchanged);
-        run(&Tree::load(repo.root()).unwrap(), &args(true)).unwrap();
+        run(&Tree::load(repo.root()).unwrap(), &args(true), None).unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), migrated);
     }
 
@@ -324,7 +324,7 @@ mod tests {
         let entries = plan(&tree, None).unwrap();
         assert_eq!(entries[0].outcome, Outcome::NeedsHuman);
         assert!(entries[0].reasons[0].contains("newer"));
-        let code = run(&tree, &args(true)).unwrap();
+        let code = run(&tree, &args(true), None).unwrap();
         assert_eq!(code, ExitCode::from(2));
         let path = repo.root().join("tree/game/tasks/T001-x.md");
         assert_eq!(std::fs::read_to_string(path).unwrap(), text);
