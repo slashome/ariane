@@ -41,7 +41,7 @@ pub fn run(tree: &Tree, args: &DoctorArgs, scope: Option<&NodePath>) -> Result<E
 }
 
 /// Collects the findings of `scope`, promoting every warning to an error under `--strict`.
-fn diagnose(tree: &Tree, scope: Option<&NodePath>, strict: bool) -> Vec<Finding> {
+pub(crate) fn diagnose(tree: &Tree, scope: Option<&NodePath>, strict: bool) -> Vec<Finding> {
     let mut findings = check::findings(tree, scope);
     if strict {
         for finding in &mut findings {

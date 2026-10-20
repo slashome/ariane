@@ -12,7 +12,8 @@
 //! - `ariane tasks` → [`tasks`], lists items;
 //! - `ariane doctor` → [`doctor`], checks items without writing (ADR-0004);
 //! - `ariane migrate` → [`migrate`], upgrades items to the current schema (ADR-0009);
-//! - `ariane schema` → [`schema`], prints the header schema; it needs no repository.
+//! - `ariane schema` → [`schema`], prints the header schema; it needs no repository;
+//! - `ariane serve` → [`serve`], serves the web interface (ADR-0012).
 //!
 //! Exit code `3` means the command could not run at all (ADR-0004); the other
 //! codes are chosen by each command.
@@ -31,6 +32,7 @@ mod node;
 mod repo;
 /// The core header schema, declared once as data.
 mod schema;
+mod serve;
 /// `ariane tasks`: the list of items.
 mod tasks;
 /// The whole content repository loaded in memory.
@@ -87,6 +89,7 @@ fn run() -> Result<ExitCode> {
             migrate::run(&tree, &args, scope.as_ref())
         }
         cli::Command::Schema(args) => schema_command(&args),
+        cli::Command::Serve(args) => serve::run(location.root, tree, &args),
     }
 }
 

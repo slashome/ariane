@@ -5,13 +5,21 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.104"
+axum = "0.8.9"
 clap = { version = "4.6.7", features = ["derive", "env"] }
+mime_guess = "2.0.5"
+notify = "8.2.0"
+rust-embed = "8.13.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 similar = "3.2.0"
 thiserror = "2.0.21"
+tokio = { version = "1.54.0", features = ["rt-multi-thread", "macros", "net", "signal", "sync", "time"] }
+tokio-stream = { version = "0.1.19", features = ["sync"] }
 toml = "1.1.8"
 yaml_serde = "0.10.7"
 
 [dev-dependencies]
+http-body-util = "0.1.5"
 tempfile = "3.27.0"
+tower = { version = "0.5.3", features = ["util"] }

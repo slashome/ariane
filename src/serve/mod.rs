@@ -1,0 +1,283 @@
+//! `ariane serve`: the web interface, served by the binary itself (ADR-0012).
+//!
+//! One process: an `axum` server bound to `127.0.0.1` only, holding the loaded
+//! [`Tree`] in memory. The front is a React application embedded at build time
+//! ([`assets`]); the JSON API it calls lives in [`api`]. A file watcher
+//! ([`watch`]) reloads the tree when anything under `tree/` or `.git/` changes and
+//! tells the browsers through Server-Sent Events, so there is no Rescan button.
+//!
+//! Nothing here writes or commits: this step of the interface is read-only.
+
+mod api;
+mod assets;
+mod git;
+mod watch;
+
+use std::net::{Ipv4Addr, SocketAddr};
+use std::path::PathBuf;
+use std::process::ExitCode;
+use std::sync::{Arc, RwLock};
+
+use anyhow::{Context, Result};
+use axum::Router;
+use axum::routing::get;
+use tokio::sync::broadcast;
+
+use crate::cli::ServeArgs;
+use crate::tree::Tree;
+
+/// What every request handler shares: the repository root, the tree loaded from
+/// it, and the channel that announces each reload to the open event streams.
+///
+/// The tree sits behind a [`RwLock`]: handlers take short read locks to build
+/// their response, the watcher takes a write lock only to swap in a freshly
+/// loaded tree. No lock is held across an `.await`.
+pub struct State {
+    /// Root of the content repository.
+    pub root: PathBuf,
+    /// The tree as last loaded from disk.
+    pub tree: RwLock<Tree>,
+    /// Sends one message per reload; each `/api/events` stream subscribes to it.
+    pub changes: broadcast::Sender<()>,
+}
+
+impl State {
+    /// Wraps a loaded tree into shared state, ready to be cloned into handlers.
+    ///
+    /// `Arc` is a reference-counted pointer: cloning it is cheap and every clone
+    /// points to the same state, which is how axum hands it to each request.
+    pub fn new(root: PathBuf, tree: Tree) -> Arc<State> {
+        let (changes, _) = broadcast::channel(16);
+        Arc::new(State {
+            root,
+            tree: RwLock::new(tree),
+            changes,
+        })
+    }
+
+    /// Reloads the tree from disk, swaps it in and announces the change.
+    ///
+    /// A tree that fails to load leaves the previous one in place: the interface
+    /// keeps showing the last good state rather than going blank.
+    ///
+    /// # Errors
+    ///
+    /// Fails when the tree cannot be read; the shared state is then unchanged.
+    pub fn reload(&self) -> Result<()> {
+        let fresh = Tree::load(&self.root)?;
+        *self
+            .tree
+            .write()
+            .map_err(|_| anyhow::anyhow!("the tree lock is poisoned"))? = fresh;
+        let _ = self.changes.send(());
+        Ok(())
+    }
+}
+
+/// Builds the router: the JSON API under `/api`, everything else from the
+/// embedded front with a fallback to its `index.html`.
+pub fn router(state: Arc<State>) -> Router {
+    Router::new()
+        .route("/api/items", get(api::items))
+        .route("/api/nodes", get(api::nodes))
+        .route("/api/schema", get(api::schema))
+        .route("/api/doctor", get(api::doctor))
+        .route("/api/repo", get(api::repo))
+        .route("/api/events", get(api::events))
+        .route("/api", get(api::not_found))
+        .route("/api/{*rest}", get(api::not_found))
+        .fallback(get(assets::serve))
+        .with_state(state)
+}
+
+/// Runs `ariane serve` until Ctrl-C.
+///
+/// The server listens on `127.0.0.1` only, never on another interface, which is
+/// why it has no authentication (ADR-0012). `main` is synchronous, so this
+/// function builds the tokio runtime itself and blocks on the server.
+///
+/// # Errors
+///
+/// Fails when the runtime cannot start, the port is taken, or the watcher
+/// cannot be installed.
+pub fn run(root: PathBuf, tree: Tree, args: &ServeArgs) -> Result<ExitCode> {
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .context("starting the async runtime")?;
+    runtime.block_on(serve(root, tree, args.port, args.open))?;
+    Ok(ExitCode::SUCCESS)
+}
+
+/// Binds the port, starts the watcher and serves until Ctrl-C.
+///
+/// # Errors
+///
+/// Fails when the port cannot be bound or the watcher cannot be installed.
+async fn serve(root: PathBuf, tree: Tree, port: u16, open: bool) -> Result<()> {
+    let state = State::new(root.clone(), tree);
+    let _watcher = watch::start(state.clone()).context("watching the content repository")?;
+    let address = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
+    let listener = tokio::net::TcpListener::bind(address)
+        .await
+        .with_context(|| format!("listening on {address}"))?;
+    let url = format!("http://{address}");
+    eprintln!("ariane serve: {} on {url} (Ctrl-C to stop)", root.display());
+    if open {
+        open_browser(&url);
+    }
+    axum::serve(listener, router(state))
+        .with_graceful_shutdown(async {
+            let _ = tokio::signal::ctrl_c().await;
+        })
+        .await
+        .context("serving")
+}
+
+/// Opens `url` in the default browser: `open` on macOS, `xdg-open` elsewhere.
+///
+/// A failure is reported on stderr and ignored: the server is up either way.
+fn open_browser(url: &str) {
+    let program = if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    if let Err(error) = std::process::Command::new(program).arg(url).spawn() {
+        eprintln!("ariane serve: could not open the browser ({error}); open {url}");
+    }
+}
+
+/// Requests sent to the router without a network, against fixture repositories.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tree::fixture::Repo;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use http_body_util::BodyExt;
+    use tower::ServiceExt;
+
+    /// A repository with one node, a workflow, one task and one invalid item.
+    fn sample() -> Repo {
+        let repo = Repo::new();
+        repo.write("p/INDEX.md", "# p\n")
+            .write(
+                "p/node.toml",
+                "[[workflow]]\nid = \"a-faire\"\nlabel = \"À faire\"\ncategory = \"todo\"\n",
+            )
+            .write(
+                "p/tasks/T001-a.md",
+                "---\nariane: 1\nnode: p\nid: T001\ntitle: A\nstatus: a-faire\n---\n# A\n",
+            )
+            .write("p/tasks/legacy.md", "# Legacy\n");
+        repo
+    }
+
+    /// Sends a GET to a router over `repo` and returns the status and body.
+    async fn get(repo: &Repo, path: &str) -> (StatusCode, Vec<u8>, Option<String>) {
+        let state = State::new(repo.root().to_path_buf(), Tree::load(repo.root()).unwrap());
+        let response = router(state)
+            .oneshot(Request::get(path).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        let status = response.status();
+        let content_type = response
+            .headers()
+            .get("content-type")
+            .map(|value| value.to_str().unwrap().to_owned());
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        (status, body.to_vec(), content_type)
+    }
+
+    /// Parses a response body as JSON.
+    fn json(body: &[u8]) -> serde_json::Value {
+        serde_json::from_slice(body).unwrap()
+    }
+
+    #[tokio::test]
+    async fn items_lists_every_item_with_its_resolved_category() {
+        let repo = sample();
+        let (status, body, _) = get(&repo, "/api/items").await;
+        assert_eq!(status, StatusCode::OK);
+        let items = json(&body);
+        assert_eq!(items.as_array().unwrap().len(), 2);
+        let task = items
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|item| item["id"] == "T001")
+            .unwrap();
+        assert_eq!(task["category"], "todo");
+        assert_eq!(task["node"], "p");
+    }
+
+    #[tokio::test]
+    async fn nodes_carry_their_item_count_and_effective_workflow() {
+        let repo = sample();
+        let (status, body, _) = get(&repo, "/api/nodes").await;
+        assert_eq!(status, StatusCode::OK);
+        let nodes = json(&body);
+        let node = nodes
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|node| node["path"] == "p")
+            .unwrap();
+        assert_eq!(node["items"], 2);
+        assert_eq!(node["has_index"], true);
+        assert_eq!(node["workflow"][0]["id"], "a-faire");
+        assert_eq!(node["workflow"][0]["category"], "todo");
+    }
+
+    #[tokio::test]
+    async fn schema_is_the_same_json_as_the_schema_command() {
+        let repo = sample();
+        let (status, body, _) = get(&repo, "/api/schema").await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(json(&body), crate::schema::export());
+    }
+
+    #[tokio::test]
+    async fn doctor_reports_the_same_findings_as_the_doctor_command() {
+        let repo = sample();
+        let (status, body, _) = get(&repo, "/api/doctor").await;
+        assert_eq!(status, StatusCode::OK);
+        let tree = Tree::load(repo.root()).unwrap();
+        let expected = serde_json::to_value(crate::doctor::diagnose(&tree, None, false)).unwrap();
+        assert_eq!(json(&body), expected);
+        assert!(!expected.as_array().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_unknown_api_path_is_a_json_404() {
+        let repo = sample();
+        let (status, body, content_type) = get(&repo, "/api/nope").await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert!(json(&body)["error"].is_string());
+        assert!(content_type.unwrap().starts_with("application/json"));
+    }
+
+    #[tokio::test]
+    async fn any_other_path_falls_back_to_the_front_entry_page() {
+        let repo = sample();
+        let (status, body, content_type) = get(&repo, "/tasks/some/deep/link").await;
+        assert_eq!(status, StatusCode::OK);
+        assert!(content_type.unwrap().starts_with("text/html"));
+        assert!(String::from_utf8(body).unwrap().contains("<html"));
+    }
+
+    #[tokio::test]
+    async fn a_reload_swaps_the_tree_and_notifies_subscribers() {
+        let repo = sample();
+        let state = State::new(repo.root().to_path_buf(), Tree::load(repo.root()).unwrap());
+        let mut changes = state.changes.subscribe();
+        repo.write(
+            "p/tasks/T002-b.md",
+            "---\nariane: 1\nnode: p\nid: T002\ntitle: B\nstatus: a-faire\n---\n# B\n",
+        );
+        state.reload().unwrap();
+        assert_eq!(state.tree.read().unwrap().items.len(), 3);
+        assert!(changes.try_recv().is_ok());
+    }
+}

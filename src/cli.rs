@@ -44,6 +44,8 @@ pub enum Command {
     Migrate(MigrateArgs),
     #[command(about = "Print the item header schema")]
     Schema(SchemaArgs),
+    #[command(about = "Serve the web interface on 127.0.0.1")]
+    Serve(ServeArgs),
 }
 
 /// Arguments of `ariane tasks`: an optional node scope, whether to include
@@ -126,4 +128,15 @@ pub struct MigrateArgs {
 pub struct SchemaArgs {
     #[arg(long)]
     pub json: bool,
+}
+
+/// Arguments of `ariane serve`: the port to listen on, on the loopback interface
+/// only (ADR-0012), and whether to open the browser once listening.
+#[derive(Args)]
+pub struct ServeArgs {
+    #[arg(long, default_value_t = 4317, help = "Port to listen on, on 127.0.0.1")]
+    pub port: u16,
+
+    #[arg(long, help = "Open the interface in the browser once listening")]
+    pub open: bool,
 }
