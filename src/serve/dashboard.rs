@@ -1,7 +1,8 @@
 //! The pinned nodes of the dashboard, stored in `config.toml` (ADR-0013).
 //!
 //! Pins live under `[dashboard] pinned`, a list of node paths whose order is the
-//! order of the cards. Reading tolerates a missing file. Writing goes through
+//! order of the cards. Reading goes through the typed configuration of
+//! [`crate::config`] and tolerates a missing file. Writing goes through
 //! `toml_edit`, which edits the parsed document in place: every other key,
 //! comment and blank line of the owner's file is kept as it was.
 
@@ -16,20 +17,7 @@ use toml_edit::{Array, DocumentMut, Item, Table, value};
 ///
 /// Fails when the file exists but cannot be read or parsed.
 pub fn read(file: &Path) -> Result<Vec<String>> {
-    let Some(document) = load(file)? else {
-        return Ok(Vec::new());
-    };
-    Ok(document
-        .get("dashboard")
-        .and_then(|dashboard| dashboard.get("pinned"))
-        .and_then(Item::as_array)
-        .map(|pinned| {
-            pinned
-                .iter()
-                .filter_map(|entry| entry.as_str().map(str::to_owned))
-                .collect()
-        })
-        .unwrap_or_default())
+    Ok(crate::config::load(file)?.config.dashboard.pinned)
 }
 
 /// Replaces the pinned node paths, creating the file and its directory if needed.

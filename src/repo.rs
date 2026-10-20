@@ -14,10 +14,8 @@
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, bail};
-use serde::Deserialize;
-
 use crate::tree::NodePath;
+use anyhow::{Context, Result, bail};
 
 /// Name of the link through which a host repository materializes its node.
 const DIR_NAME: &str = "_ariane";
@@ -32,14 +30,6 @@ pub struct Location {
     /// the node directory it sits in inside the content repository. `None` when
     /// the command runs from anywhere else, in which case it covers the whole tree.
     pub here: Option<NodePath>,
-}
-
-/// The part of `config.toml` that discovery reads: the path of the content
-/// repository (ADR-0013), used when the current directory leads to none.
-#[derive(Debug, Default, Deserialize)]
-struct Config {
-    /// Path of the content repository; a leading `~/` stands for the home directory.
-    repo: Option<String>,
 }
 
 /// Returns the content repository to work on and the node the current directory stands in.
@@ -72,8 +62,8 @@ pub fn discover(explicit: Option<&Path>) -> Result<Location> {
             here,
         });
     }
-    let config = config_file();
-    match configured_repository(&config)? {
+    let config = crate::config::file();
+    match crate::config::load(&config)?.config.repo_path() {
         Some(path) => Ok(Location {
             root: content_repository(&path)?,
             here: None,
@@ -116,41 +106,6 @@ fn node_of(root: &Path, dir: &Path) -> Option<NodePath> {
     Some(NodePath::new(segments.join("/")))
 }
 
-/// Path of `config.toml`: `$XDG_CONFIG_HOME/ariane/config.toml`, falling back
-/// to `~/.config/ariane/config.toml` (PLAN §9).
-pub fn config_file() -> PathBuf {
-    let base = std::env::var_os("XDG_CONFIG_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))
-        .unwrap_or_default();
-    base.join("ariane").join("config.toml")
-}
-
-/// Reads the `repo` key of the configuration file, expanding a leading `~/`.
-///
-/// A missing file is not an error: it simply yields `None`.
-///
-/// # Errors
-///
-/// Fails when the file exists but cannot be read or parsed.
-fn configured_repository(file: &Path) -> Result<Option<PathBuf>> {
-    let text = match std::fs::read_to_string(file) {
-        Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => {
-            return Err(error).with_context(|| format!("reading {}", file.display()));
-        }
-    };
-    let config: Config =
-        toml::from_str(&text).with_context(|| format!("parsing {}", file.display()))?;
-    Ok(config.repo.map(|repo| match repo.strip_prefix("~/") {
-        Some(rest) => std::env::var_os("HOME")
-            .map(|home| PathBuf::from(home).join(rest))
-            .unwrap_or_else(|| PathBuf::from(&repo)),
-        None => PathBuf::from(repo),
-    }))
-}
-
 /// Tells whether `dir` holds both a `tree/` directory and a `.git` entry.
 pub fn is_content_repository(dir: &Path) -> bool {
     dir.join("tree").is_dir() && dir.join(".git").exists()
@@ -188,26 +143,5 @@ mod tests {
             Some(NodePath::new(""))
         );
         assert_eq!(node_of(root, Path::new("/elsewhere")), None);
-    }
-
-    #[test]
-    fn the_configured_repository_expands_the_home_directory() {
-        let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join("config.toml");
-        std::fs::write(&file, "repo = \"~/content\"\n").unwrap();
-        let home = std::env::var_os("HOME").map(PathBuf::from).unwrap();
-        assert_eq!(
-            configured_repository(&file).unwrap(),
-            Some(home.join("content"))
-        );
-    }
-
-    #[test]
-    fn a_missing_configuration_file_configures_nothing() {
-        let dir = tempfile::tempdir().unwrap();
-        assert_eq!(
-            configured_repository(&dir.path().join("config.toml")).unwrap(),
-            None
-        );
     }
 }

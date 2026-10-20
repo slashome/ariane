@@ -1,0 +1,16 @@
+# Ariane configuration (ADR-0013).
+# Generated from the schema compiled into `ariane`: `ariane config example`.
+
+# Schema version of this file. Changed only by `ariane migrate`.
+version = 1
+
+# The content repository, used when the current directory leads to none.
+# repo = "~/path/to/_ariane"
+
+[server]
+# Port `ariane serve` listens on, on 127.0.0.1 only. `--port` overrides it.
+port = 4317
+
+[dashboard]
+# Nodes pinned on the dashboard, in the order of their cards.
+pinned = []

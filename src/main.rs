@@ -20,6 +20,8 @@
 
 /// Command-line arguments, declared with `clap`.
 mod cli;
+/// `config.toml` and `ariane config`.
+mod config;
 /// `ariane doctor`: validation of items and nodes.
 mod doctor;
 /// One item file: its front-matter and its body.
@@ -33,6 +35,8 @@ mod repo;
 /// The core header schema, declared once as data.
 mod schema;
 mod serve;
+/// `ariane service`: the server as a background service.
+mod service;
 /// `ariane tasks`: the list of items.
 mod tasks;
 /// The whole content repository loaded in memory.
@@ -59,9 +63,10 @@ fn main() -> ExitCode {
 
 /// Parses the arguments and dispatches to the requested command.
 ///
-/// `ariane schema` is answered before looking for a repository, because the
-/// schema is built into the binary. Every other command first discovers the
-/// content repository and loads the whole tree once.
+/// `ariane schema`, `ariane config` and `ariane service` are answered before
+/// looking for a repository: the schema is built into the binary, and the other
+/// two work on the configuration and the machine, not on content. Every other
+/// command first discovers the content repository and loads the whole tree once.
 ///
 /// # Errors
 ///
@@ -69,8 +74,11 @@ fn main() -> ExitCode {
 /// itself fails.
 fn run() -> Result<ExitCode> {
     let cli = cli::Cli::parse();
-    if let cli::Command::Schema(args) = &cli.command {
-        return schema_command(args);
+    match &cli.command {
+        cli::Command::Schema(args) => return schema_command(args),
+        cli::Command::Config(args) => return config::command::run(args),
+        cli::Command::Service(args) => return service::run(args),
+        _ => {}
     }
     let location = repo::discover(cli.repo.as_deref())?;
     let tree = tree::Tree::load(&location.root)?;
@@ -90,6 +98,8 @@ fn run() -> Result<ExitCode> {
         }
         cli::Command::Schema(args) => schema_command(&args),
         cli::Command::Serve(args) => serve::run(location.root, tree, &args),
+        cli::Command::Config(args) => config::command::run(&args),
+        cli::Command::Service(args) => service::run(&args),
     }
 }
 

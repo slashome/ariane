@@ -153,13 +153,12 @@ pub fn run(root: PathBuf, tree: Tree, args: &ServeArgs) -> Result<ExitCode> {
         .enable_all()
         .build()
         .context("starting the async runtime")?;
-    runtime.block_on(serve(
-        root,
-        tree,
-        crate::repo::config_file(),
-        args.port,
-        args.open,
-    ))?;
+    let config = crate::config::file();
+    let port = match args.port {
+        Some(port) => port,
+        None => crate::config::load(&config)?.config.server.port,
+    };
+    runtime.block_on(serve(root, tree, config, port, args.open))?;
     Ok(ExitCode::SUCCESS)
 }
 
