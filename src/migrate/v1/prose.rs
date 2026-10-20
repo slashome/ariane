@@ -341,13 +341,21 @@ impl Reader {
             .all(|word| word.contains(".monday.com") || word.contains('/'))
     }
 
-    /// Collects the ticket numbers of a text that mentions Monday.
+    /// Notes the Monday tickets a text mentions outside the item's own `Monday` key.
+    ///
+    /// Such a mention is often another item's ticket (an origin, a parent story, a
+    /// branch name), so it is never bound to `external` automatically: it becomes a
+    /// leftover for the reviewer to decide.
     fn monday_mentions(&mut self, text: &str) {
         if !text.to_lowercase().contains("monday") {
             return;
         }
-        for id in ticket_ids(text) {
-            self.add_external(id);
+        let ids = ticket_ids(text);
+        if !ids.is_empty() {
+            self.leftovers.push(format!(
+                "mentions Monday ticket {} outside the Monday key; add it to `external` only if it is this item's own ticket",
+                ids.join(", ")
+            ));
         }
     }
 
@@ -602,21 +610,39 @@ fn is_date(text: &str) -> bool {
     (1..=12).contains(&month) && (1..=31).contains(&day)
 }
 
-/// The runs of at least nine digits in `text`: Monday ticket numbers.
+/// The Monday ticket numbers of `text`.
+///
+/// In a `monday.com` link only the `/pulses/<id>` segment names a ticket: a
+/// `/boards/<id>` link names a board and yields nothing. Outside links, a ticket
+/// is a standalone number of at least nine digits; digits glued to letters, as in
+/// a branch name `feature_3000000000`, are not. When the text links a ticket,
+/// only linked tickets count: a bare number beside a link usually names a board.
 fn ticket_ids(text: &str) -> Vec<String> {
-    let mut ids = Vec::new();
-    let mut run = String::new();
-    for c in text.chars().chain(std::iter::once(' ')) {
-        if c.is_ascii_digit() {
-            run.push(c);
-            continue;
+    let mut linked: Vec<String> = Vec::new();
+    let mut bare: Vec<String> = Vec::new();
+    for token in text.split(|c: char| c.is_whitespace() || "[]()".contains(c)) {
+        if token.contains(".monday.com") {
+            if let Some((_, rest)) = token.split_once("/pulses/") {
+                push_ticket(
+                    &mut linked,
+                    rest.chars().take_while(char::is_ascii_digit).collect(),
+                );
+            }
+        } else {
+            let number = token.trim_matches(|c: char| !c.is_ascii_alphanumeric());
+            if number.chars().all(|c| c.is_ascii_digit()) {
+                push_ticket(&mut bare, number.to_owned());
+            }
         }
-        if run.len() >= 9 && !ids.contains(&run) {
-            ids.push(run.clone());
-        }
-        run.clear();
     }
-    ids
+    if linked.is_empty() { bare } else { linked }
+}
+
+/// Adds `id` to `ids` when it is long enough to be a ticket number and not already there.
+fn push_ticket(ids: &mut Vec<String>, id: String) {
+    if id.len() >= 9 && !ids.contains(&id) {
+        ids.push(id);
+    }
 }
 
 /// Applies the edits to the header region and rebuilds the body, keeping each line's own line ending.
@@ -852,12 +878,18 @@ mod tests {
             text_field(&extraction, "created").as_deref(),
             Some("2030-06-01")
         );
-        assert_eq!(external(&extraction), vec!["monday:1000000002"]);
+        assert!(external(&extraction).is_empty());
         assert!(
             extraction
                 .leftovers
                 .iter()
                 .any(|note| note.contains("archive banner wins"))
+        );
+        assert!(
+            extraction
+                .leftovers
+                .iter()
+                .any(|note| note.contains("1000000002"))
         );
         assert!(extraction.body.contains("TERMINÉ ET ARCHIVÉ"));
         assert!(!extraction.body.contains("statut"));
@@ -879,15 +911,37 @@ mod tests {
     }
 
     #[test]
-    fn several_ticket_forms_collapse_into_one_external_list() {
+    fn only_the_monday_key_binds_a_ticket_and_other_mentions_are_left_to_review() {
         let body = "# Tâche\n\n- **Monday** : 1000000003\n- **Lien** : voir le ticket monday https://example.monday.com/boards/9/pulses/1000000004\n\nTexte.\n";
         let extraction = extract(Kind::Task, body);
-        assert_eq!(
-            external(&extraction),
-            vec!["monday:1000000003", "monday:1000000004"]
+        assert_eq!(external(&extraction), vec!["monday:1000000003"]);
+        assert!(
+            extraction
+                .leftovers
+                .iter()
+                .any(|note| note.contains("1000000004"))
         );
         assert!(!extraction.body.contains("**Monday** : 1000000003"));
         assert!(extraction.body.contains("**Lien**"));
+    }
+
+    #[test]
+    fn a_monday_link_yields_its_pulse_never_its_board() {
+        let body = "# Story\n\n- **Monday** : [1000000005](https://example.monday.com/boards/1000000900/pulses/1000000005)\n- **Epic** : [Pages](https://example.monday.com/boards/1000000901)\n\nTexte.\n";
+        let extraction = extract(Kind::Story, body);
+        assert_eq!(external(&extraction), vec!["monday:1000000005"]);
+    }
+
+    #[test]
+    fn digits_glued_to_a_branch_name_are_not_a_ticket() {
+        assert!(ticket_ids("branche `feature_slices_1000000006`").is_empty());
+        assert_eq!(ticket_ids("ticket `1000000007`."), vec!["1000000007"]);
+        assert_eq!(
+            ticket_ids(
+                "[1000000008](https://example.monday.com/boards/1000000900/pulses/1000000008), board `1000000900`"
+            ),
+            vec!["1000000008"]
+        );
     }
 
     #[test]
