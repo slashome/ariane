@@ -112,8 +112,9 @@ pub async fn doctor(Shared(state): Shared<Arc<State>>) -> Response {
     })
 }
 
-/// `GET /api/repo`: the repository root, its branch and its uncommitted files,
-/// which feed the header's commit indicator.
+/// `GET /api/repo`: the repository root, its branch, how many commits it is
+/// ahead of its upstream and its uncommitted files, which feed the header's
+/// commit indicator.
 ///
 /// `git` is a blocking subprocess, so it runs on tokio's blocking thread pool
 /// (`spawn_blocking`) instead of stalling the threads that serve requests.
@@ -123,6 +124,7 @@ pub async fn repo(Shared(state): Shared<Arc<State>>) -> Response {
         Ok(Ok(status)) => Json(json!({
             "root": state.root.to_string_lossy(),
             "branch": status.branch,
+            "ahead": status.ahead,
             "uncommitted": status
                 .entries
                 .iter()

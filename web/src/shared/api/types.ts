@@ -54,6 +54,7 @@ export interface UncommittedFile {
 export interface Repo {
   root: string
   branch: string | null
+  ahead: number
   uncommitted: UncommittedFile[]
 }
 

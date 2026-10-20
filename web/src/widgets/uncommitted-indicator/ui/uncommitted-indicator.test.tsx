@@ -22,7 +22,7 @@ afterEach(() => {
 
 describe('UncommittedIndicator', () => {
   it('stays hidden when the working tree is clean', async () => {
-    const { container } = renderWith({ root: '/r', branch: 'main', uncommitted: [] })
+    const { container } = renderWith({ root: '/r', branch: 'main', ahead: 0, uncommitted: [] })
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(container).toBeEmptyDOMElement()
   })
@@ -31,11 +31,17 @@ describe('UncommittedIndicator', () => {
     renderWith({
       root: '/r',
       branch: 'main',
+      ahead: 0,
       uncommitted: [
         { code: 'M', path: 'tree/a.md' },
         { code: '??', path: 'tree/b.md' },
       ],
     })
     expect(await screen.findByRole('button', { name: '2 uncommitted files' })).toHaveTextContent('2')
+  })
+
+  it('stays visible after a commit while commits remain to push', async () => {
+    renderWith({ root: '/r', branch: 'main', ahead: 2, uncommitted: [] })
+    expect(await screen.findByRole('button', { name: '2 commits to push' })).toHaveTextContent('2')
   })
 })

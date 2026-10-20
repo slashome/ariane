@@ -26,10 +26,15 @@ export function UncommittedIndicator() {
   const push = usePush()
   const [composing, setComposing] = useState(false)
   const files = repo?.uncommitted ?? []
-  if (files.length === 0) {
+  const ahead = repo?.ahead ?? 0
+  if (files.length === 0 && ahead === 0) {
     return null
   }
-  const label = `${files.length} uncommitted ${files.length === 1 ? 'file' : 'files'}`
+  const pending = [
+    files.length > 0 ? `${files.length} uncommitted ${files.length === 1 ? 'file' : 'files'}` : null,
+    ahead > 0 ? `${ahead} ${ahead === 1 ? 'commit' : 'commits'} to push` : null,
+  ].filter(Boolean)
+  const label = pending.join(', ')
   return (
     <HoverCard openDelay={100} open={composing ? true : undefined}>
       <HoverCardTrigger asChild>
@@ -38,23 +43,40 @@ export function UncommittedIndicator() {
           aria-label={label}
           className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-300"
         >
-          <GitCommitHorizontal className="size-3.5" aria-hidden />
-          {files.length}
+          {files.length > 0 ? (
+            <>
+              <GitCommitHorizontal className="size-3.5" aria-hidden />
+              {files.length}
+            </>
+          ) : null}
+          {ahead > 0 ? (
+            <>
+              <Upload className="size-3.5" aria-hidden />
+              {ahead}
+            </>
+          ) : null}
         </button>
       </HoverCardTrigger>
       <HoverCardContent onEscapeKeyDown={() => setComposing(false)}>
         <p className="mb-2 font-medium">{label}</p>
-        <UncommittedList files={files} />
+        {files.length > 0 ? <UncommittedList files={files} /> : null}
         <div className="mt-3 border-t border-border pt-3">
           {composing ? (
             <CommitForm files={files} onDone={() => setComposing(false)} />
           ) : (
             <div className="flex gap-2">
-              <Button size="sm" onClick={() => setComposing(true)}>
-                <GitCommitHorizontal className="size-3.5" aria-hidden />
-                Commit all
-              </Button>
-              <Button size="sm" variant="outline" disabled={push.isPending} onClick={() => push.mutate()}>
+              {files.length > 0 ? (
+                <Button size="sm" onClick={() => setComposing(true)}>
+                  <GitCommitHorizontal className="size-3.5" aria-hidden />
+                  Commit all
+                </Button>
+              ) : null}
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={ahead === 0 || push.isPending}
+                onClick={() => push.mutate()}
+              >
                 <Upload className="size-3.5" aria-hidden />
                 {push.isPending ? 'Pushing…' : 'Push'}
               </Button>

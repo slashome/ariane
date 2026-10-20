@@ -31,6 +31,8 @@ pub struct Entry {
 pub struct Status {
     /// The checked-out branch; `None` on a detached `HEAD`.
     pub branch: Option<String>,
+    /// How many local commits the upstream does not have yet; `0` without upstream.
+    pub ahead: u32,
     /// Every path that differs from `HEAD`, untracked files included.
     pub entries: Vec<Entry>,
 }
@@ -146,11 +148,14 @@ pub fn parse(output: &[u8]) -> Status {
         .filter(|record| !record.is_empty());
     let mut status = Status {
         branch: None,
+        ahead: 0,
         entries: Vec::new(),
     };
     while let Some(record) = records.next() {
         if let Some(header) = record.strip_prefix(b"## ") {
-            status.branch = branch(&String::from_utf8_lossy(header));
+            let header = String::from_utf8_lossy(header);
+            status.branch = branch(&header);
+            status.ahead = ahead(&header);
             continue;
         }
         if record.len() < 4 {
@@ -164,6 +169,17 @@ pub fn parse(output: &[u8]) -> Status {
         status.entries.push(Entry { code, path });
     }
     status
+}
+
+/// Reads the `ahead n` count of the porcelain header, `0` when absent.
+///
+/// `main...origin/main [ahead 2, behind 1]` gives `2`.
+fn ahead(header: &str) -> u32 {
+    header
+        .split_once("[ahead ")
+        .and_then(|(_, rest)| rest.split([',', ']']).next())
+        .and_then(|count| count.trim().parse().ok())
+        .unwrap_or(0)
 }
 
 /// Extracts the branch name from the porcelain header.
@@ -198,6 +214,7 @@ mod tests {
         let output = b"## main...origin/main [ahead 1]\0 M tree/a.md\0R  tree/new.md\0tree/old.md\0?? tree/b c.md\0";
         let status = parse(output);
         assert_eq!(status.branch.as_deref(), Some("main"));
+        assert_eq!(status.ahead, 1);
         let entries: Vec<_> = status
             .entries
             .iter()
@@ -211,6 +228,13 @@ mod tests {
                 ("??", "tree/b c.md")
             ]
         );
+    }
+
+    #[test]
+    fn the_ahead_count_is_read_with_or_without_behind() {
+        assert_eq!(ahead("main...origin/main [ahead 2, behind 1]"), 2);
+        assert_eq!(ahead("main...origin/main [behind 3]"), 0);
+        assert_eq!(ahead("main"), 0);
     }
 
     #[test]
