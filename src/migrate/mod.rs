@@ -1,3 +1,17 @@
+//! `ariane migrate`: brings item files to the current schema version (ADR-0009).
+//!
+//! Each item's version is read from its `ariane` key (absent means version 0).
+//! Migrations are applied one version at a time, `N` to `N + 1`, until the file
+//! reaches [`SCHEMA_VERSION`](crate::item::SCHEMA_VERSION); each migration is idempotent, so a migrated file
+//! is left unchanged by a second run.
+//!
+//! By default nothing is written: the command prints a unified diff per file and
+//! a summary. `--apply` writes the files and is the only write path of the
+//! command; it never commits, so the changes stay in the working tree for review.
+//! A file newer than this binary is reported and never touched. The exit code is
+//! `2` when at least one file needs a human, `0` otherwise.
+
+/// Migration 0 → 1: from the legacy prose headers and pharmakon's French keys to the version-1 header.
 mod v1;
 
 use std::process::ExitCode;
@@ -10,43 +24,77 @@ use crate::cli::MigrateArgs;
 use crate::item::{Document, Header, SCHEMA_VERSION};
 use crate::tree::{Item, NodePath, Tree};
 
+/// What one migration produced for one file.
 #[derive(Debug)]
 pub struct Step {
+    /// The whole new text of the file.
     pub text: String,
+    /// Keys whose value was guessed rather than read, for the reviewer.
     pub inferred: Vec<String>,
+    /// Remarks about what was done, such as a header read tolerantly.
     pub notes: Vec<String>,
 }
 
+/// One migration from version `source()` to the next one.
+///
+/// A trait is Rust's interface: the engine only knows this contract, so adding
+/// the migration 1 → 2 means writing one more type that implements it.
 pub trait Migration {
+    /// The version this migration upgrades from.
     fn source(&self) -> u64;
+    /// Upgrades `text`, the current text of `item`, by one version. Returns the
+    /// reasons a human must step in instead, as `Err`, when it cannot decide.
     fn apply(&self, item: &Item, text: &str) -> Result<Step, Vec<String>>;
 }
 
+/// What happens to one file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Outcome {
+    /// The file changes (or would, in a dry run).
     Migrated,
+    /// The file is already current.
     Unchanged,
+    /// The file cannot be migrated without a decision.
     NeedsHuman,
 }
 
+/// The plan for one file, serialized by `--json`. The `#[serde(skip)]` fields
+/// are working data that the JSON output leaves out.
 #[derive(Debug, Serialize)]
 pub struct Entry {
+    /// Path relative to the repository root.
     pub path: String,
+    /// Version found in the file; `None` when it cannot be read.
     pub from: Option<u64>,
+    /// Version the file is brought to.
     pub to: u64,
+    /// What happens to the file.
     pub outcome: Outcome,
+    /// Why a human is needed, when that is the outcome.
     pub reasons: Vec<String>,
+    /// Keys guessed by the migrations.
     pub inferred: Vec<String>,
+    /// Remarks of the migrations.
     pub notes: Vec<String>,
+    /// Text of the file before migration.
     #[serde(skip)]
     before: String,
+    /// Text after migration, when it changes.
     #[serde(skip)]
     after: Option<String>,
+    /// Absolute path, to write the file with `--apply`.
     #[serde(skip)]
     file: std::path::PathBuf,
 }
 
+/// Runs `ariane migrate`: plans every file in scope, writes the migrated ones
+/// with `--apply`, then prints the diffs or the JSON plan.
+///
+/// # Errors
+///
+/// Fails when a file cannot be read or written, or when the plan cannot be
+/// serialized to JSON.
 pub fn run(tree: &Tree, args: &MigrateArgs) -> Result<ExitCode> {
     let scope = args.node.as_deref().map(NodePath::new);
     let entries = plan(tree, scope.as_ref())?;
@@ -75,6 +123,15 @@ pub fn run(tree: &Tree, args: &MigrateArgs) -> Result<ExitCode> {
     })
 }
 
+/// Plans the migration of every item in `scope` without writing anything.
+///
+/// The migrations are held as `&dyn Migration`, trait objects: the engine calls
+/// them through the trait without knowing their concrete type. Collecting an
+/// iterator of `Result` into a `Result<Vec<_>>` stops at the first error.
+///
+/// # Errors
+///
+/// Fails when an item file cannot be read.
 pub fn plan(tree: &Tree, scope: Option<&NodePath>) -> Result<Vec<Entry>> {
     let zero_to_one = v1::ZeroToOne::new(tree, scope);
     let migrations: [&dyn Migration; 1] = [&zero_to_one];
@@ -87,6 +144,8 @@ pub fn plan(tree: &Tree, scope: Option<&NodePath>) -> Result<Vec<Entry>> {
         .collect()
 }
 
+/// Plans one file: reads its version, then chains the migrations from that
+/// version to the current one, each taking the previous one's output.
 fn migrate(migrations: &[&dyn Migration], item: &Item, before: String) -> Entry {
     let mut entry = Entry {
         path: item.relative.to_string_lossy().into_owned(),
@@ -134,7 +193,9 @@ fn migrate(migrations: &[&dyn Migration], item: &Item, before: String) -> Entry 
     entry
 }
 
+/// Builders of an entry's outcome.
 impl Entry {
+    /// Marks the entry as needing a human for `reasons`. `mut self` takes the entry by value, changes it and hands it back.
     fn needs_human(mut self, reasons: Vec<String>) -> Entry {
         self.outcome = Outcome::NeedsHuman;
         self.reasons = reasons;
@@ -143,6 +204,10 @@ impl Entry {
     }
 }
 
+/// The schema version of a file's text: `0` without front-matter or without an
+/// `ariane` key. A front-matter that strict YAML rejects is still version 0 when
+/// the tolerant line-by-line reader of [`v1::flat_front_matter`] can read it.
+/// Returns the reason as `Err` when the version cannot be told.
 fn version_of(text: &str) -> Result<u64, String> {
     let document = Document::parse(text);
     match &document.header {
@@ -160,6 +225,7 @@ fn version_of(text: &str) -> Result<u64, String> {
     }
 }
 
+/// Prints a unified diff per migrated file (or `wrote <path>` after `--apply`), the reasons of the files that need a human, and a summary.
 fn report(entries: &[Entry], applied: bool) {
     for entry in entries {
         match (entry.outcome, &entry.after) {
@@ -200,11 +266,13 @@ fn report(entries: &[Entry], applied: bool) {
     );
 }
 
+/// Unit tests of the engine: dry run, apply, idempotence, newer files, scope.
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::tree::fixture::Repo;
 
+    /// The arguments of `ariane migrate`, with or without `--apply`.
     fn args(apply: bool) -> MigrateArgs {
         MigrateArgs {
             node: None,
@@ -213,6 +281,7 @@ mod tests {
         }
     }
 
+    /// A repository with a few legacy items to migrate.
     fn sample() -> Repo {
         let repo = Repo::new();
         repo.write(

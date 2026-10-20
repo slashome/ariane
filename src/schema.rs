@@ -1,39 +1,77 @@
+//! The core header schema, declared once as data (SPEC.md §1.3, ADR-0008).
+//!
+//! [`CORE_KEYS`](crate::schema::CORE_KEYS) describes each of the sixteen core keys a single time: its value
+//! type, whether it is required depending on the item kind, and its place in the
+//! canonical key order. Everything else reads this table instead of keeping its
+//! own list:
+//!
+//! - `ariane doctor` validates every item by iterating it;
+//! - `ariane migrate` takes from it the order in which keys are written;
+//! - `ariane schema --json` exports it, so that the interface never redeclares a
+//!   vocabulary in TypeScript.
+//!
+//! The fixed vocabularies (sizes, levels, reflexion statuses), the id prefixes by
+//! kind and the small format checks shared by those commands live here too.
+
 use serde::Serialize;
 use serde_json::{Map, Value as Json, json};
 
 use crate::item::{Kind, SCHEMA_VERSION};
 use crate::node::Category;
 
+/// Allowed values of `size`, smallest first.
 pub const SIZES: &[&str] = &["XS", "S", "M", "L", "XL"];
+/// Allowed values of `impact` and `priority`.
 pub const LEVELS: &[&str] = &["low", "medium", "high"];
+/// Statuses of a reflexion: open, being tried (`trial`), or settled.
 pub const REFLEXION_STATUSES: &[&str] = &["open", "trial", "settled"];
+/// The only reflexion status that counts as closed, for archived reflexions.
 pub const REFLEXION_CLOSED: &str = "settled";
 
+/// How strongly an item must carry a key, in RFC 2119 terms (SPEC.md §1.3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Requirement {
+    /// The key is required.
     Must,
+    /// The key is recommended; its absence is not an error.
     Should,
+    /// The key is optional.
     May,
+    /// The key is forbidden, such as `status` on a ressource.
     MustNot,
 }
 
+/// The shape a core key's value must have.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ValueType {
+    /// A non-negative integer: the schema version.
     Version,
+    /// A non-empty string.
     Text,
+    /// A string that YAML could read as a number, such as `"1.0"`; it must be quoted.
     Name,
+    /// An item identifier such as `T038`.
     Id,
+    /// A status id, checked against the node's workflow elsewhere.
     Status,
+    /// A `YYYY-MM-DD` date.
     Date,
+    /// One item reference: `T022` or `node/path#T022`.
     Reference,
+    /// A list of item references.
     References,
+    /// A list of strings.
     Texts,
+    /// A list of `<connector>:<id>` links to external trackers.
     External,
+    /// One string out of a fixed vocabulary. `&'static` means the vocabulary is
+    /// compiled into the binary and lives for the whole run.
     Enum(&'static [&'static str]),
 }
 
 impl ValueType {
+    /// Name of the type in `ariane schema` output.
     pub fn id(self) -> &'static str {
         match self {
             ValueType::Version => "integer",
@@ -50,6 +88,7 @@ impl ValueType {
         }
     }
 
+    /// What a valid value looks like, for doctor's messages.
     pub fn expected(self) -> &'static str {
         match self {
             ValueType::Version => "a non-negative integer",
@@ -65,15 +104,21 @@ impl ValueType {
     }
 }
 
+/// One core key of the header.
 #[derive(Debug, Clone, Copy)]
 pub struct CoreKey {
+    /// The key as written in the front-matter.
     pub name: &'static str,
+    /// The shape its value must have.
     pub value: ValueType,
+    /// Its requirement for any kind not listed in `by_kind`.
     pub requirement: Requirement,
+    /// Requirements that differ for some kinds.
     pub by_kind: &'static [(Kind, Requirement)],
 }
 
 impl CoreKey {
+    /// The requirement of this key for an item of `kind`: the `by_kind` override if there is one, the default otherwise.
     pub fn requirement_for(&self, kind: Kind) -> Requirement {
         self.by_kind
             .iter()
@@ -82,6 +127,8 @@ impl CoreKey {
     }
 }
 
+/// Builds a core key with the same requirement for every kind. `const fn` lets
+/// it run at compile time, inside the [`CORE_KEYS`] constant.
 const fn key(name: &'static str, value: ValueType, requirement: Requirement) -> CoreKey {
     CoreKey {
         name,
@@ -91,6 +138,7 @@ const fn key(name: &'static str, value: ValueType, requirement: Requirement) -> 
     }
 }
 
+/// Every core key, in the canonical order in which `migrate` writes them.
 pub const CORE_KEYS: &[CoreKey] = &[
     key("ariane", ValueType::Version, Requirement::Must),
     key("node", ValueType::Text, Requirement::Must),
@@ -121,6 +169,7 @@ pub const CORE_KEYS: &[CoreKey] = &[
     key("external", ValueType::External, Requirement::May),
 ];
 
+/// Every item kind, in the order `ariane schema --json` lists them.
 pub const KINDS: [Kind; 6] = [
     Kind::Task,
     Kind::Story,
@@ -130,14 +179,17 @@ pub const KINDS: [Kind; 6] = [
     Kind::Unknown,
 ];
 
+/// The core key named `name`, if it is one.
 pub fn core_key(name: &str) -> Option<&'static CoreKey> {
     CORE_KEYS.iter().find(|key| key.name == name)
 }
 
+/// Tells whether `name` is a core key; any other key is a custom key.
 pub fn is_core(name: &str) -> bool {
     core_key(name).is_some()
 }
 
+/// The names of the core keys whose value has the type `value`, lazily.
 pub fn keys_of_type(value: ValueType) -> impl Iterator<Item = &'static str> {
     CORE_KEYS
         .iter()
@@ -145,6 +197,7 @@ pub fn keys_of_type(value: ValueType) -> impl Iterator<Item = &'static str> {
         .map(|key| key.name)
 }
 
+/// Letter that starts a new id for an item of `kind`: T task or backlog, S story, R reflexion, D ressource (SPEC.md §1.4).
 pub fn id_prefix(kind: Kind) -> char {
     match kind {
         Kind::Story => 'S',
@@ -154,6 +207,7 @@ pub fn id_prefix(kind: Kind) -> char {
     }
 }
 
+/// Tells whether `id` matches `^[A-Za-z][A-Za-z0-9-]*$` (SPEC.md §1.3).
 pub fn is_valid_id(id: &str) -> bool {
     let mut chars = id.chars();
     chars
@@ -162,6 +216,8 @@ pub fn is_valid_id(id: &str) -> bool {
         && chars.all(|c| c.is_ascii_alphanumeric() || c == '-')
 }
 
+/// Tells whether `text` is a `YYYY-MM-DD` date with a month from 1 to 12 and a
+/// day from 1 to 31. It does not check that the day exists in that month.
 pub fn is_date(text: &str) -> bool {
     let bytes = text.as_bytes();
     if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
@@ -176,6 +232,7 @@ pub fn is_date(text: &str) -> bool {
         && (1..=31).contains(&day)
 }
 
+/// Tells whether `entry` is a `<connector>:<id>` link, the connector written in lower case.
 pub fn is_external(entry: &str) -> bool {
     entry.split_once(':').is_some_and(|(connector, id)| {
         !connector.is_empty()
@@ -186,6 +243,9 @@ pub fn is_external(entry: &str) -> bool {
     })
 }
 
+/// The schema as JSON, as printed by `ariane schema --json`: version, keys with
+/// their type, requirement per kind and vocabulary, status categories,
+/// reflexion statuses and id prefixes.
 pub fn export() -> Json {
     let keys: Vec<Json> = CORE_KEYS
         .iter()
@@ -222,6 +282,7 @@ pub fn export() -> Json {
     })
 }
 
+/// The name of a kind as serialized in JSON, such as `ressource`.
 fn kind_id(kind: Kind) -> String {
     match serde_json::to_value(kind) {
         Ok(Json::String(id)) => id,
@@ -229,6 +290,7 @@ fn kind_id(kind: Kind) -> String {
     }
 }
 
+/// Unit tests of the schema table and its export.
 #[cfg(test)]
 mod tests {
     use super::*;

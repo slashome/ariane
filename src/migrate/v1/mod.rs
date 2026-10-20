@@ -1,5 +1,27 @@
+//! Migration 0 → 1: builds the version-1 header of a legacy item (ADR-0009).
+//!
+//! Three starting points are handled:
+//!
+//! - a YAML front-matter with French keys, as in the pharmakon node: keys are
+//!   renamed (`titre` → `title`, `statut` → `status`, `jalon` → `milestone`,
+//!   `depend` → `depends_on`) and every other key is kept in place. A
+//!   front-matter that strict YAML rejects (an unquoted title containing `: `)
+//!   is read line by line instead;
+//! - a front-matter holding only `node`, followed by a prose header;
+//! - no front-matter at all, only a prose header.
+//!
+//! In the last two cases [`prose::extract`](crate::migrate::v1::prose::extract) reads the legacy prose header. Then
+//! the missing pieces are filled in: `id` from `ids`, `title` from the first
+//! `# ` heading, `status` mapped onto the node's workflow, `created` from the
+//! commit that added the file. Keys are written in the canonical order of
+//! [`CORE_KEYS`](crate::schema::CORE_KEYS), custom keys after them. When a value cannot be decided, the
+//! file is left to a human with the reasons, never guessed silently.
+
+/// Allocation of item ids.
 mod ids;
+/// Reading of the legacy prose headers.
 pub mod prose;
+/// The legacy status and priority vocabularies.
 mod vocabulary;
 
 use std::path::Path;
@@ -16,6 +38,7 @@ use super::{Migration, Step};
 use ids::Allocations;
 use prose::StatusValue;
 
+/// French keys of pharmakon's front-matter and their English names (SPEC.md §1.2).
 const RENAMED: [(&str, &str); 4] = [
     ("titre", "title"),
     ("statut", "status"),
@@ -23,12 +46,16 @@ const RENAMED: [(&str, &str); 4] = [
     ("depend", "depends_on"),
 ];
 
+/// The migration from version 0 to version 1. It borrows the tree (lifetime
+/// `'a`) to read node workflows and the repository root, and holds the ids
+/// allocated for the whole scope up front.
 pub struct ZeroToOne<'a> {
     tree: &'a Tree,
     ids: Allocations,
 }
 
 impl<'a> ZeroToOne<'a> {
+    /// Prepares the migration of `scope`, allocating every id it will need.
     pub fn new(tree: &'a Tree, scope: Option<&NodePath>) -> ZeroToOne<'a> {
         ZeroToOne {
             tree,
@@ -37,11 +64,19 @@ impl<'a> ZeroToOne<'a> {
     }
 }
 
+/// The migration as seen by the engine.
 impl Migration for ZeroToOne<'_> {
+    /// Version 0, the files without an `ariane` key.
     fn source(&self) -> u64 {
         0
     }
 
+    /// Builds the version-1 text of one item: reads its header (tolerantly when
+    /// needed), renames French keys, extracts the prose header when there is no
+    /// structured one, fills in `id`, `title`, `status` and `created`, then renders
+    /// the header in canonical order above the body.
+    ///
+    /// Returns `Err` with every reason collected when one value cannot be decided.
     fn apply(&self, item: &Item, text: &str) -> Result<Step, Vec<String>> {
         let document = Document::parse(text);
         let header = match &document.header {
@@ -121,14 +156,22 @@ impl Migration for ZeroToOne<'_> {
     }
 }
 
+/// What the migration of one item has collected so far.
 #[derive(Default)]
 struct Draft {
+    /// Why a human must decide; non-empty means the file is not migrated.
     reasons: Vec<String>,
+    /// Keys whose value was guessed.
     inferred: Vec<String>,
+    /// Remarks for the reviewer.
     notes: Vec<String>,
 }
 
+/// The steps of migration 0 → 1 that can fail or guess.
 impl Draft {
+    /// Copies the header with French keys renamed to English. A key present in both
+    /// languages needs a human. `release` and `milestone` are kept as text, using
+    /// the raw text of the file so that `1.0` stays `"1.0"` and does not become `1`.
     fn rename(&mut self, header: &Mapping, raw: Option<&str>) -> Mapping {
         let mut fields = Mapping::new();
         for (key, value) in header {
@@ -156,6 +199,7 @@ impl Draft {
         fields
     }
 
+    /// Records a reason when the header's `node` disagrees with where the file sits.
     fn check_node(&mut self, fields: &Mapping, node: &NodePath) {
         let Some(declared) = fields.get("node") else {
             return;
@@ -168,6 +212,8 @@ impl Draft {
         }
     }
 
+    /// The title: the `title` key, or else the first `# ` heading with a leading
+    /// `<id> —` removed. Records a reason when there is neither.
     fn title(&mut self, fields: &Mapping, body: &str, id: Option<&str>) -> Option<String> {
         if let Some(title) = text_of(fields, "title") {
             return Some(title.to_owned());
@@ -190,6 +236,11 @@ impl Draft {
         Some(without_id.unwrap_or(heading).to_owned())
     }
 
+    /// The status: the one already written; or the extracted one mapped onto the
+    /// node's workflow (a category becomes the first workflow status of that
+    /// category, a reflexion keeps open, trial or settled); or, for an archived
+    /// item, a closed status marked as inferred. A ressource gets none. Records a
+    /// reason when no status can be decided.
     fn status(
         &mut self,
         fields: &Mapping,
@@ -270,6 +321,7 @@ impl Draft {
     }
 }
 
+/// The id of the first status of `category` in the workflow.
 fn first_of(effective: &Effective, category: Category) -> Option<String> {
     effective
         .workflow
@@ -278,10 +330,12 @@ fn first_of(effective: &Effective, category: Category) -> Option<String> {
         .map(|status| status.id.clone())
 }
 
+/// The value of `key` when it is a non-empty string, borrowed from the mapping.
 fn text_of<'a>(fields: &'a Mapping, key: &str) -> Option<&'a str> {
     fields.get(key)?.as_str().filter(|text| !text.is_empty())
 }
 
+/// A number or boolean turned into the text it was written as, so that names such as release `1.0` stay strings.
 fn as_name(value: &Value, raw: Option<&str>) -> Value {
     match value {
         Value::Number(number) => Value::from(raw.map_or_else(|| number.to_string(), str::to_owned)),
@@ -290,6 +344,7 @@ fn as_name(value: &Value, raw: Option<&str>) -> Value {
     }
 }
 
+/// The fields with the core keys first, in canonical order, then the custom keys in their original order.
 fn ordered(mut fields: Mapping) -> Mapping {
     let mut result = Mapping::new();
     for key in CORE_KEYS {
@@ -303,6 +358,9 @@ fn ordered(mut fields: Mapping) -> Mapping {
     result
 }
 
+/// Reads a front-matter that strict YAML rejects, one `key: value` line at a
+/// time, splitting on the first `:`. `[a, b]` values become lists. Returns
+/// `None` when a line is not a plain lower-case key followed by a value.
 pub fn flat_front_matter(text: &str) -> Option<Mapping> {
     let mut mapping = Mapping::new();
     for line in raw_front_matter(text)?.lines() {
@@ -336,12 +394,14 @@ pub fn flat_front_matter(text: &str) -> Option<Mapping> {
     Some(mapping)
 }
 
+/// The raw text between the opening and closing `---`, unparsed.
 fn raw_front_matter(text: &str) -> Option<&str> {
     let rest = text.strip_prefix("---\n")?;
     let end = rest.find("\n---")?;
     Some(&rest[..end])
 }
 
+/// The raw text of `key`'s value in the front-matter, when it is a plain scalar (not a list, a map or a quoted string).
 fn raw_scalar<'a>(front_matter: &'a str, key: &str) -> Option<&'a str> {
     front_matter.lines().find_map(|line| {
         let value = line.strip_prefix(key)?.strip_prefix(':')?.trim();
@@ -349,6 +409,9 @@ fn raw_scalar<'a>(front_matter: &'a str, key: &str) -> Option<&'a str> {
     })
 }
 
+/// The date of the commit that added the file, as `YYYY-MM-DD`, asked to
+/// `git log --diff-filter=A --follow`. The path is passed to git as a raw path,
+/// not as UTF-8 text (ADR-0005). `None` when git fails or knows no such commit.
 fn added_on(root: &Path, relative: &Path) -> Option<String> {
     let output = Command::new("git")
         .arg("-C")
@@ -372,13 +435,16 @@ fn added_on(root: &Path, relative: &Path) -> Option<String> {
     (!date.is_empty()).then(|| date.to_owned())
 }
 
+/// Unit tests of migration 0 → 1.
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::tree::fixture::Repo;
 
+    /// A `node.toml` with a two-status workflow.
     const WORKFLOW: &str = "[[workflow]]\nid = \"to-do\"\nlabel = \"To do\"\ncategory = \"todo\"\n\n[[workflow]]\nid = \"shipped\"\nlabel = \"Shipped\"\ncategory = \"done\"\n";
 
+    /// Runs migration 0 → 1 on one file of the repository.
     fn migrate(repo: &Repo, relative: &str) -> Result<Step, Vec<String>> {
         let tree = Tree::load(repo.root()).unwrap();
         let item = tree

@@ -1,7 +1,22 @@
+//! Command-line interface of `ariane`, declared with `clap`'s derive macros.
+//!
+//! Each struct below becomes a parser: `#[derive(Parser)]` for the top-level
+//! command, `#[derive(Subcommand)]` for the list of commands and `#[derive(Args)]`
+//! for the arguments of one command. The `about` and `help` attributes are the
+//! texts shown by `ariane --help`; they are set explicitly so that the rustdoc on
+//! these items never leaks into the help output.
+//!
+//! Struct fields carry no rustdoc of their own, and each struct keeps a
+//! one-paragraph doc: on a `clap` item, a field doc or a multi-paragraph doc
+//! becomes help text. `repo` is the content repository given by `--repo` or
+//! `ARIANE_REPO`; `global = true` makes it accepted after any command, and
+//! `None` means "discover it from the current directory".
+
 use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
 
+/// The whole command line: the global `repo` option and the chosen command.
 #[derive(Parser)]
 #[command(
     name = "ariane",
@@ -16,6 +31,7 @@ pub struct Cli {
     pub command: Command,
 }
 
+/// The commands `ariane` understands.
 #[derive(Subcommand)]
 pub enum Command {
     #[command(about = "List the items of the tree")]
@@ -30,6 +46,8 @@ pub enum Command {
     Schema(SchemaArgs),
 }
 
+/// Arguments of `ariane tasks`: an optional node scope, whether to include
+/// archived items, and `json` to print JSON instead of a table.
 #[derive(Args)]
 pub struct TasksArgs {
     #[arg(long, help = "Only the items of this node and its descendants")]
@@ -42,6 +60,8 @@ pub struct TasksArgs {
     pub json: bool,
 }
 
+/// Arguments of `ariane doctor`: an optional node scope, `strict` to fail on
+/// warnings, and `json` to print the findings as JSON.
 #[derive(Args)]
 pub struct DoctorArgs {
     #[arg(long, help = "Only check this node and its descendants")]
@@ -54,6 +74,8 @@ pub struct DoctorArgs {
     pub json: bool,
 }
 
+/// Arguments of `ariane migrate`: an optional node scope, `apply` to write the
+/// files (a dry run otherwise), and `json` to print the plan as JSON.
 #[derive(Args)]
 pub struct MigrateArgs {
     #[arg(long, help = "Only migrate this node and its descendants")]
@@ -69,6 +91,7 @@ pub struct MigrateArgs {
     pub json: bool,
 }
 
+/// Arguments of `ariane schema`: `json` to print the schema as JSON.
 #[derive(Args)]
 pub struct SchemaArgs {
     #[arg(long)]

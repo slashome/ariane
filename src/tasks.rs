@@ -1,3 +1,10 @@
+//! `ariane tasks`: lists the items of the tree.
+//!
+//! Prints one line per item (node, id, status, title) or, with `--json`, the full
+//! rows for scripts and agents. ADR-0010 makes this the on-demand aggregation
+//! that `INDEX.md` files no longer carry: an agent without the interface asks
+//! `ariane tasks --node <node> --json`.
+
 use std::process::ExitCode;
 
 use anyhow::Result;
@@ -8,23 +15,38 @@ use crate::item::Kind;
 use crate::node::Category;
 use crate::tree::{Item, NodePath, Tree};
 
+/// One item as listed by `ariane tasks`, and as serialized with `--json`.
+///
+/// The `'a` lifetime says that the string fields borrow from the loaded tree
+/// instead of copying it: a `Row` cannot outlive the [`Tree`] it was built from.
 #[derive(Debug, Serialize)]
 pub struct Row<'a> {
+    /// Logical path of the node holding the item.
     pub node: &'a NodePath,
     pub id: Option<&'a str>,
     pub title: Option<&'a str>,
     pub kind: Kind,
     pub archived: bool,
+    /// Status id as written in the item, if any.
     pub status: Option<&'a str>,
+    /// Category of that status in the node's effective workflow, if it is known there.
     pub category: Option<Category>,
     pub size: Option<&'a str>,
     pub impact: Option<&'a str>,
     pub priority: Option<&'a str>,
     pub created: Option<&'a str>,
+    /// Schema version of the file; `None` for a file not migrated yet.
     pub version: Option<u64>,
+    /// Path of the file relative to the repository root.
     pub path: String,
 }
 
+/// Runs `ariane tasks`: filters the items by node and archive state, then prints
+/// them as a table or as JSON.
+///
+/// # Errors
+///
+/// Fails only if the rows cannot be serialized to JSON.
 pub fn run(tree: &Tree, args: &TasksArgs) -> Result<ExitCode> {
     let scope = args.node.as_deref().map(NodePath::new);
     let rows: Vec<Row> = tree
@@ -40,6 +62,8 @@ pub fn run(tree: &Tree, args: &TasksArgs) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
+/// Builds the row of one item, resolving its status category through the
+/// node's effective workflow (inherited `node.toml` files, SPEC.md §1.5).
 pub fn row<'a>(tree: &Tree, item: &'a Item) -> Row<'a> {
     let document = &item.document;
     let status = document.text("status");
@@ -66,6 +90,7 @@ pub fn row<'a>(tree: &Tree, item: &'a Item) -> Row<'a> {
     }
 }
 
+/// Prints the rows as aligned columns, followed by a count of unversioned items.
 fn print_table(rows: &[Row]) {
     let node_width = rows
         .iter()
@@ -98,6 +123,7 @@ fn print_table(rows: &[Row]) {
     );
 }
 
+/// Unit tests of row building.
 #[cfg(test)]
 mod tests {
     use super::*;

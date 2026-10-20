@@ -1,4 +1,18 @@
+//! `ariane doctor`: checks every item and node against SPEC.md §1.6.
+//!
+//! Doctor only observes (ADR-0004): there is no write path anywhere in this
+//! module or in `check`. It prints its findings grouped by node, or as JSON for
+//! agents and scripts, and its exit code says how much human involvement the
+//! repairs need:
+//!
+//! - `0` no error (warnings alone do not fail, unless `--strict`);
+//! - `1` every error is repaired by a command, `ariane migrate`;
+//! - `2` at least one error needs a human decision;
+//! - `3` the diagnosis could not run at all (returned by `main`).
+
+/// The checks themselves.
 mod check;
+/// The types of a finding and of its remedy.
 mod finding;
 
 use std::collections::BTreeMap;
@@ -10,6 +24,12 @@ use crate::cli::DoctorArgs;
 use crate::tree::{NodePath, Tree};
 use finding::{Finding, Remedy, Severity};
 
+/// Runs `ariane doctor`: diagnoses the scope, prints the report and returns the
+/// exit code.
+///
+/// # Errors
+///
+/// Fails only if the findings cannot be serialized to JSON.
 pub fn run(tree: &Tree, args: &DoctorArgs) -> Result<ExitCode> {
     let scope = args.node.as_deref().map(NodePath::new);
     let findings = diagnose(tree, scope.as_ref(), args.strict);
@@ -21,6 +41,7 @@ pub fn run(tree: &Tree, args: &DoctorArgs) -> Result<ExitCode> {
     Ok(ExitCode::from(exit_code(&findings)))
 }
 
+/// Collects the findings of `scope`, promoting every warning to an error under `--strict`.
 fn diagnose(tree: &Tree, scope: Option<&NodePath>, strict: bool) -> Vec<Finding> {
     let mut findings = check::findings(tree, scope);
     if strict {
@@ -31,6 +52,10 @@ fn diagnose(tree: &Tree, scope: Option<&NodePath>, strict: bool) -> Vec<Finding>
     findings
 }
 
+/// The exit code for these findings (see the module documentation).
+///
+/// `peekable()` lets the function look at the first error without consuming it,
+/// so the same iterator can then be checked with `all`.
 fn exit_code(findings: &[Finding]) -> u8 {
     let mut errors = findings
         .iter()
@@ -45,6 +70,9 @@ fn exit_code(findings: &[Finding]) -> u8 {
     }
 }
 
+/// Prints the findings grouped by node. Files that only need `ariane migrate`
+/// are folded into one line per node, so that a tree still on the legacy format
+/// does not bury the other findings.
 fn print_report(findings: &[Finding]) {
     let mut by_node: BTreeMap<String, Vec<&Finding>> = BTreeMap::new();
     for finding in findings {
@@ -82,6 +110,7 @@ fn print_report(findings: &[Finding]) {
     println!("{}", summary(findings));
 }
 
+/// Prints the remedy line under a finding.
 fn print_remedy(remedy: &Remedy) {
     match remedy {
         Remedy::Command { command } => println!("           → {command}"),
@@ -91,6 +120,7 @@ fn print_remedy(remedy: &Remedy) {
     }
 }
 
+/// The closing line: errors, warnings, nodes concerned and files needing migration.
 fn summary(findings: &[Finding]) -> String {
     if findings.is_empty() {
         return "doctor: healthy".to_owned();
@@ -118,16 +148,19 @@ fn summary(findings: &[Finding]) -> String {
     )
 }
 
+/// `"s"` unless `count` is one.
 fn plural(count: usize) -> &'static str {
     if count == 1 { "" } else { "s" }
 }
 
+/// Unit tests of every SPEC.md §1.6 row, of scoping, `--strict` and exit codes.
 #[cfg(test)]
 mod tests {
     use super::finding::Check;
     use super::*;
     use crate::tree::fixture::Repo;
 
+    /// A `node.toml` declaring custom fields and a pharmakon-like workflow.
     const WORKFLOW: &str = r#"
 [fields.mod]
 type = "string"
@@ -151,12 +184,14 @@ label = "Validé"
 category = "done"
 "#;
 
+    /// The text of a version-1 task of `node` with id `id`, plus `extra` header lines.
     fn task(node: &str, id: &str, extra: &str) -> String {
         format!(
             "---\nariane: 1\nnode: {node}\nid: {id}\ntitle: Title {id}\nstatus: a-faire\nmod: M\n{extra}---\n# {id}\n"
         )
     }
 
+    /// A repository with one node, its `node.toml` and its `INDEX.md`.
     fn base() -> Repo {
         let repo = Repo::new();
         repo.write("p/INDEX.md", "# p\n")
@@ -164,6 +199,7 @@ category = "done"
         repo
     }
 
+    /// The checks that fire on the whole repository, sorted.
     fn checks(repo: &Repo) -> Vec<Check> {
         let tree = Tree::load(repo.root()).unwrap();
         diagnose(&tree, None, false)
@@ -172,6 +208,7 @@ category = "done"
             .collect()
     }
 
+    /// Asserts that exactly one check fires, and that it is `expected`.
     fn only(repo: &Repo, expected: Check) {
         assert_eq!(checks(repo), vec![expected]);
     }

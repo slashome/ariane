@@ -1,22 +1,43 @@
+//! The status and priority words of the legacy prose headers, and what they
+//! mean in the version-1 vocabulary.
+//!
+//! The legacy items wrote their status and priority in free French prose
+//! ("⏳ à faire", "✅ LIVRÉE", "🟡 moyenne"). These tables map the observed words
+//! onto the fixed values of SPEC.md: a status category, a reflexion status, or a
+//! priority level. Each entry also says whether the mapping is a judgment call
+//! (`inferred`), which is shown to the reviewer.
+//!
+//! Emoji are dropped before matching and never decide anything on their own:
+//! 🔴 means "high priority" in some files and "in progress" in others.
+
 use crate::item::Kind;
 use crate::node::Category;
 
 use super::prose::StatusValue;
 
+/// A word found in a table. `T` is the type of value the table maps to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Match<T> {
+    /// The value the word maps to.
     pub value: T,
+    /// Whether the mapping is a judgment call rather than a plain translation.
     pub inferred: bool,
+    /// Whether the whole text was the word, or the word followed by an explanation.
     pub exact: bool,
 }
 
+/// The result of reading a legacy value.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Reading<T> {
+    /// A known word starts the text.
     Found(Match<T>),
+    /// Nothing but emoji or punctuation: nothing to decide on.
     EmojiOnly,
+    /// No known word; carries the normalized text.
     Unknown(String),
 }
 
+/// Status words of tasks, stories and backlog items, with their category and whether the mapping is inferred.
 const TASK_STATUSES: &[(&str, Category, bool)] = &[
     ("commencée puis enterrée", Category::Dropped, true),
     ("commencé puis enterré", Category::Dropped, true),
@@ -79,6 +100,7 @@ const TASK_STATUSES: &[(&str, Category, bool)] = &[
     ("obsolète", Category::Dropped, true),
 ];
 
+/// Status words of reflexions: open, trial ("en essai") or settled.
 const REFLEXION_STATUSES: &[(&str, StatusValue, bool)] = &[
     ("partiellement tranchée", StatusValue::Open, true),
     ("partiellement tranché", StatusValue::Open, true),
@@ -102,6 +124,7 @@ const REFLEXION_STATUSES: &[(&str, StatusValue, bool)] = &[
     ("abandonné", StatusValue::Settled, true),
 ];
 
+/// Priority words and their level: low, medium or high.
 const PRIORITIES: &[(&str, &str, bool)] = &[
     ("moyenne-haute", "medium", true),
     ("moyenne haute", "medium", true),
@@ -116,6 +139,9 @@ const PRIORITIES: &[(&str, &str, bool)] = &[
     ("absolue", "high", true),
 ];
 
+/// Reads a legacy status for an item of `kind`: reflexions use their own table,
+/// every other kind the task table. An "open" backlog item stays in the backlog
+/// rather than becoming a planned task.
 pub fn status(kind: Kind, raw: &str) -> Reading<StatusValue> {
     match kind {
         Kind::Reflexion => lookup(raw, REFLEXION_STATUSES),
@@ -131,10 +157,12 @@ pub fn status(kind: Kind, raw: &str) -> Reading<StatusValue> {
     }
 }
 
+/// Reads a legacy priority.
 pub fn priority(raw: &str) -> Reading<&'static str> {
     lookup(raw, PRIORITIES)
 }
 
+/// Lower-cases the text, drops emoji and other symbols, and collapses the whitespace, so that words compare equal however they were decorated.
 pub fn normalize(raw: &str) -> String {
     let kept: String = raw
         .chars()
@@ -146,6 +174,7 @@ pub fn normalize(raw: &str) -> String {
         .to_lowercase()
 }
 
+/// Maps an open status to the backlog category for a backlog item.
 fn backlog_when_open(kind: Kind, category: Category) -> Category {
     match (kind, category) {
         (Kind::Backlog, Category::Todo) => Category::Backlog,
@@ -153,6 +182,12 @@ fn backlog_when_open(kind: Kind, category: Category) -> Category {
     }
 }
 
+/// Looks the normalized text up in `table`, longest words first, so that
+/// "partiellement tranchée" wins over "tranchée". A word matches the whole
+/// text, or its start when followed by a separator ("haute — à faire vite").
+///
+/// `T: Copy` means the values can be copied out of the table instead of
+/// borrowed.
 fn lookup<T: Copy>(raw: &str, table: &[(&str, T, bool)]) -> Reading<T> {
     let text = normalize(raw);
     let text = text.trim_matches(|c: char| c == '.' || c == ':' || c.is_whitespace());
@@ -187,10 +222,12 @@ fn lookup<T: Copy>(raw: &str, table: &[(&str, T, bool)]) -> Reading<T> {
     Reading::Unknown(text.to_owned())
 }
 
+/// Unit tests of the vocabulary tables.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// The match of a reading, failing the test when nothing was found.
     fn found<T: Copy>(reading: Reading<T>) -> Match<T> {
         match reading {
             Reading::Found(found) => found,

@@ -1,13 +1,25 @@
+//! Allocation of item ids during migration 0 → 1 (SPEC.md §1.4).
+//!
+//! Every item needs an `id` unique within its node. In order of preference, an
+//! item keeps the `id` it already declares, takes a code prefix from its file
+//! name (`b3-…` gives `b3`, `T038-…` gives `T038`), or receives a new one: the
+//! prefix of its kind (T task or backlog, S story, R reflexion, D ressource)
+//! followed by the next free number of that prefix in the node, zero-padded to
+//! three digits. Allocation runs over the files sorted by path, so it is the same
+//! on every run. Files are never renamed.
+
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use crate::schema::{id_prefix, is_valid_id};
 use crate::tree::{Item, NodePath, Tree};
 
+/// The id chosen for each item file, keyed by its path relative to the repository root.
 #[derive(Debug, Default)]
 pub struct Allocations(HashMap<PathBuf, String>);
 
 impl Allocations {
+    /// Chooses the id of every item of `scope`, node by node, in path order.
     pub fn plan(tree: &Tree, scope: Option<&NodePath>) -> Allocations {
         let mut by_node: BTreeMap<&NodePath, Vec<&Item>> = BTreeMap::new();
         for item in &tree.items {
@@ -23,10 +35,14 @@ impl Allocations {
         allocations
     }
 
+    /// The id chosen for the file at `relative`, if it is in the plan.
     pub fn id_of(&self, relative: &Path) -> Option<&str> {
         self.0.get(relative).map(String::as_str)
     }
 
+    /// Chooses the ids of one node's items: declared ids first, then file-name
+    /// prefixes not already taken, then new ids per kind prefix, numbered after the
+    /// highest existing one and never reusing a taken id.
     fn plan_node(&mut self, items: &[&Item]) {
         let mut taken: BTreeSet<String> = items
             .iter()
@@ -70,10 +86,14 @@ impl Allocations {
     }
 }
 
+/// The `id` the item already declares, when it is a valid id.
 fn declared_id(item: &Item) -> Option<&str> {
     item.document.text("id").filter(|id| is_valid_id(id))
 }
 
+/// A code prefix at the start of the file name: letters followed by digits,
+/// before the first `-`. A purely numeric prefix, such as a Monday ticket
+/// number, or a word such as `fusionner` is not an id.
 fn filename_id(relative: &Path) -> Option<String> {
     let stem = relative.file_stem()?.to_str()?;
     let (prefix, _) = stem.split_once('-')?;
@@ -84,10 +104,12 @@ fn filename_id(relative: &Path) -> Option<String> {
     is_code.then(|| prefix.to_owned())
 }
 
+/// The number of an id made of `prefix` and digits, such as 38 for `T038`.
 fn allocated_number(id: &str, prefix: char) -> Option<u32> {
     id.strip_prefix(prefix)?.parse().ok()
 }
 
+/// Unit tests of id allocation.
 #[cfg(test)]
 mod tests {
     use super::*;

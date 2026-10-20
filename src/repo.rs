@@ -1,9 +1,32 @@
+//! Finds the Ariane content repository on disk.
+//!
+//! A content repository is a git repository with a `tree/` directory at its root.
+//! It is found, in this order: from `--repo` or the `ARIANE_REPO` environment
+//! variable; otherwise from the current directory, first following its `_ariane`
+//! link when there is one (a host repository materializes its node through a
+//! symlink named `_ariane`, PLAN §4), then walking up the parent directories.
+//!
+//! Paths are kept as raw [`PathBuf`](std::path::PathBuf) values, never forced into UTF-8 (ADR-0005):
+//! a badly named path must still be reportable.
+
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
+/// Name of the link through which a host repository materializes its node.
 const DIR_NAME: &str = "_ariane";
 
+/// Returns the root of the content repository to work on.
+///
+/// With an explicit path, that path must itself be a content repository. Without
+/// one, the search starts from the current directory, or from the target of its
+/// `_ariane` link, and walks up with `Path::ancestors`, which yields the path
+/// itself and then each parent in turn.
+///
+/// # Errors
+///
+/// Fails when the explicit path cannot be resolved or is not a content
+/// repository, or when nothing is found walking up from the current directory.
 pub fn discover(explicit: Option<&Path>) -> Result<PathBuf> {
     if let Some(path) = explicit {
         let root = path
@@ -31,10 +54,12 @@ pub fn discover(explicit: Option<&Path>) -> Result<PathBuf> {
         })
 }
 
+/// Tells whether `dir` holds both a `tree/` directory and a `.git` entry.
 pub fn is_content_repository(dir: &Path) -> bool {
     dir.join("tree").is_dir() && dir.join(".git").exists()
 }
 
+/// Unit tests of repository discovery.
 #[cfg(test)]
 mod tests {
     use super::*;

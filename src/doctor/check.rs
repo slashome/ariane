@@ -1,3 +1,16 @@
+//! The checks of `ariane doctor` (SPEC.md §1.6), all read-only.
+//!
+//! Three passes, each appending to one list of findings:
+//!
+//! 1. **structural**: unreadable files, invalid `node.toml`, nodes without
+//!    `INDEX.md`;
+//! 2. **per item**: the schema version first (a file that needs `migrate` gets
+//!    that single finding and nothing else), then every core key by iterating
+//!    the declarative table [`CORE_KEYS`](crate::schema::CORE_KEYS), then the checks that depend on
+//!    context: `node` against the file's location, `status` against the node's
+//!    workflow, custom keys against the node's `node.toml`;
+//! 3. **across items**: ids duplicated within a node.
+
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
 
@@ -12,6 +25,11 @@ use crate::schema::{
 };
 use crate::tree::{Item, NodePath, Tree};
 
+/// Runs every check on the items of `scope` (the whole tree when `None`) and
+/// returns the findings in report order.
+///
+/// References are resolved against every item of the tree, not only those in
+/// scope: a task may depend on an item of another node.
 pub fn findings(tree: &Tree, scope: Option<&NodePath>) -> Vec<Finding> {
     let mut found = Vec::new();
     structural(tree, scope, &mut found);
@@ -23,6 +41,7 @@ pub fn findings(tree: &Tree, scope: Option<&NodePath>) -> Vec<Finding> {
     found
 }
 
+/// Reports what prevents reading the tree properly: unreadable paths, invalid `node.toml` files, nodes without `INDEX.md`.
 fn structural(tree: &Tree, scope: Option<&NodePath>, found: &mut Vec<Finding>) {
     let scope_dir = scope.map(|scope| tree.node_dir(scope));
     let in_scope = |path: &Path| scope_dir.as_ref().is_none_or(|dir| path.starts_with(dir));
@@ -74,6 +93,9 @@ fn structural(tree: &Tree, scope: Option<&NodePath>, found: &mut Vec<Finding>) {
     }
 }
 
+/// Checks one item. A missing or unreadable header, a missing or non-integer
+/// `ariane` key, or a schema version other than the binary's stops the checks
+/// there: the rest of the header is not meant for this version of the rules.
 fn check_item(
     tree: &Tree,
     item: &Item,
@@ -152,13 +174,21 @@ fn check_item(
     report.custom(mapping, &effective);
 }
 
+/// Context shared by the checks of one item: the tree, the item, and the list
+/// findings are appended to.
+///
+/// The fields are references with the lifetime `'a`, so a `Reporter` is a
+/// short-lived view that borrows them; `&'a mut` gives it the exclusive right to
+/// push to the list while it exists.
 struct Reporter<'a> {
     tree: &'a Tree,
     item: &'a Item,
     found: &'a mut Vec<Finding>,
 }
 
+/// The per-item checks. `'_` lets the compiler infer the lifetime.
 impl Reporter<'_> {
+    /// Appends a finding about the current item, with its node and relative path.
     fn push(
         &mut self,
         check: Check,
@@ -176,10 +206,12 @@ impl Reporter<'_> {
         });
     }
 
+    /// Appends an error about the current item.
     fn error(&mut self, check: Check, message: impl Into<String>, remedy: Remedy) {
         self.push(check, Severity::Error, message, remedy);
     }
 
+    /// Checks one core key: present when required, absent when forbidden for this kind, and of the right shape when present.
     fn core_key(&mut self, key: &CoreKey, mapping: &Mapping, known: &HashSet<(NodePath, String)>) {
         let requirement = key.requirement_for(self.item.kind);
         let Some(value) = mapping.get(key.name) else {
@@ -199,6 +231,7 @@ impl Reporter<'_> {
         self.value(key, value, known);
     }
 
+    /// Reports a key that this item's kind must not carry.
     fn forbidden(&mut self, name: &str) {
         let kind = kind_label(self.item);
         self.error(
@@ -211,6 +244,9 @@ impl Reporter<'_> {
         );
     }
 
+    /// Checks the shape of a core key's value according to its [`ValueType`]:
+    /// non-empty text, valid id, quoted name, list of strings, date, vocabulary,
+    /// references that resolve, external links.
     fn value(&mut self, key: &CoreKey, value: &Value, known: &HashSet<(NodePath, String)>) {
         let name = key.name;
         match key.value {
@@ -284,6 +320,7 @@ impl Reporter<'_> {
         }
     }
 
+    /// Reports a key that must be a non-empty string.
     fn non_empty(&mut self, name: &str) {
         self.error(
             Check::WrongType,
@@ -292,10 +329,14 @@ impl Reporter<'_> {
         );
     }
 
+    /// Reports a value outside its vocabulary or format. `const N: usize` is a
+    /// compile-time array length: callers pass exactly as many resolutions as they
+    /// wrote, without allocating a `Vec`.
     fn out_of_vocabulary<const N: usize>(&mut self, message: String, resolutions: [String; N]) {
         self.error(Check::OutOfVocabulary, message, Remedy::human(resolutions));
     }
 
+    /// Reports a `node` key that disagrees with where the file sits.
     fn node(&mut self, mapping: &Mapping) {
         let Some(declared) = mapping.get("node").and_then(Value::as_str) else {
             return;
@@ -316,6 +357,9 @@ impl Reporter<'_> {
         }
     }
 
+    /// Checks `status`: a reflexion takes one of the reflexion statuses, any other
+    /// kind a status of the node's effective workflow; in both cases an archived
+    /// item must be closed. Ressources are skipped, their status being forbidden.
     fn status(&mut self, mapping: &Mapping, effective: &Effective) {
         let status_key = schema::core_key("status");
         if status_key.is_some_and(|key| key.requirement_for(self.item.kind) == Requirement::MustNot)
@@ -371,6 +415,7 @@ impl Reporter<'_> {
         }
     }
 
+    /// Reports an archived item whose status is not closed.
     fn open_in_archives(&mut self, status: &str) {
         self.error(
             Check::OpenInArchives,
@@ -382,6 +427,7 @@ impl Reporter<'_> {
         );
     }
 
+    /// Reports a reference that does not parse or points to no known item.
     fn reference(&mut self, key: &str, raw: &str, known: &HashSet<(NodePath, String)>) {
         let Some(target) = parse_reference(raw, &self.item.node) else {
             self.error(
@@ -403,6 +449,9 @@ impl Reporter<'_> {
         }
     }
 
+    /// Checks the keys that are not core keys: each one against its declaration in
+    /// the applicable `node.toml` files (a warning when undeclared), and every
+    /// required custom key for presence.
     fn custom(&mut self, mapping: &Mapping, effective: &Effective) {
         let declarations: BTreeMap<&str, &FieldDecl> = effective
             .fields
@@ -453,6 +502,7 @@ impl Reporter<'_> {
         }
     }
 
+    /// Reports a key whose value is not of the expected shape.
     fn wrong_type(&mut self, key: &str, expected: &str) {
         self.error(
             Check::WrongType,
@@ -465,6 +515,9 @@ impl Reporter<'_> {
     }
 }
 
+/// Reports ids used by more than one item of the same node, once per file.
+/// Only versioned items are considered: unversioned files have no reliable id
+/// yet and are already reported as needing migration.
 fn duplicates(tree: &Tree, scope: Option<&NodePath>, found: &mut Vec<Finding>) {
     let mut by_id: BTreeMap<(&NodePath, &str), Vec<&Item>> = BTreeMap::new();
     for item in tree.items_within(scope) {
@@ -496,6 +549,7 @@ fn duplicates(tree: &Tree, scope: Option<&NodePath>, found: &mut Vec<Finding>) {
     }
 }
 
+/// Every `(node, id)` pair of the tree, to resolve references against.
 fn known_ids(tree: &Tree) -> HashSet<(NodePath, String)> {
     tree.items
         .iter()
@@ -503,6 +557,7 @@ fn known_ids(tree: &Tree) -> HashSet<(NodePath, String)> {
         .collect()
 }
 
+/// Checks a custom key's value against its declared type; returns what was expected when it does not match, `None` when it does.
 fn mismatch(decl: &FieldDecl, value: &Value, node: &NodePath) -> Option<String> {
     let ok = match decl.kind {
         FieldType::String => value.is_string(),
@@ -536,6 +591,9 @@ fn mismatch(decl: &FieldDecl, value: &Value, node: &NodePath) -> Option<String> 
     })
 }
 
+/// Parses a reference: `T022` stands for an item of the `current` node,
+/// `node/path#T022` for an item of another node. `None` when the id part is not
+/// a valid id. `bool::then` turns a condition into an `Option`.
 pub fn parse_reference(raw: &str, current: &NodePath) -> Option<(NodePath, String)> {
     let (node, id) = match raw.split_once('#') {
         Some((node, id)) => (NodePath::new(node), id),
@@ -544,10 +602,12 @@ pub fn parse_reference(raw: &str, current: &NodePath) -> Option<(NodePath, Strin
     is_valid_id(id).then(|| (node, id.to_owned()))
 }
 
+/// The value as a string when it is one and is not blank.
 fn non_empty(value: &Value) -> Option<&str> {
     value.as_str().filter(|text| !text.trim().is_empty())
 }
 
+/// The item's kind as a word, for messages.
 fn kind_label(item: &Item) -> String {
     serde_json::to_value(item.kind)
         .ok()
@@ -555,10 +615,14 @@ fn kind_label(item: &Item) -> String {
         .unwrap_or_else(|| "item".to_owned())
 }
 
+/// The value as a list of string slices, or `None` if it is not a list or one
+/// entry is not a string: collecting an iterator of `Option` into an `Option`
+/// stops at the first `None`.
 fn string_list(value: &Value) -> Option<Vec<&str>> {
     value.as_sequence()?.iter().map(Value::as_str).collect()
 }
 
+/// A value as it would read in YAML, for messages.
 fn display(value: &Value) -> String {
     match value {
         Value::String(text) => text.clone(),
@@ -568,6 +632,7 @@ fn display(value: &Value) -> String {
     }
 }
 
+/// A path relative to the repository root, for messages.
 fn relative(tree: &Tree, path: &Path) -> String {
     path.strip_prefix(&tree.root)
         .unwrap_or(path)

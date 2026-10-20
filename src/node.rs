@@ -1,3 +1,16 @@
+//! `node.toml`: what a node declares about its items (SPEC.md §1.5, ADR-0008).
+//!
+//! A node may carry a `node.toml` next to its `INDEX.md` with three tables:
+//!
+//! - `[fields.<key>]` declares a custom header key and its type;
+//! - `[[workflow]]` lists the statuses its items may take, each with a stable
+//!   `id`, a free `label` and one of the six fixed categories;
+//! - `[tracker]` binds the node to an external tracker (ADR-0011, not used yet).
+//!
+//! A node inherits from its ancestors: fields accumulate (the nearest declaration
+//! wins), a workflow replaces the inherited one as a whole, and a node with no
+//! workflow above it uses the default one, one status per category.
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -5,20 +18,32 @@ use serde::{Deserialize, Serialize};
 
 use crate::tree::NodePath;
 
+/// Name of the file a node declares itself in.
 pub const FILE: &str = "node.toml";
 
+/// The six status categories fixed by Ariane. Every workflow status belongs to
+/// one, which is what lets the dashboard aggregate nodes with different
+/// workflows. `#[serde(rename_all = "snake_case")]` writes `InProgress` as
+/// `in_progress`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Category {
+    /// Not planned yet.
     Backlog,
+    /// Planned, not started.
     Todo,
+    /// Being worked on, or waiting for validation.
     InProgress,
+    /// Cannot move until something else happens.
     Blocked,
+    /// Finished.
     Done,
+    /// Abandoned; closed without being done.
     Dropped,
 }
 
 impl Category {
+    /// Every category, in display order.
     pub const ALL: [Category; 6] = [
         Category::Backlog,
         Category::Todo,
@@ -28,6 +53,7 @@ impl Category {
         Category::Dropped,
     ];
 
+    /// The identifier written in files and JSON, such as `in_progress`.
     pub fn id(self) -> &'static str {
         match self {
             Category::Backlog => "backlog",
@@ -39,6 +65,7 @@ impl Category {
         }
     }
 
+    /// The English label of the default workflow.
     pub fn label(self) -> &'static str {
         match self {
             Category::Backlog => "Backlog",
@@ -50,80 +77,119 @@ impl Category {
         }
     }
 
+    /// Tells whether an item in this category is finished, done or dropped.
     pub fn is_closed(self) -> bool {
         matches!(self, Category::Done | Category::Dropped)
     }
 }
 
+/// One status of a workflow, as declared in a `[[workflow]]` entry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Status {
+    /// Stable identifier, the value written in items' `status` key.
     pub id: String,
+    /// Text shown to humans; renaming it changes no item.
     pub label: String,
+    /// The fixed category this status belongs to.
     pub category: Category,
 }
 
+/// Type of a custom key, as written in `type = "…"` of a `[fields.<key>]` table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum FieldType {
+    /// Any string.
     #[serde(rename = "string")]
     String,
+    /// A whole number.
     #[serde(rename = "integer")]
     Integer,
+    /// Any number.
     #[serde(rename = "number")]
     Number,
+    /// `true` or `false`.
     #[serde(rename = "boolean")]
     Boolean,
+    /// A `YYYY-MM-DD` date.
     #[serde(rename = "date")]
     Date,
+    /// One item reference: `T022` or `node/path#T022`.
     #[serde(rename = "ref")]
     Ref,
+    /// A list of strings, written `list<string>`.
     #[serde(rename = "list<string>")]
     ListOfStrings,
+    /// A list of item references, written `list<ref>`.
     #[serde(rename = "list<ref>")]
     ListOfRefs,
+    /// One string out of `values`.
     #[serde(rename = "enum")]
     Enum,
 }
 
+/// The declaration of one custom key.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct FieldDecl {
+    /// Its type, read from the `type` key (renamed because `type` is a Rust keyword).
     #[serde(rename = "type")]
     pub kind: FieldType,
+    /// Allowed values when the type is `enum`; empty otherwise.
     #[serde(default)]
     pub values: Vec<String>,
+    /// Whether every item of the node must carry the key.
     #[serde(default)]
     pub required: bool,
 }
 
+/// The content of one `node.toml` file, exactly as written.
+/// `deny_unknown_fields` turns a misspelled table into a parse error instead of
+/// silently ignoring it.
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NodeFile {
+    /// Custom keys declared by this file.
     #[serde(default)]
     pub fields: BTreeMap<String, FieldDecl>,
+    /// The workflow declared by this file, if any.
     pub workflow: Option<Vec<Status>>,
+    /// The tracker binding, kept as raw TOML until connectors exist (ADR-0011).
     pub tracker: Option<toml::Table>,
 }
 
+/// What applies to one node once its ancestors' files are combined.
 #[derive(Debug, Clone)]
 pub struct Effective {
+    /// Custom keys of the node and its ancestors; the nearest declaration wins.
     pub fields: BTreeMap<String, FieldDecl>,
+    /// The nearest workflow, or the default one.
     pub workflow: Vec<Status>,
+    /// Node that declared the workflow; `None` for the default workflow.
     pub workflow_from: Option<NodePath>,
+    /// The nearest tracker binding, if any.
     pub tracker: Option<toml::Table>,
 }
 
 impl Effective {
+    /// The workflow status whose id is `id`, if the workflow has one.
     pub fn status(&self, id: &str) -> Option<&Status> {
         self.workflow.iter().find(|status| status.id == id)
     }
 }
 
+/// Every `node.toml` of the tree, and those that could not be parsed.
 #[derive(Debug, Default)]
 pub struct Configs {
+    /// Parsed files, keyed by the node holding them.
     pub files: BTreeMap<NodePath, NodeFile>,
+    /// Files that exist but do not parse, with the parser's message, for `doctor`.
     pub errors: Vec<(PathBuf, String)>,
 }
 
 impl Configs {
+    /// Reads the `node.toml` of every node and of every ancestor of a node.
+    ///
+    /// An ancestor may declare a workflow without holding any item, so every
+    /// ancestor is a candidate. A missing file is normal and skipped; a file that
+    /// does not parse is recorded in `errors`, never ignored.
     pub fn load(tree_dir: &Path, nodes: &[NodePath]) -> Configs {
         let mut configs = Configs::default();
         let mut candidates: Vec<NodePath> = nodes
@@ -147,6 +213,8 @@ impl Configs {
         configs
     }
 
+    /// Combines the files from the home node down to `node` (SPEC.md §1.5): fields
+    /// accumulate, the nearest workflow and tracker replace inherited ones.
     pub fn effective(&self, node: &NodePath) -> Effective {
         let mut effective = Effective {
             fields: BTreeMap::new(),
@@ -175,6 +243,7 @@ impl Configs {
     }
 }
 
+/// The workflow of a node with none declared above it: one status per category, whose id is the category's.
 pub fn default_workflow() -> Vec<Status> {
     Category::ALL
         .into_iter()
@@ -186,6 +255,7 @@ pub fn default_workflow() -> Vec<Status> {
         .collect()
 }
 
+/// Path of the `node.toml` a node would hold.
 fn file_of(tree_dir: &Path, node: &NodePath) -> PathBuf {
     let mut path = tree_dir.to_path_buf();
     for segment in node
@@ -198,12 +268,14 @@ fn file_of(tree_dir: &Path, node: &NodePath) -> PathBuf {
     path.join(FILE)
 }
 
+/// Unit tests of `node.toml` parsing and inheritance.
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::tree::Tree;
     use crate::tree::fixture::Repo;
 
+    /// A parent `node.toml` declaring a field, a workflow and a tracker.
     const PARENT: &str = r#"
 [fields.mod]
 type = "string"
@@ -218,6 +290,7 @@ category = "todo"
 kind = "monday"
 "#;
 
+    /// A child `node.toml` overriding the field and the workflow.
     const CHILD: &str = r#"
 [fields.mod]
 type = "enum"

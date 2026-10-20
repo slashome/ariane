@@ -1,3 +1,21 @@
+//! Reading the legacy prose header of an item, for migration 0 → 1.
+//!
+//! Before the versioned front-matter, items described themselves in prose right
+//! under their `# ` title, in a handful of shapes measured on the real content:
+//!
+//! - bullets `- **Clé** : valeur`, several of them possibly on one line joined
+//!   by `·` (state, priority, Monday ticket, estimation, dependencies…);
+//! - block quotes `> Créée : DATE — statut : …`, `> Priorité : …`,
+//!   `> Ouverte le DATE. **Statut : …**`, `> Versée le DATE. …`;
+//! - an archive banner `> ✅ **TERMINÉ ET ARCHIVÉ** (DATE)` stacked over an
+//!   older status line, in which case the banner wins.
+//!
+//! [`extract`](crate::migrate::v1::prose::extract) turns what it recognises into version-1 values (status,
+//! priority, `created`, `external`) and removes the parts it fully consumed from
+//! the body. Anything recognised but not translatable is reported in
+//! `leftovers`, anything guessed in `inferred`, and every other line stays in the
+//! body: no information is dropped.
+
 use yaml_serde::Value;
 
 use crate::item::Kind;
@@ -5,23 +23,40 @@ use crate::node::Category;
 
 use super::vocabulary::{self, Reading};
 
+/// A status read from prose, before it is mapped onto a node's workflow.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusValue {
+    /// The status of a task, story or backlog item, as a category.
     Category(Category),
+    /// A reflexion still open.
     Open,
+    /// A reflexion being tried out ("en essai").
     Trial,
+    /// A reflexion settled.
     Settled,
 }
 
+/// What was read from a prose header.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Extraction {
+    /// The status, if one was recognised.
     pub status: Option<StatusValue>,
+    /// Other version-1 keys read: `created`, `priority`, `external`.
     pub fields: Vec<(String, Value)>,
+    /// Keys whose value is a judgment call.
     pub inferred: Vec<String>,
+    /// Things recognised but not translatable, with the reason, for a human.
     pub leftovers: Vec<String>,
+    /// The body with the consumed header parts removed.
     pub body: String,
 }
 
+/// Reads the prose header of `body` for an item of `kind`.
+///
+/// Only the lines right after the title that are bullets or quotes form the
+/// header region; each one is read, then kept, rewritten without its consumed
+/// parts, or removed. Returns the body unchanged with no field when nothing is
+/// recognised.
 pub fn extract(kind: Kind, body: &str) -> Extraction {
     let lines: Vec<&str> = body.split_inclusive('\n').collect();
     let Some(region) = header_region(&lines) else {
@@ -46,6 +81,7 @@ pub fn extract(kind: Kind, body: &str) -> Extraction {
     reader.finish(rebuild(&lines, &edits, region))
 }
 
+/// An extraction that found nothing and keeps the body as is.
 fn unchanged(body: &str) -> Extraction {
     Extraction {
         body: body.to_owned(),
@@ -53,29 +89,44 @@ fn unchanged(body: &str) -> Extraction {
     }
 }
 
+/// What happens to one line of the header region.
 #[derive(Debug, Clone, PartialEq)]
 enum Edit {
+    /// The line stays as it is.
     Keep,
+    /// The line is rewritten without its consumed parts.
     Replace(String),
+    /// Everything in the line was consumed.
     Remove,
 }
 
+/// Where a status was read from, to settle disagreements.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Source {
+    /// An archive banner: the most recent statement.
     Banner,
+    /// A status line or bullet.
     Field,
 }
 
+/// The state accumulated while reading the header lines of one item.
 struct Reader {
+    /// Kind of the item, which decides the status vocabulary.
     kind: Kind,
+    /// The status found, where it came from, and whether it was inferred.
     status: Option<(StatusValue, Source, bool)>,
+    /// The priority level found, and whether it was inferred.
     priority: Option<(&'static str, bool)>,
+    /// The first creation date found.
     created: Option<String>,
+    /// The `monday:<id>` links found, without duplicates.
     external: Vec<String>,
+    /// Things a human must look at.
     leftovers: Vec<String>,
 }
 
 impl Reader {
+    /// An empty reader for an item of `kind`.
     fn new(kind: Kind) -> Reader {
         Reader {
             kind,
@@ -87,6 +138,7 @@ impl Reader {
         }
     }
 
+    /// Whether nothing at all was recognised.
     fn is_empty(&self) -> bool {
         self.status.is_none()
             && self.priority.is_none()
@@ -95,6 +147,7 @@ impl Reader {
             && self.leftovers.is_empty()
     }
 
+    /// Reads a bullet line and returns what to do with it: kept, rewritten with only its unconsumed pairs, or removed.
     fn bullet_line(&mut self, text: &str) -> Edit {
         let pairs = bullet_pairs(text);
         if pairs.is_empty() {
@@ -118,6 +171,9 @@ impl Reader {
         Edit::Replace(format!("- {rebuilt}"))
     }
 
+    /// Reads a quoted line: an archive banner sets the status and stays; any other
+    /// line is cut into segments, each one read on its own. The line is rewritten
+    /// without its consumed segments, unless that would leave unbalanced `**`.
     fn quote_line(&mut self, quoted: &str) -> Edit {
         let content = quoted.trim();
         if content.is_empty() {
@@ -151,6 +207,7 @@ impl Reader {
         Edit::Replace(format!("> {rebuilt}"))
     }
 
+    /// Reads one segment of a quoted line: a creation date, a `key : value` pair, or a Monday mention. Returns whether it was fully consumed.
     fn segment(&mut self, text: &str) -> bool {
         let plain = text.replace("**", "").replace('`', "");
         let plain = plain.trim();
@@ -171,6 +228,7 @@ impl Reader {
         false
     }
 
+    /// Reads a creation date after its marker. The segment is consumed only if nothing but the date follows the marker.
     fn created_segment(&mut self, plain: &str, marker_chars: usize) -> bool {
         let rest: String = plain.chars().skip(marker_chars).collect();
         let Some(date) = find_date(&rest) else {
@@ -183,6 +241,10 @@ impl Reader {
             .is_empty()
     }
 
+    /// Reads one `key : value` pair by its normalized key: status, priority, Monday
+    /// ticket and creation date are translated; estimation and dependencies become
+    /// leftovers; any other key stays in the body. Returns whether the pair was
+    /// fully consumed.
     fn field(&mut self, key: &str, value: &str) -> bool {
         let name = vocabulary::normalize(key);
         let name = name.trim_matches(|c: char| c == ':' || c.is_whitespace());
@@ -212,6 +274,7 @@ impl Reader {
         }
     }
 
+    /// Reads a status value; consumed only when the value is exactly a known word.
     fn status_field(&mut self, value: &str) -> bool {
         if self.kind == Kind::Ressource {
             self.leftovers
@@ -237,6 +300,7 @@ impl Reader {
         }
     }
 
+    /// Reads a priority value; the first one found wins.
     fn priority_field(&mut self, value: &str) -> bool {
         match vocabulary::priority(value) {
             Reading::Found(found) => {
@@ -260,6 +324,7 @@ impl Reader {
         }
     }
 
+    /// Reads a `Monday` value; consumed when it holds nothing but ticket numbers and links.
     fn monday_field(&mut self, value: &str) -> bool {
         let ids = ticket_ids(value);
         if ids.is_empty() {
@@ -276,6 +341,7 @@ impl Reader {
             .all(|word| word.contains(".monday.com") || word.contains('/'))
     }
 
+    /// Collects the ticket numbers of a text that mentions Monday.
     fn monday_mentions(&mut self, text: &str) {
         if !text.to_lowercase().contains("monday") {
             return;
@@ -285,6 +351,7 @@ impl Reader {
         }
     }
 
+    /// Adds a `monday:<id>` link once.
     fn add_external(&mut self, id: String) {
         let value = format!("monday:{id}");
         if !self.external.contains(&value) {
@@ -292,6 +359,7 @@ impl Reader {
         }
     }
 
+    /// Reads an archive banner: abandoned or buried means dropped, finished, archived or delivered means done; a reflexion becomes settled.
     fn banner(&mut self, content: &str) {
         let lowered = vocabulary::normalize(content);
         let category = if lowered.contains("abandonn") || lowered.contains("enterr") {
@@ -312,6 +380,7 @@ impl Reader {
         self.set_status(value, Source::Banner, false);
     }
 
+    /// Records a status; when two disagree, an archive banner wins over a status line, and the disagreement is reported.
     fn set_status(&mut self, value: StatusValue, source: Source, inferred: bool) {
         match self.status {
             None => self.status = Some((value, source, inferred)),
@@ -328,6 +397,7 @@ impl Reader {
         }
     }
 
+    /// Turns the reader into an [`Extraction`] with the rebuilt `body`. Takes `self` by value: the reader is consumed.
     fn finish(self, body: String) -> Extraction {
         let mut fields = Vec::new();
         let mut inferred = Vec::new();
@@ -360,6 +430,7 @@ impl Reader {
     }
 }
 
+/// Phrases that introduce a creation date, longest first.
 const CREATED_MARKERS: [&str; 8] = [
     "créée le",
     "créé le",
@@ -371,12 +442,18 @@ const CREATED_MARKERS: [&str; 8] = [
     "extrait le",
 ];
 
+/// One segment of a quoted line, with the separator that preceded it.
 #[derive(Debug, Clone, PartialEq)]
 struct Piece {
+    /// The separator before this segment (`" — "`, `" · "` or a sentence end), to rejoin the kept segments.
     separator: &'static str,
+    /// The segment's text.
     text: String,
 }
 
+/// Cuts a quoted line at ` — `, ` · ` and sentence ends (`. ` followed by a
+/// capital). The loop walks bytes but only stops on character boundaries, since
+/// the text holds multi-byte characters such as `é` and `—`.
 fn split_segments(content: &str) -> Vec<Piece> {
     let mut pieces = Vec::new();
     let mut separator = "";
@@ -413,6 +490,7 @@ fn split_segments(content: &str) -> Vec<Piece> {
     pieces
 }
 
+/// Whether `rest` starts with `. ` followed by a capital letter or `*`.
 fn sentence_end(rest: &str) -> bool {
     let Some(after) = rest.strip_prefix(". ") else {
         return false;
@@ -423,6 +501,7 @@ fn sentence_end(rest: &str) -> bool {
         .is_some_and(|c| c.is_uppercase() || c == '*')
 }
 
+/// Rejoins the kept segments with their original separators.
 fn join_pieces(pieces: &[&Piece]) -> String {
     let mut text = String::new();
     for (index, piece) in pieces.iter().enumerate() {
@@ -434,6 +513,7 @@ fn join_pieces(pieces: &[&Piece]) -> String {
     text
 }
 
+/// The range of lines right after the title made only of bullets and quotes, blank lines included; `None` when there is none.
 fn header_region(lines: &[&str]) -> Option<std::ops::Range<usize>> {
     let title = lines
         .iter()
@@ -457,6 +537,7 @@ fn header_region(lines: &[&str]) -> Option<std::ops::Range<usize>> {
     seen.then_some(start..end)
 }
 
+/// Whether a line is a `- **Key** : value` bullet.
 fn is_bullet(text: &str) -> bool {
     text.strip_prefix("- **").is_some_and(|rest| {
         rest.split_once("**").is_some_and(|(_, after)| {
@@ -467,6 +548,7 @@ fn is_bullet(text: &str) -> bool {
         .is_some_and(|rest| rest.split_once(":**").is_some())
 }
 
+/// The `(key, value)` pairs of a bullet line, several pairs being joined by ` · **`.
 fn bullet_pairs(text: &str) -> Vec<(String, String)> {
     let Some(rest) = text.strip_prefix("- ") else {
         return Vec::new();
@@ -487,6 +569,7 @@ fn bullet_pairs(text: &str) -> Vec<(String, String)> {
         .collect()
 }
 
+/// Whether a quoted line is an archive banner.
 fn is_banner(content: &str) -> bool {
     let upper = content.to_uppercase();
     content.starts_with('✅')
@@ -495,6 +578,7 @@ fn is_banner(content: &str) -> bool {
         || upper.starts_with("**ARCHIVÉ")
 }
 
+/// The first `YYYY-MM-DD` date in `text`, scanning ten characters at a time.
 fn find_date(text: &str) -> Option<String> {
     let chars: Vec<char> = text.chars().collect();
     chars.windows(10).find_map(|window| {
@@ -503,6 +587,7 @@ fn find_date(text: &str) -> Option<String> {
     })
 }
 
+/// Whether `text` is a `YYYY-MM-DD` date with a plausible month and day.
 fn is_date(text: &str) -> bool {
     let bytes = text.as_bytes();
     if bytes.len() != 10 || bytes[4] != b'-' || bytes[7] != b'-' {
@@ -517,6 +602,7 @@ fn is_date(text: &str) -> bool {
     (1..=12).contains(&month) && (1..=31).contains(&day)
 }
 
+/// The runs of at least nine digits in `text`: Monday ticket numbers.
 fn ticket_ids(text: &str) -> Vec<String> {
     let mut ids = Vec::new();
     let mut run = String::new();
@@ -533,6 +619,7 @@ fn ticket_ids(text: &str) -> Vec<String> {
     ids
 }
 
+/// Applies the edits to the header region and rebuilds the body, keeping each line's own line ending.
 fn rebuild(lines: &[&str], edits: &[Edit], region: std::ops::Range<usize>) -> String {
     let head = lines[..region.start].concat();
     let mut middle: Vec<String> = region
@@ -557,6 +644,7 @@ fn rebuild(lines: &[&str], edits: &[Edit], region: std::ops::Range<usize>) -> St
     format!("{head}{}{tail}", middle.concat())
 }
 
+/// Removes the empty quote lines and doubled blank lines that removals leave behind.
 fn tidy(lines: &mut Vec<String>) {
     let is_quote_text = |line: &str| line.starts_with('>') && line.trim() != ">";
     let mut kept: Vec<String> = Vec::with_capacity(lines.len());
@@ -584,10 +672,12 @@ fn tidy(lines: &mut Vec<String>) {
     *lines = kept;
 }
 
+/// Unit tests, one per header shape, all on invented content.
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// The value of `key` in an extraction.
     fn field<'a>(extraction: &'a Extraction, key: &str) -> Option<&'a Value> {
         extraction
             .fields
@@ -596,10 +686,12 @@ mod tests {
             .map(|(_, value)| value)
     }
 
+    /// The value of `key` in an extraction, as text.
     fn text_field(extraction: &Extraction, key: &str) -> Option<String> {
         field(extraction, key).and_then(|value| value.as_str().map(str::to_owned))
     }
 
+    /// The external links of an extraction.
     fn external(extraction: &Extraction) -> Vec<String> {
         field(extraction, "external")
             .and_then(Value::as_sequence)

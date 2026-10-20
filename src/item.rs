@@ -1,21 +1,41 @@
+//! Reading and writing one item file.
+//!
+//! An item is a Markdown file that starts with a YAML front-matter between two
+//! `---` lines (SPEC.md §1.2). This module splits a file into that header and its
+//! body, parses the header into an ordered YAML mapping, and renders it back.
+//!
+//! The mapping keeps every key in its original order, including keys this tool
+//! does not know: SPEC.md §1.3 requires a tool to write back what it did not
+//! understand unchanged.
+
 use anyhow::Result;
 use serde::Serialize;
 use yaml_serde::{Mapping, Value};
 
+/// Schema version this binary implements: the value of the `ariane` key it writes and expects.
 pub const SCHEMA_VERSION: u64 = 1;
 
+/// The nature of an item, given by the directory it sits in, never by its header
+/// (SPEC.md §1.1).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
+    /// An item in `backlog/`.
     Backlog,
+    /// An item in `tasks/`.
     Task,
+    /// An item in `stories/`.
     Story,
+    /// An item in `reflexions/`.
     Reflexion,
+    /// An item in `ressources/`: an external reference, never a status.
     Ressource,
+    /// An archived item stored directly in `archives/`, whose kind cannot be told.
     Unknown,
 }
 
 impl Kind {
+    /// Maps an item directory name to its kind, or `None` for any other directory.
     pub fn from_dir(name: &str) -> Option<Kind> {
         match name {
             "backlog" => Some(Kind::Backlog),
@@ -28,20 +48,31 @@ impl Kind {
     }
 }
 
+/// What was found at the top of an item file.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Header {
+    /// No front-matter: the file does not start with a closed `---` block.
     Missing,
+    /// A front-matter that is not a YAML mapping; carries the parser's message.
     Malformed(String),
+    /// A parsed front-matter, keys in file order.
     Present(Mapping),
 }
 
+/// An item file split into its header and its Markdown body.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Document {
+    /// The front-matter, if any.
     pub header: Header,
+    /// Everything after the closing `---`, untouched.
     pub body: String,
 }
 
 impl Document {
+    /// Splits `text` into a header and a body and parses the header.
+    ///
+    /// Never fails: a file without front-matter or with invalid YAML is still a
+    /// document, and the problem is recorded in [`Header`] for `doctor` to report.
     pub fn parse(text: &str) -> Document {
         let Some((yaml, body)) = split(text) else {
             return Document {
@@ -61,6 +92,7 @@ impl Document {
         }
     }
 
+    /// The header mapping when the front-matter was parsed, `None` otherwise.
     pub fn mapping(&self) -> Option<&Mapping> {
         match &self.header {
             Header::Present(mapping) => Some(mapping),
@@ -68,20 +100,38 @@ impl Document {
         }
     }
 
+    /// The schema version written in the `ariane` key, if it is an integer.
+    ///
+    /// The `?` operator inside a function returning `Option` returns `None` as soon
+    /// as one step is missing: no header, no key, or a value that is not an integer.
     pub fn version(&self) -> Option<u64> {
         self.mapping()?.get("ariane")?.as_u64()
     }
 
+    /// The value of `key` when it is a string.
+    ///
+    /// The returned `&str` borrows from the document, so it lives as long as the
+    /// document does and nothing is copied.
     pub fn text(&self, key: &str) -> Option<&str> {
         self.mapping()?.get(key)?.as_str()
     }
 }
 
+/// Builds the text of an item file from a header mapping and a body.
+///
+/// # Errors
+///
+/// Fails if the mapping cannot be serialized to YAML.
 pub fn render(header: &Mapping, body: &str) -> Result<String> {
     let yaml = yaml_serde::to_string(header)?;
     Ok(format!("---\n{yaml}---\n{body}"))
 }
 
+/// Cuts a file into its front-matter text and its body, without parsing either.
+///
+/// The front-matter must open on the very first line (after an optional byte
+/// order mark) and close on a line made only of `---`. Both returned slices
+/// borrow from `text`. Returns `None` when there is no closed front-matter.
 fn split(text: &str) -> Option<(&str, &str)> {
     let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     let rest = text
@@ -97,6 +147,7 @@ fn split(text: &str) -> Option<(&str, &str)> {
     None
 }
 
+/// Unit tests of front-matter splitting, parsing and rendering.
 #[cfg(test)]
 mod tests {
     use super::*;
