@@ -30,7 +30,7 @@ export function Dialog({ open, onOpenChange, title, description, className, chil
                 <DialogPrimitive.Description className="text-sm text-muted-foreground">{description}</DialogPrimitive.Description>
               ) : null}
             </div>
-            <DialogPrimitive.Close className="rounded p-1 hover:bg-muted" aria-label="Close">
+            <DialogPrimitive.Close className="icon-button size-6" aria-label="Close">
               <X className="size-4" aria-hidden />
             </DialogPrimitive.Close>
           </div>

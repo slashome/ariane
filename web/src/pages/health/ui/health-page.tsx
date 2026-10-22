@@ -19,7 +19,7 @@ function Remedy({ finding }: { finding: Finding }) {
         <button
           type="button"
           aria-label={`Copy ${command}`}
-          className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="icon-button size-5.5"
           onClick={() => {
             void navigator.clipboard?.writeText(command)
             toast.success('Command copied')

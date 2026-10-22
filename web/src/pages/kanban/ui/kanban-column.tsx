@@ -54,7 +54,7 @@ export function KanbanColumn({
                     type="button"
                     aria-label={`Open ${item.title ?? item.path}`}
                     title="Open details"
-                    className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="icon-button size-5"
                     onPointerDown={(event) => event.stopPropagation()}
                     onKeyDown={(event) => event.stopPropagation()}
                     onClick={() => onOpen(item)}

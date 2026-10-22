@@ -36,7 +36,7 @@ export function UncommittedList({
               type="button"
               aria-label={`Discard ${file.path}`}
               title="Discard this change"
-              className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-red-600"
+              className="icon-button mr-1 size-4.5 shrink-0 hover:text-red-600"
               onClick={() => onDiscard(file.path)}
             >
               <Undo2 className="size-3.5" aria-hidden />

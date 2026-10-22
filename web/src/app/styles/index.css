@@ -11,7 +11,12 @@
   --color-primary-foreground: oklch(0.99 0 0);
   --color-popover: oklch(1 0 0);
   --color-sidebar: oklch(0.975 0.004 260);
+  /* The halo behind an icon button on hover: a lighter disc in dark mode, a darker one in light mode. */
+  --color-halo: oklch(0.2 0.01 260 / 0.08);
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  /* Motion: one short duration and one easing for every hover feedback. */
+  --duration-hover: 160ms;
+  --ease-hover: cubic-bezier(0.2, 0, 0, 1);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -26,6 +31,71 @@
     --color-primary-foreground: oklch(0.15 0.01 260);
     --color-popover: oklch(0.21 0.012 260);
     --color-sidebar: oklch(0.15 0.01 260);
+    --color-halo: oklch(1 0 0 / 0.12);
+  }
+}
+
+/* Tailwind v4 leaves buttons on the default cursor; every clickable button here gets the pointer back. */
+@layer base {
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/* A button that is only an icon: a pointer cursor and a light disc that grows in behind the icon on
+   hover, stays on keyboard focus, and appears without motion when the system asks for less. */
+@utility icon-button {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  cursor: pointer;
+  color: var(--color-muted-foreground);
+  transition: color var(--duration-hover) var(--ease-hover);
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -0.25rem;
+    z-index: -1;
+    border-radius: inherit;
+    background: var(--color-halo);
+    opacity: 0;
+    transform: scale(0.6);
+    transition:
+      opacity var(--duration-hover) var(--ease-hover),
+      transform var(--duration-hover) var(--ease-hover);
+  }
+
+  &:hover,
+  &:focus-visible {
+    color: var(--color-foreground);
+  }
+
+  &:hover::before,
+  &:focus-visible::before {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &,
+    &::before {
+      transition: none;
+    }
   }
 }
 

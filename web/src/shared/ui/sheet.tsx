@@ -21,7 +21,7 @@ export function Sheet({ open, onOpenChange, title, description, children }: Shee
               <Dialog.Title className="text-base font-semibold">{title}</Dialog.Title>
               {description && <Dialog.Description className="text-sm text-muted-foreground">{description}</Dialog.Description>}
             </div>
-            <Dialog.Close className="rounded p-1 hover:bg-muted" aria-label="Close">
+            <Dialog.Close className="icon-button size-6" aria-label="Close">
               <X className="size-4" aria-hidden />
             </Dialog.Close>
           </div>
