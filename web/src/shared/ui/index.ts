@@ -1,6 +1,8 @@
+export { ConfirmDialog } from './alert-dialog'
 export { Badge } from './badge'
 export { Button, type ButtonProps } from './button'
 export { ComingSoon } from './coming-soon'
+export { Dialog } from './dialog'
 export { HoverCard, HoverCardContent, HoverCardTrigger } from './hover-card'
 export { Input } from './input'
 export { MultiSelect, type MultiSelectOption } from './multi-select'
