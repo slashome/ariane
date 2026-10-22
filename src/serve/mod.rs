@@ -18,7 +18,7 @@ mod git;
 mod watch;
 mod write;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -46,6 +46,9 @@ pub struct State {
     pub tree: RwLock<Tree>,
     /// Date of the latest commit under each node, recomputed with every load.
     pub last_change: RwLock<BTreeMap<NodePath, Option<String>>>,
+    /// Date of the latest commit of each item file, by path relative to the
+    /// root, recomputed with every load.
+    pub dates: RwLock<HashMap<PathBuf, String>>,
     /// The `config.toml` holding the dashboard pins (ADR-0013).
     pub config: PathBuf,
     /// Held for the whole of a write or a git action, so that two of them never
@@ -67,10 +70,12 @@ impl State {
         let (changes, _) = broadcast::channel(16);
         let (stopping, _) = signal::channel(false);
         let last_change = RwLock::new(last_changes(&root, &tree));
+        let dates = RwLock::new(crate::history::file_dates(&root));
         Arc::new(State {
             root,
             tree: RwLock::new(tree),
             last_change,
+            dates,
             config,
             busy: Mutex::new(()),
             changes,
@@ -88,7 +93,8 @@ impl State {
     /// Fails when the tree cannot be read; the shared state is then unchanged.
     pub fn reload(&self) -> Result<()> {
         let fresh = Tree::load(&self.root)?;
-        let dates = last_changes(&self.root, &fresh);
+        let nodes = last_changes(&self.root, &fresh);
+        let files = crate::history::file_dates(&self.root);
         *self
             .tree
             .write()
@@ -96,7 +102,11 @@ impl State {
         *self
             .last_change
             .write()
-            .map_err(|_| anyhow::anyhow!("the date lock is poisoned"))? = dates;
+            .map_err(|_| anyhow::anyhow!("the date lock is poisoned"))? = nodes;
+        *self
+            .dates
+            .write()
+            .map_err(|_| anyhow::anyhow!("the date lock is poisoned"))? = files;
         let _ = self.changes.send(());
         Ok(())
     }
@@ -124,6 +134,7 @@ fn last_changes(root: &Path, tree: &Tree) -> BTreeMap<NodePath, Option<String>> 
 pub fn router(state: Arc<State>) -> Router {
     Router::new()
         .route("/api/items", get(api::items).patch(api::patch_item))
+        .route("/api/show", get(api::show))
         .route("/api/dashboard", get(api::dashboard).put(api::pin))
         .route("/api/commit", post(api::commit))
         .route("/api/push", post(api::push))
@@ -291,6 +302,53 @@ mod tests {
         assert_eq!(task["category"], "todo");
         assert_eq!(task["node"], "p");
         assert_eq!(task["external"], serde_json::json!(["monday:42"]));
+    }
+
+    #[tokio::test]
+    async fn items_keep_the_kinds_asked_and_add_bodies_on_request() {
+        let repo = sample();
+        repo.write(
+            "p/stories/S001-s.md",
+            "---\nariane: 1\nnode: p\nid: S001\ntitle: S\nstatus: a-faire\n---\n# S\n",
+        );
+        let (status, body, _) = get(&repo, "/api/items?kind=story&body=1").await;
+        assert_eq!(status, StatusCode::OK);
+        let items = json(&body);
+        assert_eq!(items.as_array().unwrap().len(), 1);
+        assert_eq!(items[0]["reference"], "p#S001");
+        assert_eq!(items[0]["body"], "# S\n");
+        let (_, body, _) = get(&repo, "/api/items?kind=task,story").await;
+        assert_eq!(json(&body).as_array().unwrap().len(), 3);
+        assert!(json(&body)[0].get("body").is_none());
+        let (status, body, _) = get(&repo, "/api/items?kind=backlog").await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(json(&body)["error"].as_str().unwrap().contains("backlog"));
+    }
+
+    #[tokio::test]
+    async fn show_is_the_same_json_as_the_show_command() {
+        let repo = sample();
+        repo.write(
+            "p/tasks/T002-b.md",
+            "---\nariane: 1\nnode: p\nid: T002\ntitle: B\nstatus: a-faire\ndepends_on: [T001]\n---\n# B\n",
+        );
+        let (status, body, _) = get(&repo, "/api/show?ref=p%23T001").await;
+        assert_eq!(status, StatusCode::OK);
+        let tree = Tree::load(repo.root()).unwrap();
+        let item = crate::show::find(&tree, "p#T001", None).unwrap();
+        let dates = crate::history::file_dates(repo.root());
+        let expected = serde_json::to_value(crate::show::shown(&tree, item, Some(&dates))).unwrap();
+        assert_eq!(json(&body), expected);
+        assert_eq!(
+            expected["relations"]["dependents"][0]["reference"],
+            "p#T002"
+        );
+        assert_eq!(expected["header"]["external"][0], "monday:42");
+        let (status, body, _) = get(&repo, "/api/show?ref=p%23T404").await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert!(json(&body)["error"].is_string());
+        let (status, _, _) = get(&repo, "/api/show").await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]

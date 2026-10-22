@@ -231,8 +231,9 @@ impl Draft {
 
     /// The status: the one already written; or the extracted one mapped onto the
     /// node's workflow (a category becomes the first workflow status of that
-    /// category, a reflexion keeps open, trial or settled); or, for an archived
-    /// item, a closed status marked as inferred. A ressource gets none. Records a
+    /// category, a reflexion keeps open, trial or settled, and an open item of
+    /// the former `backlog/` directory stays in the backlog); or, for an
+    /// archived item, a closed status marked as inferred. A ressource gets none. Records a
     /// reason when no status can be decided.
     fn status(
         &mut self,
@@ -268,6 +269,10 @@ impl Draft {
                 )
             }
             (_, Some(StatusValue::Category(category))) => {
+                let category = match category {
+                    Category::Todo if item.legacy => Category::Backlog,
+                    category => category,
+                };
                 let status = first_of(effective, category);
                 if status.is_none() {
                     self.reasons.push(format!(
@@ -524,6 +529,19 @@ mod tests {
         assert_eq!(document.text("status"), Some("trial"));
         assert_eq!(document.text("id"), Some("R001"));
         assert!(!step.inferred.contains(&"status".to_owned()));
+    }
+
+    #[test]
+    fn an_open_item_of_the_former_backlog_directory_stays_in_the_backlog() {
+        let repo = Repo::new();
+        repo.write(
+            "game/backlog/idee.md",
+            "# Une idée\n\n- **État** : ouvert\n",
+        );
+        let step = migrate(&repo, "idee.md").unwrap();
+        let document = Document::parse(&step.text);
+        assert_eq!(document.text("status"), Some("backlog"));
+        assert_eq!(document.text("id"), Some("T001"));
     }
 
     #[test]

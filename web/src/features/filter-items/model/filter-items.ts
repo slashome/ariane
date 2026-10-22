@@ -22,7 +22,12 @@ function matchesQuery(item: Item, query: string): boolean {
     return true
   }
   const needle = query.toLowerCase()
-  return [item.title, item.id, item.node, item.path].some((field) => field?.toLowerCase().includes(needle))
+  return [item.title, item.id, item.node, item.path, item.body].some((field) => field?.toLowerCase().includes(needle))
+}
+
+// The items every view shows: those of the node in scope, archived ones only when the toggle says so.
+export function scopeItems(items: Item[], scope: { node: string | null; includeArchived: boolean }, kinds: Kind[] = []): Item[] {
+  return filterItems(items, { ...emptyFilters, node: scope.node, includeArchived: scope.includeArchived, kinds })
 }
 
 export function filterItems(items: Item[], filters: ItemFilters): Item[] {

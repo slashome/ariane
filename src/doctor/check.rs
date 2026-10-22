@@ -4,7 +4,8 @@
 //!
 //! 1. **structural**: unreadable files, invalid `node.toml`, nodes without
 //!    `INDEX.md`;
-//! 2. **per item**: the schema version first (a file that needs `migrate` gets
+//! 2. **per item**: the directory first (an item still in the former
+//!    `backlog/` is reported, and checked on), then the schema version (a file that needs `migrate` gets
 //!    that single finding and nothing else), then every core key by iterating
 //!    the declarative table [`CORE_KEYS`](crate::schema::CORE_KEYS), then the checks that depend on
 //!    context: `node` against the file's location, `status` against the node's
@@ -25,7 +26,7 @@ use crate::schema::{
     self, CORE_KEYS, CoreKey, REFLEXION_CLOSED, REFLEXION_STATUSES, Requirement, ValueType,
     is_date, is_external, is_valid_id,
 };
-use crate::tree::{Item, NodePath, Tree};
+use crate::tree::{Item, NodePath, Tree, parse_reference};
 
 /// Runs every check on the items of `scope` (the whole tree when `None`) and
 /// returns the findings in report order.
@@ -105,6 +106,13 @@ fn check_item(
     found: &mut Vec<Finding>,
 ) {
     let mut report = Reporter { tree, item, found };
+    if item.legacy {
+        report.error(
+            Check::LegacyDirectory,
+            "the item sits in `backlog/`, which is no longer an item directory: a backlog item is a task whose status is in the `backlog` category",
+            Remedy::fix(&item.node),
+        );
+    }
     let mapping = match &item.document.header {
         Header::Missing => {
             report.error(
@@ -629,17 +637,6 @@ fn mismatch(decl: &FieldDecl, value: &Value, node: &NodePath) -> Option<String> 
         FieldType::ListOfRefs => "a list of references".to_owned(),
         FieldType::Enum => format!("one of: {}", decl.values.join(", ")),
     })
-}
-
-/// Parses a reference: `T022` stands for an item of the `current` node,
-/// `node/path#T022` for an item of another node. `None` when the id part is not
-/// a valid id. `bool::then` turns a condition into an `Option`.
-pub fn parse_reference(raw: &str, current: &NodePath) -> Option<(NodePath, String)> {
-    let (node, id) = match raw.split_once('#') {
-        Some((node, id)) => (NodePath::new(node), id),
-        None => (current.clone(), raw),
-    };
-    is_valid_id(id).then(|| (node, id.to_owned()))
 }
 
 /// The value as a string when it is one and is not blank.

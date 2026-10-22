@@ -6,7 +6,8 @@ import { ItemsTable } from './items-table'
 export function TasksPage() {
   const { data: items = [], isPending, error } = useItems()
   const { filters } = useItemFilters()
-  const visible = useMemo(() => filterItems(items, filters), [items, filters])
+  const tasks = useMemo(() => items.filter((item) => item.kind === 'task'), [items])
+  const visible = useMemo(() => filterItems(tasks, { ...filters, kinds: [] }), [tasks, filters])
 
   return (
     <div className="flex flex-col gap-4 p-6">
@@ -14,7 +15,7 @@ export function TasksPage() {
         <div>
           <h1 className="text-xl font-semibold">Tasks</h1>
           <p className="text-sm text-muted-foreground">
-            {isPending ? 'Loading…' : `${visible.length} of ${items.length} items`}
+            {isPending ? 'Loading…' : `${visible.length} of ${tasks.length} tasks`}
           </p>
         </div>
         <ItemFiltersBar />

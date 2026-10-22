@@ -140,14 +140,13 @@ const PRIORITIES: &[(&str, &str, bool)] = &[
 ];
 
 /// Reads a legacy status for an item of `kind`: reflexions use their own table,
-/// every other kind the task table. An "open" backlog item stays in the backlog
-/// rather than becoming a planned task.
+/// every other kind the task table.
 pub fn status(kind: Kind, raw: &str) -> Reading<StatusValue> {
     match kind {
         Kind::Reflexion => lookup(raw, REFLEXION_STATUSES),
         _ => match lookup(raw, TASK_STATUSES) {
             Reading::Found(found) => Reading::Found(Match {
-                value: StatusValue::Category(backlog_when_open(kind, found.value)),
+                value: StatusValue::Category(found.value),
                 inferred: found.inferred,
                 exact: found.exact,
             }),
@@ -172,14 +171,6 @@ pub fn normalize(raw: &str) -> String {
         .collect::<Vec<_>>()
         .join(" ")
         .to_lowercase()
-}
-
-/// Maps an open status to the backlog category for a backlog item.
-fn backlog_when_open(kind: Kind, category: Category) -> Category {
-    match (kind, category) {
-        (Kind::Backlog, Category::Todo) => Category::Backlog,
-        _ => category,
-    }
 }
 
 /// Looks the normalized text up in `table`, longest words first, so that
@@ -256,12 +247,6 @@ mod tests {
     fn the_longest_term_wins() {
         let found = found(status(Kind::Task, "🟠 commencée puis enterrée"));
         assert_eq!(found.value, StatusValue::Category(Category::Dropped));
-    }
-
-    #[test]
-    fn an_open_backlog_item_stays_in_the_backlog() {
-        let found = found(status(Kind::Backlog, "ouvert"));
-        assert_eq!(found.value, StatusValue::Category(Category::Backlog));
     }
 
     #[test]

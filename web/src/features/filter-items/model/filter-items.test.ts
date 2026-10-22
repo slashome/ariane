@@ -1,5 +1,5 @@
 import type { Item } from '@/shared/api'
-import { emptyFilters, filterItems } from './filter-items'
+import { emptyFilters, filterItems, scopeItems } from './filter-items'
 
 function item(overrides: Partial<Item>): Item {
   return {
@@ -14,6 +14,12 @@ function item(overrides: Partial<Item>): Item {
     impact: null,
     priority: null,
     created: null,
+    reference: null,
+    type: null,
+    release: null,
+    milestone: null,
+    parent: null,
+    depends_on: [],
     external: [],
     version: 1,
     path: 'tree/acme/web/tasks/T001-ship.md',
@@ -54,5 +60,18 @@ describe('filterItems', () => {
     expect(ids(filterItems(items, { ...emptyFilters, query: 'LEGACY' }))).toEqual(['T003'])
     expect(ids(filterItems(items, { ...emptyFilters, query: 'r001' }))).toEqual(['R001'])
     expect(ids(filterItems(items, { ...emptyFilters, query: 'tasks/T001' }))).toEqual(['T001'])
+  })
+})
+
+describe('scopeItems', () => {
+  it('applies the archive toggle and the node scope of every view, and the kinds asked', () => {
+    expect(ids(scopeItems(items, { node: null, includeArchived: false }))).toEqual(['T001', 'T003', 'R001'])
+    expect(ids(scopeItems(items, { node: null, includeArchived: true }))).toEqual(['T001', 'T002', 'T003', 'R001'])
+    expect(ids(scopeItems(items, { node: 'acme/web', includeArchived: true }, ['task']))).toEqual(['T001', 'T002'])
+  })
+
+  it('searches the body when the item carries one', () => {
+    const withBody = [item({ body: 'Read https://example.com first' }), item({ id: 'T009' })]
+    expect(ids(filterItems(withBody, { ...emptyFilters, query: 'example.com' }))).toEqual(['T001'])
   })
 })

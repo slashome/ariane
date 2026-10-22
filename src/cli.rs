@@ -16,6 +16,8 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
 
+use crate::item::Kind;
+
 /// The whole command line: the global `repo` option and the chosen command.
 #[derive(Parser)]
 #[command(
@@ -36,6 +38,8 @@ pub struct Cli {
 pub enum Command {
     #[command(about = "List the items of the tree")]
     Tasks(TasksArgs),
+    #[command(about = "Show one item: its header, its body, its parent, children and dependencies")]
+    Show(ShowArgs),
     #[command(
         about = "Check every item and node against the specification, without writing anything"
     )]
@@ -57,7 +61,8 @@ pub enum Command {
 }
 
 /// Arguments of `ariane tasks`: an optional node scope, whether to include
-/// archived items, and `json` to print JSON instead of a table.
+/// archived items, the kinds to keep, whether to add bodies and dates, and
+/// `json` to print JSON instead of a table.
 #[derive(Args)]
 pub struct TasksArgs {
     #[arg(
@@ -75,6 +80,31 @@ pub struct TasksArgs {
 
     #[arg(long, help = "Include archived items")]
     pub archived: bool,
+
+    #[arg(
+        long,
+        value_enum,
+        value_delimiter = ',',
+        help = "Only items of these kinds, such as `task,story` (default: every kind)"
+    )]
+    pub kind: Vec<Kind>,
+
+    #[arg(long, help = "Add each item's Markdown body to the JSON rows")]
+    pub body: bool,
+
+    #[arg(long, help = "Add the date of each item's latest commit (`updated`)")]
+    pub dates: bool,
+
+    #[arg(long)]
+    pub json: bool,
+}
+
+/// Arguments of `ariane show`: the item reference, and `json` to print the
+/// header, body and relations as JSON.
+#[derive(Args)]
+pub struct ShowArgs {
+    #[arg(help = "The item: `<node>#<id>`, or a bare id within the node of the current directory")]
+    pub reference: String,
 
     #[arg(long)]
     pub json: bool,

@@ -11,7 +11,6 @@ export function AppHeader({ actions }: { actions?: ReactNode }) {
       <div className="flex min-w-0 items-center gap-1.5 text-sm text-muted-foreground" title={repo?.root}>
         <FolderGit2 className="size-4 shrink-0" aria-hidden />
         <span className="truncate font-mono text-xs">{repo?.root ?? '…'}</span>
-        {repo?.branch && <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">{repo.branch}</span>}
       </div>
       <NodeSwitcher />
       <div className="ml-auto flex items-center gap-3">

@@ -21,8 +21,15 @@ export function KanbanPage() {
   const [opened, setOpened] = useState<string | null>(null)
 
   const scoped = useMemo(
-    () => filterItems(items, { ...emptyFilters, query: filters.query, node: filters.node }),
-    [items, filters.query, filters.node],
+    () =>
+      filterItems(items, {
+        ...emptyFilters,
+        query: filters.query,
+        node: filters.node,
+        includeArchived: filters.includeArchived,
+        kinds: ['task'],
+      }),
+    [items, filters.query, filters.node, filters.includeArchived],
   )
   const columns = useMemo(() => buildColumns(scoped, nodes, filters.node, schema), [scoped, nodes, filters.node, schema])
   const openedItem = items.find((item) => item.path === opened) ?? null

@@ -2,7 +2,7 @@ import type { Category, EditableField, Item, ItemChanges, Kind } from '@/shared/
 
 export const categoryOrder: Category[] = ['backlog', 'todo', 'in_progress', 'blocked', 'done', 'dropped']
 
-const workKinds: Kind[] = ['task', 'story', 'backlog']
+const workKinds: Kind[] = ['task', 'story']
 
 export function isClosed(category: Category | null): boolean {
   return category === 'done' || category === 'dropped'

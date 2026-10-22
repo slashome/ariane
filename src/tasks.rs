@@ -3,8 +3,12 @@
 //! Prints one line per item (node, id, status, title) or, with `--json`, the full
 //! rows for scripts and agents. ADR-0010 makes this the on-demand aggregation
 //! that `INDEX.md` files no longer carry: an agent without the interface asks
-//! `ariane tasks --node <node> --json`.
+//! `ariane tasks --node <node> --json`. `--kind` keeps some kinds only,
+//! `--body` adds each item's Markdown body and `--dates` the date of its
+//! latest commit.
 
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::Result;
@@ -13,6 +17,7 @@ use serde::Serialize;
 use crate::cli::TasksArgs;
 use crate::item::Kind;
 use crate::node::Category;
+use crate::relations;
 use crate::tree::{Item, NodePath, Tree};
 
 /// One item as listed by `ariane tasks`, and as serialized with `--json`.
@@ -24,6 +29,8 @@ pub struct Row<'a> {
     /// Logical path of the node holding the item.
     pub node: &'a NodePath,
     pub id: Option<&'a str>,
+    /// `<node>#<id>`, the reference that reads the same from any node.
+    pub reference: Option<String>,
     pub title: Option<&'a str>,
     pub kind: Kind,
     pub archived: bool,
@@ -35,12 +42,64 @@ pub struct Row<'a> {
     pub impact: Option<&'a str>,
     pub priority: Option<&'a str>,
     pub created: Option<&'a str>,
+    /// The node's classification of the item (`type` in the header).
+    pub r#type: Option<&'a str>,
+    pub release: Option<&'a str>,
+    pub milestone: Option<&'a str>,
+    /// `parent` as `<node>#<id>`.
+    pub parent: Option<String>,
+    /// `depends_on` as `<node>#<id>` references, in header order.
+    pub depends_on: Vec<String>,
     /// Links to external trackers, as `<connector>:<id>` (ADR-0011); empty when unbound.
     pub external: Vec<&'a str>,
     /// Schema version of the file; `None` for a file not migrated yet.
     pub version: Option<u64>,
     /// Path of the file relative to the repository root.
     pub path: String,
+    /// Date of the latest commit touching the file, with `--dates`; `None`
+    /// for a file never committed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub updated: Option<String>,
+    /// The Markdown body, with `--body`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub body: Option<&'a str>,
+}
+
+/// Which items `ariane tasks` lists, and what each row carries beyond the header.
+#[derive(Debug, Default)]
+pub struct Selection<'a> {
+    /// Include the items under `archives/`.
+    pub archived: bool,
+    /// Keep only these kinds; every kind when empty.
+    pub kinds: &'a [Kind],
+    /// Add the Markdown body to each row.
+    pub body: bool,
+    /// The date of the latest commit of each file, by path relative to the
+    /// repository root; `None` leaves `updated` out.
+    pub dates: Option<&'a HashMap<PathBuf, String>>,
+}
+
+/// The rows of the items of `scope` that `selection` keeps, in tree order.
+/// The command and `GET /api/items` both list items through it.
+pub fn rows<'a>(
+    tree: &'a Tree,
+    scope: Option<&'a NodePath>,
+    selection: &Selection,
+) -> Vec<Row<'a>> {
+    tree.items_within(scope)
+        .filter(|item| selection.archived || !item.archived)
+        .filter(|item| selection.kinds.is_empty() || selection.kinds.contains(&item.kind))
+        .map(|item| {
+            let mut row = row(tree, item);
+            if selection.body {
+                row.body = Some(&item.document.body);
+            }
+            if let Some(dates) = selection.dates {
+                row.updated = dates.get(&item.relative).cloned();
+            }
+            row
+        })
+        .collect()
 }
 
 /// Runs `ariane tasks`: filters the items by node and archive state, then prints
@@ -50,11 +109,14 @@ pub struct Row<'a> {
 ///
 /// Fails only if the rows cannot be serialized to JSON.
 pub fn run(tree: &Tree, args: &TasksArgs, scope: Option<&NodePath>) -> Result<ExitCode> {
-    let rows: Vec<Row> = tree
-        .items_within(scope)
-        .filter(|item| args.archived || !item.archived)
-        .map(|item| row(tree, item))
-        .collect();
+    let dates = args.dates.then(|| crate::history::file_dates(&tree.root));
+    let selection = Selection {
+        archived: args.archived,
+        kinds: &args.kind,
+        body: args.body,
+        dates: dates.as_ref(),
+    };
+    let rows = rows(tree, scope, &selection);
     if args.json {
         println!("{}", serde_json::to_string_pretty(&rows)?);
     } else {
@@ -77,6 +139,7 @@ pub fn row<'a>(tree: &Tree, item: &'a Item) -> Row<'a> {
     Row {
         node: &item.node,
         id: document.text("id"),
+        reference: item.reference(),
         title: document.text("title"),
         kind: item.kind,
         archived: item.archived,
@@ -86,9 +149,16 @@ pub fn row<'a>(tree: &Tree, item: &'a Item) -> Row<'a> {
         impact: document.text("impact"),
         priority: document.text("priority"),
         created: document.text("created"),
+        r#type: document.text("type"),
+        release: document.text("release"),
+        milestone: document.text("milestone"),
+        parent: relations::parent(item),
+        depends_on: relations::depends_on(item),
         external: document.texts("external"),
         version: document.version(),
         path: item.relative.to_string_lossy().into_owned(),
+        updated: None,
+        body: None,
     }
 }
 
@@ -150,5 +220,57 @@ mod tests {
         let legacy = rows.iter().find(|row| row.id.is_none()).unwrap();
         assert_eq!(legacy.version, None);
         assert_eq!(legacy.category, None);
+    }
+
+    #[test]
+    fn a_selection_keeps_some_kinds_and_adds_bodies_and_dates() {
+        let repo = Repo::new();
+        repo.write(
+            "p/tasks/T1-a.md",
+            "---\nariane: 1\nnode: p\nid: T1\ntitle: A\nstatus: todo\nparent: S1\nrelease: \"1.0\"\n---\n# A\n",
+        )
+        .write(
+            "p/stories/S1-s.md",
+            "---\nariane: 1\nnode: p\nid: S1\ntitle: S\nstatus: todo\n---\n# S\n",
+        )
+        .write(
+            "p/archives/stories/S2-old.md",
+            "---\nariane: 1\nnode: p\nid: S2\ntitle: Old\nstatus: done\n---\n",
+        );
+        let tree = Tree::load(repo.root()).unwrap();
+        let dates = HashMap::from([(
+            PathBuf::from("tree/p/stories/S1-s.md"),
+            "2026-10-22".to_owned(),
+        )]);
+        let stories = rows(
+            &tree,
+            None,
+            &Selection {
+                kinds: &[Kind::Story],
+                body: true,
+                dates: Some(&dates),
+                ..Selection::default()
+            },
+        );
+        assert_eq!(stories.len(), 1);
+        assert_eq!(stories[0].reference.as_deref(), Some("p#S1"));
+        assert_eq!(stories[0].body, Some("# S\n"));
+        assert_eq!(stories[0].updated.as_deref(), Some("2026-10-22"));
+        let all = rows(
+            &tree,
+            None,
+            &Selection {
+                archived: true,
+                ..Selection::default()
+            },
+        );
+        assert_eq!(all.len(), 3);
+        let task = all.iter().find(|row| row.id == Some("T1")).unwrap();
+        assert_eq!(task.parent.as_deref(), Some("p#S1"));
+        assert_eq!(task.release, Some("1.0"));
+        assert!(task.body.is_none());
+        let json = serde_json::to_value(task).unwrap();
+        assert!(json.get("body").is_none());
+        assert_eq!(json["type"], serde_json::Value::Null);
     }
 }

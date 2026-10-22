@@ -2,9 +2,11 @@
 //!
 //! Under `tree/`, every directory is a potential **node**, whose logical path is
 //! its location (`cmc/cmc-lib`, ADR-0001); the root `tree/` itself is the home
-//! node, whose path is empty. A node holds **item directories** (`backlog/`,
-//! `tasks/`, `stories/`, `reflexions/`, `ressources/`, and `archives/` with the
-//! same subdirectories); every other subdirectory is walked as a child node.
+//! node, whose path is empty. A node holds **item directories** (`tasks/`,
+//! `stories/`, `reflexions/`, `ressources/`, and `archives/` with the same
+//! subdirectories); every other subdirectory is walked as a child node. The
+//! former `backlog/` directory is still read, its items as tasks marked
+//! [`Item::legacy`], so that `doctor` reports them and `ariane fix` moves them.
 //!
 //! [`Tree::load`](crate::tree::Tree::load) reads every item once and parses its front-matter, so that each
 //! command works on the same snapshot without touching the disk again. Files and
@@ -17,8 +19,9 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::Serialize;
 
-use crate::item::{Document, Kind};
+use crate::item::{Document, Kind, LEGACY_BACKLOG};
 use crate::node::Configs;
+use crate::schema::is_valid_id;
 
 /// File that makes a directory a node even when it holds no item (PLAN §2).
 const INDEX: &str = "INDEX.md";
@@ -101,6 +104,24 @@ impl fmt::Display for NodePath {
     }
 }
 
+/// Parses a reference (SPEC.md §1.4): `T022` stands for an item of the
+/// `current` node, `node/path#T022` for an item of another node, `#T022` for
+/// an item of the home node. `None` when the id part is not a valid id.
+/// `bool::then` turns a condition into an `Option`.
+pub fn parse_reference(raw: &str, current: &NodePath) -> Option<(NodePath, String)> {
+    let (node, id) = match raw.split_once('#') {
+        Some((node, id)) => (NodePath::new(node), id),
+        None => (current.clone(), raw),
+    };
+    is_valid_id(id).then(|| (node, id.to_owned()))
+}
+
+/// The reference of the item `id` of `node` written so that it reads the same
+/// from any node: `<node>#<id>`, `#<id>` for the home node.
+pub fn full_reference(node: &NodePath, id: &str) -> String {
+    format!("{}#{id}", node.as_str())
+}
+
 /// A directory of the tree that is a node.
 #[derive(Debug)]
 pub struct Node {
@@ -118,12 +139,27 @@ pub struct Item {
     pub kind: Kind,
     /// Whether the item sits under `archives/`.
     pub archived: bool,
+    /// Whether the item sits in the former `backlog/` directory, which
+    /// `ariane fix` replaces by `tasks/`.
+    pub legacy: bool,
     /// Absolute path of the file.
     pub file: PathBuf,
     /// Path relative to the repository root, for messages.
     pub relative: PathBuf,
     /// The parsed header and the body.
     pub document: Document,
+}
+
+impl Item {
+    /// The item's `id`, when its header carries a valid one.
+    pub fn id(&self) -> Option<&str> {
+        self.document.text("id").filter(|id| is_valid_id(id))
+    }
+
+    /// The item's reference as read from any node, `<node>#<id>`.
+    pub fn reference(&self) -> Option<String> {
+        self.id().map(|id| full_reference(&self.node, id))
+    }
 }
 
 /// The whole content repository: nodes, items, `node.toml` files, and what could not be read.
@@ -220,7 +256,12 @@ impl Tree {
             }
             if let Some(kind) = Kind::from_dir(&name) {
                 has_items = true;
-                self.collect_items(&entry, &path, kind, false)?;
+                let place = Place {
+                    kind,
+                    archived: false,
+                    legacy: name == LEGACY_BACKLOG,
+                };
+                self.collect_items(&entry, &path, place)?;
             } else if name == ARCHIVES {
                 has_items = true;
                 self.collect_archives(&entry, &path)?;
@@ -246,40 +287,43 @@ impl Tree {
                 let Some(name) = self.utf8_name(&entry) else {
                     continue;
                 };
-                let kind = Kind::from_dir(&name).unwrap_or(Kind::Unknown);
-                self.collect_items(&entry, node, kind, true)?;
+                let place = Place {
+                    kind: Kind::from_dir(&name).unwrap_or(Kind::Unknown),
+                    archived: true,
+                    legacy: name == LEGACY_BACKLOG,
+                };
+                self.collect_items(&entry, node, place)?;
             } else if is_item_file(&entry) {
-                self.push_item(&entry, node, Kind::Unknown, true);
+                let place = Place {
+                    kind: Kind::Unknown,
+                    archived: true,
+                    legacy: false,
+                };
+                self.push_item(&entry, node, place);
             }
         }
         Ok(())
     }
 
-    /// Collects every item file under `dir`, subdirectories included, with the same
-    /// kind and archive state.
+    /// Collects every item file under `dir`, subdirectories included, in the
+    /// same place.
     ///
     /// # Errors
     ///
     /// Fails when a directory cannot be listed.
-    fn collect_items(
-        &mut self,
-        dir: &Path,
-        node: &NodePath,
-        kind: Kind,
-        archived: bool,
-    ) -> Result<()> {
+    fn collect_items(&mut self, dir: &Path, node: &NodePath, place: Place) -> Result<()> {
         for entry in sorted_entries(dir)? {
             if entry.is_dir() {
-                self.collect_items(&entry, node, kind, archived)?;
+                self.collect_items(&entry, node, place)?;
             } else if is_item_file(&entry) {
-                self.push_item(&entry, node, kind, archived);
+                self.push_item(&entry, node, place);
             }
         }
         Ok(())
     }
 
     /// Reads and parses one item file, or records it as unreadable.
-    fn push_item(&mut self, file: &Path, node: &NodePath, kind: Kind, archived: bool) {
+    fn push_item(&mut self, file: &Path, node: &NodePath, place: Place) {
         let text = match std::fs::read_to_string(file) {
             Ok(text) => text,
             Err(error) => {
@@ -291,8 +335,9 @@ impl Tree {
         let relative = file.strip_prefix(&self.root).unwrap_or(file).to_path_buf();
         self.items.push(Item {
             node: node.clone(),
-            kind,
-            archived,
+            kind: place.kind,
+            archived: place.archived,
+            legacy: place.legacy,
             file: file.to_path_buf(),
             relative,
             document: Document::parse(&text),
@@ -312,6 +357,15 @@ impl Tree {
             }
         }
     }
+}
+
+/// Where an item directory puts its items: their kind, whether they are
+/// archived, and whether the directory is the former `backlog/`.
+#[derive(Debug, Clone, Copy)]
+struct Place {
+    kind: Kind,
+    archived: bool,
+    legacy: bool,
 }
 
 /// Tells whether a file is an item: a `.md` file that is not `INDEX.md`, `HANDOFF.md` or `README.md`.
@@ -391,19 +445,21 @@ mod tests {
             .write("cmc/cmc-lib/archives/stories/s1.md", "# S1\n")
             .write("cmc/cmc-lib/archives/loose.md", "# loose\n")
             .write("cmc/cmc-lib/backlog/README.md", "# not an item\n")
+            .write("cmc/cmc-lib/backlog/b1.md", "# B1\n")
             .write("cmc/cmc-lib/audits/report.md", "# not an item either\n");
         let tree = Tree::load(repo.root()).unwrap();
         let found: Vec<_> = tree
             .items
             .iter()
-            .map(|item| (item.node.as_str(), item.kind, item.archived))
+            .map(|item| (item.node.as_str(), item.kind, item.archived, item.legacy))
             .collect();
         assert_eq!(
             found,
             vec![
-                ("cmc/cmc-lib", Kind::Unknown, true),
-                ("cmc/cmc-lib", Kind::Story, true),
-                ("cmc/cmc-lib", Kind::Task, false),
+                ("cmc/cmc-lib", Kind::Unknown, true, false),
+                ("cmc/cmc-lib", Kind::Story, true, false),
+                ("cmc/cmc-lib", Kind::Task, false, true),
+                ("cmc/cmc-lib", Kind::Task, false, false),
             ]
         );
     }

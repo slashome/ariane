@@ -1,4 +1,5 @@
-export { emptyFilters, filterItems, type ItemFilters } from './model/filter-items'
+export { emptyFilters, filterItems, scopeItems, type ItemFilters } from './model/filter-items'
 export { useItemFilters } from './model/use-item-filters'
+export { ArchivedToggle } from './ui/archived-toggle'
 export { ItemFiltersBar } from './ui/item-filters-bar'
 export { ItemSearchInput } from './ui/item-search-input'

@@ -123,6 +123,8 @@ pub enum Check {
     UndeclaredKey,
     /// A file name that does not begin with the item's `id`, a `-` and a slug.
     FileName,
+    /// An item in the former `backlog/` directory instead of `tasks/`.
+    LegacyDirectory,
 }
 
 /// One problem found by doctor, serialized as is by `--json`.

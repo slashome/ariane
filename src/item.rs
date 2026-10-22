@@ -15,14 +15,19 @@ use yaml_serde::{Mapping, Value};
 /// Schema version this binary implements: the value of the `ariane` key it writes and expects.
 pub const SCHEMA_VERSION: u64 = 1;
 
+/// The former item directory of backlog items, whose items are now tasks
+/// (SPEC.md §1.1): `doctor` reports them and `ariane fix` moves them into `tasks/`.
+pub const LEGACY_BACKLOG: &str = "backlog";
+
 /// The nature of an item, given by the directory it sits in, never by its header
 /// (SPEC.md §1.1).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+///
+/// `clap::ValueEnum` lets `ariane tasks --kind` accept the same words the JSON
+/// uses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, clap::ValueEnum)]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
-    /// An item in `backlog/`.
-    Backlog,
-    /// An item in `tasks/`.
+    /// An item in `tasks/`, or in the former `backlog/` directory (SPEC.md §1.1).
     Task,
     /// An item in `stories/`.
     Story,
@@ -36,10 +41,13 @@ pub enum Kind {
 
 impl Kind {
     /// Maps an item directory name to its kind, or `None` for any other directory.
+    ///
+    /// `backlog/` is a former item directory: its items are tasks waiting in a
+    /// status of the `backlog` category, read as tasks until `ariane fix` moves
+    /// them into `tasks/` ([`LEGACY_BACKLOG`]).
     pub fn from_dir(name: &str) -> Option<Kind> {
         match name {
-            "backlog" => Some(Kind::Backlog),
-            "tasks" => Some(Kind::Task),
+            "tasks" | LEGACY_BACKLOG => Some(Kind::Task),
             "stories" => Some(Kind::Story),
             "reflexions" => Some(Kind::Reflexion),
             "ressources" => Some(Kind::Ressource),
