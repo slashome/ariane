@@ -1,4 +1,4 @@
-import type { CommitResult, Dashboard, Item, ItemPatch, NodeSummary, Repo, Schema } from './types'
+import type { CommitResult, Dashboard, DiscardResult, FileDiff, Item, ItemPatch, NodeSummary, Repo, Schema } from './types'
 
 export class ApiError extends Error {
   constructor(
@@ -50,8 +50,12 @@ export const fetchNodes = () => request<NodeSummary[]>('GET', '/api/nodes')
 export const fetchSchema = () => request<Schema>('GET', '/api/schema')
 export const fetchRepo = () => request<Repo>('GET', '/api/repo')
 export const fetchDashboard = () => request<Dashboard>('GET', '/api/dashboard')
+export const fetchDiff = (path: string) =>
+  request<FileDiff>('GET', `/api/diff?${new URLSearchParams({ path }).toString()}`)
 
 export const patchItem = (patch: ItemPatch) => request<Item>('PATCH', '/api/items', patch)
 export const saveDashboard = (dashboard: Dashboard) => request<Dashboard>('PUT', '/api/dashboard', dashboard)
 export const commitChanges = (message: string) => request<CommitResult>('POST', '/api/commit', { message })
 export const pushChanges = () => request<{ ok: boolean }>('POST', '/api/push', {})
+export const discardChanges = (paths?: string[]) =>
+  request<DiscardResult>('POST', '/api/discard', paths === undefined ? {} : { paths })

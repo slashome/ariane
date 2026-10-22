@@ -32,6 +32,7 @@ const base: Item = {
   impact: null,
   priority: null,
   created: '2030-01-02',
+  external: [],
   version: 1,
   path: 'tree/acme/web/tasks/T001.md',
 }

@@ -14,7 +14,7 @@ import { statusLabel, useNodes } from '@/entities/node'
 import { enumValues, kindLabel, useSchema } from '@/entities/schema'
 import type { Item, NodeSummary, Schema } from '@/shared/api'
 import { cn, displayNode } from '@/shared/lib'
-import { ItemDetails } from './item-details'
+import { ItemDetails } from '@/widgets/item-details'
 
 const features = tableFeatures({
   rowSortingFeature,

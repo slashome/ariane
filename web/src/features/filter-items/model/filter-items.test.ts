@@ -14,6 +14,7 @@ function item(overrides: Partial<Item>): Item {
     impact: null,
     priority: null,
     created: null,
+    external: [],
     version: 1,
     path: 'tree/acme/web/tasks/T001-ship.md',
     ...overrides,

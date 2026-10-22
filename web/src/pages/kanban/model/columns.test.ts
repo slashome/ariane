@@ -36,6 +36,7 @@ function item(overrides: Partial<Item>): Item {
     impact: null,
     priority: null,
     created: null,
+    external: [],
     version: 1,
     path: 'tree/game/tasks/T001.md',
     ...overrides,

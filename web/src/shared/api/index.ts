@@ -1,7 +1,9 @@
 export {
   ApiError,
   commitChanges,
+  discardChanges,
   fetchDashboard,
+  fetchDiff,
   fetchItems,
   fetchNodes,
   fetchRepo,
@@ -16,8 +18,10 @@ export type {
   Category,
   CommitResult,
   Dashboard,
+  DiscardResult,
   EditableField,
   FieldChange,
+  FileDiff,
   Item,
   ItemChanges,
   ItemPatch,
@@ -26,6 +30,7 @@ export type {
   Repo,
   Schema,
   SchemaKey,
+  Tracker,
   UncommittedFile,
   WorkflowStatus,
 } from './types'

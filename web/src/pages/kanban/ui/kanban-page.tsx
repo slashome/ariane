@@ -5,6 +5,7 @@ import { useSchema } from '@/entities/schema'
 import { emptyFilters, filterItems, useItemFilters } from '@/features/filter-items'
 import { displayNode } from '@/shared/lib'
 import { DragArea, toast, type DragEndEvent } from '@/shared/ui'
+import { ItemDetails } from '@/widgets/item-details'
 import { buildColumns, targetStatus } from '../model/columns'
 import { KanbanColumn } from './kanban-column'
 
@@ -17,12 +18,14 @@ export function KanbanPage() {
   const { filters } = useItemFilters()
   const update = useUpdateItem()
   const [toggled, setToggled] = useState<Set<string>>(() => new Set())
+  const [opened, setOpened] = useState<string | null>(null)
 
   const scoped = useMemo(
     () => filterItems(items, { ...emptyFilters, query: filters.query, node: filters.node }),
     [items, filters.query, filters.node],
   )
   const columns = useMemo(() => buildColumns(scoped, nodes, filters.node, schema), [scoped, nodes, filters.node, schema])
+  const openedItem = items.find((item) => item.path === opened) ?? null
 
   const isCollapsed = (id: string, category: string) => collapsedByDefault.has(category) !== toggled.has(id)
   const toggle = (id: string) =>
@@ -84,10 +87,12 @@ export function KanbanPage() {
               collapsed={isCollapsed(column.id, column.category)}
               scope={filters.node}
               onToggle={() => toggle(column.id)}
+              onOpen={(item) => setOpened(item.path)}
             />
           ))}
         </div>
       </DragArea>
+      <ItemDetails item={openedItem} onClose={() => setOpened(null)} />
     </div>
   )
 }
