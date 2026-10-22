@@ -41,9 +41,12 @@ external:
 - `status`: an id of the node's workflow (its `node.toml`, inherited from ancestors, else the default `backlog`, `todo`, `in_progress`, `blocked`, `done`, `dropped`). Reflexions use `open`, `trial` or `settled`; ressources have no status.
 - `size` `XS`…`XL`, `impact` and `priority` `low`/`medium`/`high`, `created` `YYYY-MM-DD` — only when actually known, never from git.
 - `external`: the item's own ticket, `monday:<pulse id>` — never a board id, never another item's ticket.
+- `branches` (`<owner>/<repo>:<branch>`) and `pull_requests` (URLs): where the item's work lives. Recorded by the hook after `ariane focus`, not by hand.
 - Unknown keys are preserved where they are.
 
 ## Operating rules
+
+- **Attach the discussion to its item, first.** As soon as a discussion is about work — a task, a story, a reflexion, a ressource — find the item it belongs to (`ariane tasks --json`, `ariane show`) or create it, before anything else, then run `ariane focus <node>#<id>`. The Claude Code hook (`ariane hook claude-code`) notes the focus for this session and records every branch (`git switch -c`, `git checkout -b`) and pull request (`gh pr create`) created afterwards in the item's `branches` and `pull_requests`; one created before the focus waits and is recorded when it is set. A message starting with `Ariane:` comes from that hook. The hook is installed by merging [`adapters/claude/hooks.json`](https://github.com/slashome/ariane/blob/develop/adapters/claude/hooks.json) into `~/.claude/settings.json`.
 
 - **The header is the source of truth for an item's state; `INDEX.md` for the node's judgment.** Change a status in the header only. Never add item listings or statuses to an `INDEX.md`.
 - **After every write, run `ariane doctor`** and leave it clean. A finding names its remedy: run the command it gives (`ariane migrate`), or lay out its resolutions for the user to choose.
@@ -63,8 +66,12 @@ external:
 | `ariane doctor` | Check after every write. Exit `0` clean, `1` a command repairs it, `2` a human decision. Writes nothing. |
 | `ariane migrate` | Legacy items to the current header: dry run by default, `--apply` to write. |
 | `ariane fix` | The repairs `doctor` names as `ariane fix`: file names after the id, links rewritten. Dry run by default, `--apply` to write. |
+| `ariane show <node>#<id> --json` | One item: header, body, parent, children, dependencies, dependents. |
+| `ariane focus <node>#<id>` | First thing in a discussion about work: attaches the session to its item, where branches and pull requests are then recorded. |
+| `ariane links` | Pull requests on GitHub that name an item (monday id or `<node>#<id>`) and are not recorded in it. Dry run by default, `--apply` to write. |
 | `ariane schema --json` | Core keys and vocabularies. |
 | `ariane serve --open` | The interface: dashboard, task list, kanban, size × impact. |
+| `ariane settings` | Theme and dashboard pins, in the content's `settings.toml`. |
 | `ariane config get\|set <key>` | The configuration; set the content repository with `ariane config set repo <path>`. |
 | `ariane service status` | Whether the interface runs in the background; `install` to keep it running. |
 

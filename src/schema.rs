@@ -1,6 +1,6 @@
 //! The core header schema, declared once as data (SPEC.md §1.3, ADR-0008).
 //!
-//! [`CORE_KEYS`](crate::schema::CORE_KEYS) describes each of the sixteen core keys a single time: its value
+//! [`CORE_KEYS`](crate::schema::CORE_KEYS) describes each of the eighteen core keys a single time: its value
 //! type, whether it is required depending on the item kind, and its place in the
 //! canonical key order. Everything else reads this table instead of keeping its
 //! own list:
@@ -67,6 +67,10 @@ pub enum ValueType {
     Texts,
     /// A list of `<connector>:<id>` links to external trackers.
     External,
+    /// A list of `<owner>/<repo>:<branch>` git branches.
+    Branches,
+    /// A list of `https://` pull request URLs.
+    PullRequests,
     /// One string out of a fixed vocabulary. `&'static` means the vocabulary is
     /// compiled into the binary and lives for the whole run.
     Enum(&'static [&'static str]),
@@ -87,6 +91,8 @@ impl ValueType {
             ValueType::References => "list<reference>",
             ValueType::Texts => "list<string>",
             ValueType::External => "list<external>",
+            ValueType::Branches => "list<branch>",
+            ValueType::PullRequests => "list<url>",
             ValueType::Enum(_) => "enum",
         }
     }
@@ -103,6 +109,8 @@ impl ValueType {
             ValueType::References => "a list of reference strings",
             ValueType::Texts => "a list of strings",
             ValueType::External => "a list of `<connector>:<id>` strings",
+            ValueType::Branches => "a list of `<owner>/<repo>:<branch>` strings",
+            ValueType::PullRequests => "a list of `https://` URLs",
             ValueType::Enum(_) => "one of its vocabulary",
         }
     }
@@ -170,6 +178,8 @@ pub const CORE_KEYS: &[CoreKey] = &[
     key("milestone", ValueType::Name, Requirement::May),
     key("refs", ValueType::Texts, Requirement::May),
     key("external", ValueType::External, Requirement::May),
+    key("branches", ValueType::Branches, Requirement::May),
+    key("pull_requests", ValueType::PullRequests, Requirement::May),
 ];
 
 /// Every item kind, in the order `ariane schema --json` lists them.
@@ -232,6 +242,24 @@ pub fn is_date(text: &str) -> bool {
     text[..4].bytes().all(|b| b.is_ascii_digit())
         && (1..=12).contains(&month)
         && (1..=31).contains(&day)
+}
+
+/// Tells whether `entry` names a branch as `<owner>/<repo>:<branch>`: a
+/// repository with exactly one `/`, then a branch name without spaces.
+pub fn is_branch(entry: &str) -> bool {
+    entry.split_once(':').is_some_and(|(repository, branch)| {
+        repository.split_once('/').is_some_and(|(owner, name)| {
+            !owner.is_empty() && !name.is_empty() && !name.contains('/')
+        }) && !branch.is_empty()
+            && !entry.contains(char::is_whitespace)
+    })
+}
+
+/// Tells whether `entry` is a pull request URL: `https://` and a host.
+pub fn is_pull_request(entry: &str) -> bool {
+    entry.strip_prefix("https://").is_some_and(|rest| {
+        rest.contains('/') && !rest.starts_with('/') && !entry.contains(char::is_whitespace)
+    })
 }
 
 /// Tells whether `entry` is a `<connector>:<id>` link, the connector written in lower case.
@@ -319,6 +347,8 @@ mod tests {
                 "milestone",
                 "refs",
                 "external",
+                "branches",
+                "pull_requests",
             ]
         );
     }
@@ -389,5 +419,19 @@ mod tests {
         assert!(is_external("monday:1000000001"));
         assert!(!is_external("Monday:1"));
         assert!(!is_external("monday:"));
+    }
+
+    #[test]
+    fn branches_name_their_repository_and_pull_requests_are_urls() {
+        assert!(is_branch("slashome/ariane:feat/web-navigation-by-kind"));
+        assert!(!is_branch("ariane:main"));
+        assert!(!is_branch("a/b/c:main"));
+        assert!(!is_branch("slashome/ariane:"));
+        assert!(!is_branch("slashome/ariane:two words"));
+        assert!(is_pull_request(
+            "https://github.com/slashome/ariane/pull/19"
+        ));
+        assert!(!is_pull_request("http://github.com/x/pull/1"));
+        assert!(!is_pull_request("#19"));
     }
 }

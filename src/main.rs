@@ -27,10 +27,16 @@ mod config;
 mod doctor;
 /// `ariane fix`: the deterministic repairs of `doctor` findings.
 mod fix;
+/// `ariane focus`: the item an agent session works on.
+mod focus;
 /// When each item file last changed, according to git.
 mod history;
+/// `ariane hook`: what Ariane does inside an agent's harness.
+mod hook;
 /// One item file: its front-matter and its body.
 mod item;
+/// `ariane links`: pull requests found on GitHub, recorded in their items.
+mod links;
 /// `ariane migrate`: schema migrations of item files.
 mod migrate;
 /// `node.toml`: custom fields and status workflows of a node.
@@ -52,6 +58,8 @@ mod show;
 mod tasks;
 /// The whole content repository loaded in memory.
 mod tree;
+/// The branches and pull requests of items.
+mod work;
 
 use std::process::ExitCode;
 
@@ -89,6 +97,11 @@ fn run() -> Result<ExitCode> {
         cli::Command::Schema(args) => return schema_command(args),
         cli::Command::Config(args) => return config::command::run(args),
         cli::Command::Service(args) => return service::run(args),
+        cli::Command::Hook(args) => {
+            return Ok(match args.harness {
+                cli::HookHarness::ClaudeCode => hook::run(),
+            });
+        }
         _ => {}
     }
     let location = repo::discover(cli.repo.as_deref())?;
@@ -101,6 +114,12 @@ fn run() -> Result<ExitCode> {
         }
         cli::Command::Show(args) => show::run(&tree, &args, here.filter(|node| !node.is_home())),
         cli::Command::Settings(args) => settings::run(&location.root, &args),
+        cli::Command::Focus(args) => focus::run(&tree, &args, here.filter(|node| !node.is_home())),
+        cli::Command::Links(args) => {
+            let scope = scope(args.node.as_deref(), args.all, here);
+            links::run(&tree, &args, scope.as_ref())
+        }
+        cli::Command::Hook(_) => unreachable!("answered before loading the tree"),
         cli::Command::Doctor(args) => {
             let scope = scope(args.node.as_deref(), args.all, here);
             doctor::run(&tree, &args, scope.as_ref())

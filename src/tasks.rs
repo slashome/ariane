@@ -52,6 +52,10 @@ pub struct Row<'a> {
     pub depends_on: Vec<String>,
     /// Links to external trackers, as `<connector>:<id>` (ADR-0011); empty when unbound.
     pub external: Vec<&'a str>,
+    /// Branches of the work, as `<owner>/<repo>:<branch>`.
+    pub branches: Vec<&'a str>,
+    /// Pull requests of the work, as URLs.
+    pub pull_requests: Vec<&'a str>,
     /// Schema version of the file; `None` for a file not migrated yet.
     pub version: Option<u64>,
     /// Path of the file relative to the repository root.
@@ -155,6 +159,8 @@ pub fn row<'a>(tree: &Tree, item: &'a Item) -> Row<'a> {
         parent: relations::parent(item),
         depends_on: relations::depends_on(item),
         external: document.texts("external"),
+        branches: document.texts("branches"),
+        pull_requests: document.texts("pull_requests"),
         version: document.version(),
         path: item.relative.to_string_lossy().into_owned(),
         updated: None,

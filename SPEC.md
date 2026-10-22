@@ -44,6 +44,8 @@ Keys MUST be written in English, in lower case, with `_` as the word separator. 
 | `milestone` | string | MAY | Free name of an intermediate target. |
 | `refs` | list of strings | MAY | Pointers to ADRs, pull requests, documents. |
 | `external` | list of strings | MAY | Links to external trackers, each of the form `<connector>:<id>`, e.g. `monday:2955884643` (ADR-0011). |
+| `branches` | list of strings | MAY | The git branches the item's work lives in, each of the form `<owner>/<repo>:<branch>`, e.g. `slashome/ariane:feat/web-node-select`; a task may span several repositories. |
+| `pull_requests` | list of strings | MAY | The pull requests of the item's work, as `https://` URLs. |
 
 Any other key is a **custom key**. A custom key SHOULD be declared in the node's `node.toml` (§1.5). A tool that reads an item MUST preserve every key it does not know, unchanged, when it writes the item back.
 
@@ -95,7 +97,7 @@ The order of entries is the display order.
 | `ariane` lower than the version the CLI implements | error — remedy: `ariane migrate` |
 | `ariane` higher than the version the CLI implements | error — the CLI is outdated |
 | A required core key is missing | error |
-| A core key has a value of the wrong type (`release` or `milestone` not a string, `refs` not a list, an `external` entry not `<connector>:<id>`) | error |
+| A core key has a value of the wrong type (`release` or `milestone` not a string, `refs` not a list, an `external` entry not `<connector>:<id>`, a `branches` entry not `<owner>/<repo>:<branch>`, a `pull_requests` entry not an `https://` URL) | error |
 | `node` does not match the file's location | error |
 | `id` duplicated within the node | error |
 | `status` not in the node's effective workflow | error |
@@ -131,6 +133,10 @@ release: "1.0"
 milestone: "0.1"
 refs:
   - DR 0018
+branches:
+  - slashome/pharmakon:feat/knife-wound
+pull_requests:
+  - https://github.com/slashome/pharmakon/pull/12
 mod: NonLethalTakedowns
 tests:
   - knife_wound

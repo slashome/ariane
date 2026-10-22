@@ -48,6 +48,7 @@ A closing *Revisit if* section names the conditions under which the decision wou
 | [0011](0011-sync-external-trackers-through-connectors.md) | Sync external trackers through per-node connectors | Accepted | 2026-10-20 |
 | [0012](0012-serve-the-interface-from-the-binary.md) | Serve the interface from the `ariane` binary | Accepted | 2026-10-20 |
 | [0013](0013-define-the-configuration-schema-in-code.md) | Define the configuration schema in code | Accepted | 2026-10-20 |
+| [0014](0014-record-branches-and-pull-requests-through-the-agent-harness.md) | Record branches and pull requests through the agent's harness | Accepted | 2026-10-23 |
 
 ## Adding one
 

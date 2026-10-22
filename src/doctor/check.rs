@@ -24,7 +24,7 @@ use crate::item::{Header, SCHEMA_VERSION};
 use crate::node::{Effective, FILE as NODE_FILE, FieldDecl, FieldType};
 use crate::schema::{
     self, CORE_KEYS, CoreKey, REFLEXION_CLOSED, REFLEXION_STATUSES, Requirement, ValueType,
-    is_date, is_external, is_valid_id,
+    is_branch, is_date, is_external, is_pull_request, is_valid_id,
 };
 use crate::tree::{Item, NodePath, Tree, parse_reference};
 
@@ -320,6 +320,22 @@ impl Reporter<'_> {
                     }
                 }
                 None => self.wrong_type(name, key.value.expected()),
+            },
+            ValueType::Branches | ValueType::PullRequests => match string_list(value) {
+                None => self.wrong_type(name, key.value.expected()),
+                Some(list) => {
+                    let (valid, form): (fn(&str) -> bool, &str) = match key.value {
+                        ValueType::Branches => (is_branch, "`<owner>/<repo>:<branch>`, e.g. `slashome/ariane:develop`"),
+                        _ => (is_pull_request, "an `https://` URL, e.g. `https://github.com/slashome/ariane/pull/19`"),
+                    };
+                    for entry in list.into_iter().filter(|entry| !valid(entry)) {
+                        self.error(
+                            Check::WrongType,
+                            format!("`{name}` entry `{entry}` is not {form}"),
+                            Remedy::human([format!("write it as {form}"), format!("remove it from `{name}`")]),
+                        );
+                    }
+                }
             },
             ValueType::External => match string_list(value) {
                 None => self.wrong_type(name, key.value.expected()),

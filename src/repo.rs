@@ -46,6 +46,17 @@ pub struct Location {
 /// `config.toml` cannot be parsed, or when no source yields a repository.
 pub fn discover(explicit: Option<&Path>) -> Result<Location> {
     let cwd = std::env::current_dir().context("reading the current directory")?;
+    discover_from(explicit, &cwd)
+}
+
+/// [`discover`] as if the command ran in `cwd`: a hook is told the directory
+/// of the session it reports on, which is not its own.
+///
+/// # Errors
+///
+/// As [`discover`].
+pub fn discover_from(explicit: Option<&Path>, cwd: &Path) -> Result<Location> {
+    let cwd = cwd.to_path_buf();
     if let Some(path) = explicit {
         let root = content_repository(path)?;
         let here = node_of(&root, &cwd);
@@ -104,6 +115,14 @@ fn node_of(root: &Path, dir: &Path) -> Option<NodePath> {
         .map(|component| component.as_os_str().to_str())
         .collect::<Option<Vec<_>>>()?;
     Some(NodePath::new(segments.join("/")))
+}
+
+/// Whether `dir` or one of its parents materializes a node through an
+/// `_ariane` link, or lies inside a content repository: where Ariane's rules
+/// apply.
+pub fn in_a_node(dir: &Path) -> bool {
+    dir.ancestors()
+        .any(|ancestor| ancestor.join(DIR_NAME).exists() || is_content_repository(ancestor))
 }
 
 /// Tells whether `dir` holds both a `tree/` directory and a `.git` entry.

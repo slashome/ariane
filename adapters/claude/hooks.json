@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "ariane hook claude-code",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

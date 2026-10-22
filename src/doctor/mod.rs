@@ -216,13 +216,33 @@ category = "done"
     fn a_conforming_tree_is_healthy() {
         let repo = base();
         repo.write("p/tasks/T1-a.md", &task("p", "T1", "tests: [a]\ntype: code\nparent: T2\n"))
-            .write("p/tasks/T2-b.md", &task("p", "T2", "depends_on: [p#T1]\nsize: XS\nimpact: high\npriority: low\ncreated: 2026-10-20\nrelease: \"1.0\"\nexternal: [monday:12]\nrefs: [ADR-0008]\n"))
+            .write("p/tasks/T2-b.md", &task("p", "T2", "depends_on: [p#T1]\nsize: XS\nimpact: high\npriority: low\ncreated: 2026-10-20\nrelease: \"1.0\"\nexternal: [monday:12]\nrefs: [ADR-0008]\nbranches: [slashome/ariane:develop]\npull_requests: [https://github.com/slashome/ariane/pull/19]\n"))
             .write("p/reflexions/R1-r.md", "---\nariane: 1\nnode: p\nid: R1\ntitle: R\nstatus: open\nmod: M\n---\n")
             .write("p/ressources/S1-s.md", "---\nariane: 1\nnode: p\nid: S1\ntitle: S\nmod: M\n---\n")
             .write("p/archives/tasks/T3-c.md", &task("p", "T3", "").replace("a-faire", "valide"));
         assert_eq!(checks(&repo), vec![]);
         let tree = Tree::load(repo.root()).unwrap();
         assert_eq!(exit_code(&diagnose(&tree, None, false)), 0);
+    }
+
+    #[test]
+    fn a_branch_or_a_pull_request_in_the_wrong_form_is_reported() {
+        let repo = base();
+        repo.write(
+            "p/tasks/T1-a.md",
+            &task(
+                "p",
+                "T1",
+                "branches: [develop]\npull_requests: [https://github.com/x/y/pull/1]\n",
+            ),
+        );
+        only(&repo, Check::WrongType);
+        let repo = base();
+        repo.write(
+            "p/tasks/T1-a.md",
+            &task("p", "T1", "pull_requests: [\"#19\"]\n"),
+        );
+        only(&repo, Check::WrongType);
     }
 
     #[test]

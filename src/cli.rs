@@ -41,6 +41,16 @@ pub enum Command {
     #[command(about = "Show one item: its header, its body, its parent, children and dependencies")]
     Show(ShowArgs),
     #[command(
+        about = "Attach the current agent session to an item: its branches and pull requests go there"
+    )]
+    Focus(FocusArgs),
+    #[command(
+        about = "Record in each item the pull requests that name it (monday id or <node>#<id>), from GitHub"
+    )]
+    Links(LinksArgs),
+    #[command(about = "Run as an agent hook, reading the event on standard input")]
+    Hook(HookArgs),
+    #[command(
         about = "Check every item and node against the specification, without writing anything"
     )]
     Doctor(DoctorArgs),
@@ -112,6 +122,63 @@ pub struct ShowArgs {
 
     #[arg(long)]
     pub json: bool,
+}
+
+/// Arguments of `ariane focus`: the item, and the agent session to attach to
+/// it, which the hook passes.
+#[derive(Args)]
+pub struct FocusArgs {
+    #[arg(help = "The item: `<node>#<id>`, or a bare id within the node of the current directory")]
+    pub reference: String,
+
+    #[arg(
+        long,
+        help = "The agent session to attach (the Claude Code hook notes it on its own)"
+    )]
+    pub session: Option<String>,
+}
+
+/// Arguments of `ariane links`: an optional node scope, `apply` to write (a
+/// dry run otherwise), and `json` to print the proposals as JSON.
+#[derive(Args)]
+pub struct LinksArgs {
+    #[arg(
+        long,
+        help = "Only the items of this node and its descendants (default: the node of the current directory)"
+    )]
+    pub node: Option<String>,
+
+    #[arg(
+        long,
+        conflicts_with = "node",
+        help = "Cover the whole tree, wherever the command runs"
+    )]
+    pub all: bool,
+
+    #[arg(
+        long,
+        help = "Record the pull requests found. Without it, print them and write nothing"
+    )]
+    pub apply: bool,
+
+    #[arg(long)]
+    pub json: bool,
+}
+
+/// Arguments of `ariane hook`: the agent harness that runs it.
+#[derive(Args)]
+pub struct HookArgs {
+    #[command(subcommand)]
+    pub harness: HookHarness,
+}
+
+/// The harnesses `ariane hook` knows.
+#[derive(Subcommand)]
+pub enum HookHarness {
+    #[command(
+        about = "Claude Code `PostToolUse` hook on Bash: notes `ariane focus`, records branches and pull requests"
+    )]
+    ClaudeCode,
 }
 
 /// Arguments of `ariane doctor`: an optional node scope, `strict` to fail on
