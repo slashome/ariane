@@ -2,8 +2,9 @@
 //!
 //! Every endpoint reuses what the commands already compute, so the interface and
 //! the command line can never disagree: `/api/items` is `ariane tasks --all
-//! --archived --json`, `/api/schema` is `ariane schema --json`, `/api/doctor` is
-//! `ariane doctor --all --json`. Responses are built under a short read lock on
+//! --archived --dates --json` (`?kind=` and `?body=1` are `--kind` and
+//! `--body`), `/api/show?ref=` is `ariane show --json`, `/api/schema` is
+//! `ariane schema --json`, `/api/doctor` is `ariane doctor --all --json`. Responses are built under a short read lock on
 //! the tree, released before anything is sent.
 //!
 //! The writing endpoints — `PATCH /api/items`, `PUT /api/dashboard`,
@@ -20,6 +21,7 @@ use axum::extract::{Query, State as Shared};
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
+use clap::ValueEnum;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio_stream::wrappers::{BroadcastStream, WatchStream};
@@ -28,6 +30,7 @@ use tokio_stream::{Stream, StreamExt};
 use super::State;
 use super::write::{self, Patch, Refusal};
 use super::{dashboard as pins, git};
+use crate::item::Kind;
 use crate::tree::Tree;
 
 /// Interval between the keep-alive comments of an event stream.
@@ -52,17 +55,77 @@ fn error(status: StatusCode, message: &str) -> Response {
     (status, Json(json!({ "error": message }))).into_response()
 }
 
+/// The query of `GET /api/items`.
+#[derive(Debug, Default, Deserialize)]
+pub struct ItemsQuery {
+    /// Comma-separated kinds, as `ariane tasks --kind`; every kind when absent.
+    pub kind: Option<String>,
+    /// `1` or `true` adds each item's body, as `ariane tasks --body`.
+    pub body: Option<String>,
+}
+
 /// `GET /api/items`: every item of the tree, archived ones included, as the rows
-/// of `ariane tasks --json`.
-pub async fn items(Shared(state): Shared<Arc<State>>) -> Response {
+/// of `ariane tasks --all --archived --dates --json`; `400` for an unknown kind.
+pub async fn items(Shared(state): Shared<Arc<State>>, Query(query): Query<ItemsQuery>) -> Response {
+    let kinds = match parse_kinds(query.kind.as_deref().unwrap_or_default()) {
+        Ok(kinds) => kinds,
+        Err(message) => return error(StatusCode::BAD_REQUEST, &message),
+    };
+    let body = matches!(query.body.as_deref(), Some("1" | "true"));
+    let Ok(dates) = state.dates.read() else {
+        return error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "the date lock is poisoned",
+        );
+    };
     with_tree(&state, |tree| {
-        let rows: Vec<_> = tree
-            .items
-            .iter()
-            .map(|item| crate::tasks::row(tree, item))
-            .collect();
-        serde_json::to_value(rows).unwrap_or(Value::Null)
+        let selection = crate::tasks::Selection {
+            archived: true,
+            kinds: &kinds,
+            body,
+            dates: Some(&dates),
+        };
+        serde_json::to_value(crate::tasks::rows(tree, None, &selection)).unwrap_or(Value::Null)
     })
+}
+
+/// Reads `task,story` into kinds, with the words `ariane tasks --kind` takes.
+fn parse_kinds(raw: &str) -> Result<Vec<Kind>, String> {
+    raw.split(',')
+        .map(str::trim)
+        .filter(|word| !word.is_empty())
+        .map(|word| Kind::from_str(word, true).map_err(|_| format!("unknown kind `{word}`")))
+        .collect()
+}
+
+/// The query of `GET /api/show`.
+#[derive(Debug, Deserialize)]
+pub struct ShowQuery {
+    /// The item, `<node>#<id>`; a bare id is looked up in the whole tree.
+    #[serde(rename = "ref")]
+    pub reference: String,
+}
+
+/// `GET /api/show?ref=<node>%23<id>`: one item with its header, body and
+/// relations, as `ariane show --json`; `404` when the reference names no
+/// single item.
+pub async fn show(Shared(state): Shared<Arc<State>>, Query(query): Query<ShowQuery>) -> Response {
+    let Ok(dates) = state.dates.read() else {
+        return error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "the date lock is poisoned",
+        );
+    };
+    let Ok(tree) = state.tree.read() else {
+        return error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "the tree lock is poisoned",
+        );
+    };
+    match crate::show::find(&tree, &query.reference, None) {
+        Ok(item) => Json(crate::show::shown(&tree, item, Some(&dates))).into_response(),
+        Err(failure) => error(StatusCode::NOT_FOUND, &format!("{failure:#}")),
+    }
 }
 
 /// `GET /api/nodes`: every node with its entry point, item count, effective
