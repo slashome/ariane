@@ -11,12 +11,12 @@ export function RessourcesPage() {
   const { filters, setQuery } = useItemFilters()
   const ressources = useMemo(
     () =>
-      filterItems(items, { ...emptyFilters, node: filters.node, includeArchived: filters.includeArchived, query: filters.query }).sort(
+      filterItems(items, { ...emptyFilters, node: filters.node, includeArchived: filters.includeArchived, includeDescendants: filters.includeDescendants, query: filters.query }).sort(
         (left, right) => compareNatural(left.title ?? '', right.title ?? ''),
       ),
     [items, filters],
   )
-  const total = filterItems(items, { ...emptyFilters, node: filters.node, includeArchived: filters.includeArchived }).length
+  const total = filterItems(items, { ...emptyFilters, node: filters.node, includeArchived: filters.includeArchived, includeDescendants: filters.includeDescendants }).length
 
   return (
     <div className="flex flex-col gap-5 p-6">

@@ -14,6 +14,7 @@ export function useReflexions() {
       ...emptyFilters,
       node: filters.node,
       includeArchived: filters.includeArchived,
+      includeDescendants: filters.includeDescendants,
       kinds: ['reflexion'],
       query: filters.query,
     }).map((item) => ({ ...item, body: bodies.get(item.path) }))

@@ -20,9 +20,10 @@ export function MatrixPage() {
         query: filters.query,
         node: filters.node,
         includeArchived: filters.includeArchived,
+        includeDescendants: filters.includeDescendants,
         kinds: ['task'],
       }),
-    [items, filters.query, filters.node, filters.includeArchived],
+    [items, filters.query, filters.node, filters.includeArchived, filters.includeDescendants],
   )
   const matrix = useMemo(() => placeItems(scoped, schema, includeClosed), [scoped, schema, includeClosed])
 

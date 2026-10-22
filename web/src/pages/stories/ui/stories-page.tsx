@@ -26,10 +26,11 @@ export function StoriesPage() {
       ...emptyFilters,
       node: filters.node,
       includeArchived: filters.includeArchived,
+      includeDescendants: filters.includeDescendants,
       kinds: ['story'],
       query: filters.query,
     })
-    const tasks = scopeItems(items, { node: null, includeArchived: filters.includeArchived })
+    const tasks = scopeItems(items, { node: null, includeArchived: filters.includeArchived, includeDescendants: false })
     const statusLabel = (key: string) => schema?.categories.find((entry) => entry.id === key)?.label ?? key
     return groupStories(stories, tasks, grouping, grouping === 'status' ? statusLabel : undefined)
   }, [items, filters, grouping, schema])

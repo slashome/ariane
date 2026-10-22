@@ -27,9 +27,10 @@ export function KanbanPage() {
         query: filters.query,
         node: filters.node,
         includeArchived: filters.includeArchived,
+        includeDescendants: filters.includeDescendants,
         kinds: ['task'],
       }),
-    [items, filters.query, filters.node, filters.includeArchived],
+    [items, filters.query, filters.node, filters.includeArchived, filters.includeDescendants],
   )
   const columns = useMemo(() => buildColumns(scoped, nodes, filters.node, schema), [scoped, nodes, filters.node, schema])
   const openedItem = items.find((item) => item.path === opened) ?? null

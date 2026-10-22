@@ -44,7 +44,10 @@ export function HealthPage() {
   const { data: items = [] } = useItems()
   const { filters } = useItemFilters()
   const [grouping, setGrouping] = useState<Grouping>('node')
-  const scoped = useMemo(() => scopeFindings(findings, filters.node), [findings, filters.node])
+  const scoped = useMemo(
+    () => scopeFindings(findings, filters.node, filters.includeDescendants),
+    [findings, filters.node, filters.includeDescendants],
+  )
   const counts = countBySeverity(scoped)
   const byPath = useMemo(() => new Map(items.map((item) => [item.path, item])), [items])
   const groups = groupBy(
