@@ -37,6 +37,7 @@ external:
 
 - Keys are English; the content keeps its language. The kind comes from the directory, never from the header.
 - `id`: `T` task or backlog item, `S` story, `R` reflexion, `D` ressource, numbered after the highest id of that prefix in the node; unique within the node; referenced across nodes as `acme/web#T009`.
+- File name: the id, a `-` and a slug of the title — `T009-login-form.md`. A new id (promotion) renames the file; `ariane doctor` reports any other name as an error with its `git mv`.
 - `status`: an id of the node's workflow (its `node.toml`, inherited from ancestors, else the default `backlog`, `todo`, `in_progress`, `blocked`, `done`, `dropped`). Reflexions use `open`, `trial` or `settled`; ressources have no status.
 - `size` `XS`…`XL`, `impact` and `priority` `low`/`medium`/`high`, `created` `YYYY-MM-DD` — only when actually known, never from git.
 - `external`: the item's own ticket, `monday:<pulse id>` — never a board id, never another item's ticket.

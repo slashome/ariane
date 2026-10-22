@@ -111,6 +111,8 @@ pub enum Check {
     OutOfVocabulary,
     /// A custom key declared in no applicable `node.toml`.
     UndeclaredKey,
+    /// A file name that does not begin with the item's `id`, a `-` and a slug.
+    FileName,
 }
 
 /// One problem found by doctor, serialized as is by `--json`.

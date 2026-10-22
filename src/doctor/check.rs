@@ -8,7 +8,8 @@
 //!    that single finding and nothing else), then every core key by iterating
 //!    the declarative table [`CORE_KEYS`](crate::schema::CORE_KEYS), then the checks that depend on
 //!    context: `node` against the file's location, `status` against the node's
-//!    workflow, custom keys against the node's `node.toml`;
+//!    workflow, custom keys against the node's `node.toml`, the file name
+//!    against `id`;
 //! 3. **across items**: ids duplicated within a node.
 
 use std::collections::{BTreeMap, HashSet};
@@ -172,6 +173,7 @@ fn check_item(
     report.node(mapping);
     report.status(mapping, &effective);
     report.custom(mapping, &effective);
+    report.file_name(mapping);
 }
 
 /// Context shared by the checks of one item: the tree, the item, and the list
@@ -339,6 +341,57 @@ impl Reporter<'_> {
     /// wrote, without allocating a `Vec`.
     fn out_of_vocabulary<const N: usize>(&mut self, message: String, resolutions: [String; N]) {
         self.error(Check::OutOfVocabulary, message, Remedy::human(resolutions));
+    }
+
+    /// Reports a file whose name does not begin with the item's `id`, a `-` and
+    /// a slug (SPEC.md §1.4). Only a valid `id` is compared: a missing or
+    /// malformed one is already reported. The remedy keeps the current name as
+    /// the slug, unless that name is the bare id.
+    fn file_name(&mut self, mapping: &Mapping) {
+        let Some(id) = mapping.get("id").and_then(Value::as_str) else {
+            return;
+        };
+        if !is_valid_id(id) {
+            return;
+        }
+        let Some(stem) = self
+            .item
+            .file
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+        else {
+            return;
+        };
+        let prefix = format!("{id}-");
+        if stem
+            .strip_prefix(&prefix)
+            .is_some_and(|slug| !slug.is_empty())
+        {
+            return;
+        }
+        let message = format!("the file name does not begin with `{prefix}` followed by a slug");
+        if stem == id {
+            self.error(
+                Check::FileName,
+                message,
+                Remedy::human([format!(
+                    "rename the file `{prefix}<slug>.md`, the slug summing up its title"
+                )]),
+            );
+            return;
+        }
+        let from = relative(self.tree, &self.item.file);
+        let to = relative(
+            self.tree,
+            &self.item.file.with_file_name(format!("{prefix}{stem}.md")),
+        );
+        self.error(
+            Check::FileName,
+            message,
+            Remedy::Command {
+                command: format!("git mv {from} {to}"),
+            },
+        );
     }
 
     /// Reports a `node` key that disagrees with where the file sits.
