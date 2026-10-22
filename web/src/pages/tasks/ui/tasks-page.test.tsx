@@ -15,7 +15,7 @@ const schema: Schema = {
     { id: 'done', label: 'Done' },
     { id: 'dropped', label: 'Dropped' },
   ],
-  id_prefixes: { backlog: 'T', reflexion: 'R', ressource: 'D', story: 'S', task: 'T', unknown: 'T' },
+  id_prefixes: { reflexion: 'R', ressource: 'D', story: 'S', task: 'T', unknown: 'T' },
   keys: [{ name: 'size', type: 'enum', values: ['XS', 'S', 'M', 'L', 'XL'] }],
   reflexion_statuses: ['open', 'trial', 'settled'],
 }
@@ -32,6 +32,12 @@ const base: Item = {
   impact: null,
   priority: null,
   created: '2030-01-02',
+  reference: null,
+  type: null,
+  release: null,
+  milestone: null,
+  parent: null,
+  depends_on: [],
   external: [],
   version: 1,
   path: 'tree/acme/web/tasks/T001.md',
@@ -76,7 +82,7 @@ describe('TasksPage', () => {
     expect(await screen.findByText('Paint the fence')).toBeInTheDocument()
     expect(screen.getByText('Fix the gate')).toBeInTheDocument()
     expect(screen.queryByText('Archived thing')).not.toBeInTheDocument()
-    expect(screen.getByText('2 of 3 items')).toBeInTheDocument()
+    expect(screen.getByText('2 of 3 tasks')).toBeInTheDocument()
   })
 
   it('sorts sizes by their order in the schema, not alphabetically', async () => {
@@ -90,6 +96,6 @@ describe('TasksPage', () => {
     renderPage('/tasks?category=blocked&archived=1')
     expect(await screen.findByText('Fix the gate')).toBeInTheDocument()
     expect(screen.queryByText('Paint the fence')).not.toBeInTheDocument()
-    expect(screen.getByText('1 of 3 items')).toBeInTheDocument()
+    expect(screen.getByText('1 of 3 tasks')).toBeInTheDocument()
   })
 })

@@ -12,3 +12,16 @@ const tones: Record<Category, string> = {
 export function categoryTone(category: Category | null): string {
   return category ? tones[category] : 'border-dashed border-border text-muted-foreground'
 }
+
+const fills: Record<Category, string> = {
+  backlog: 'bg-slate-400 dark:bg-slate-500',
+  todo: 'bg-blue-500',
+  in_progress: 'bg-amber-500',
+  blocked: 'bg-red-500',
+  done: 'bg-green-500',
+  dropped: 'bg-muted-foreground/40',
+}
+
+export function categoryFill(category: Category): string {
+  return fills[category]
+}

@@ -4,7 +4,7 @@ import { Link } from 'react-router'
 import type { Category, Item } from '@/shared/api'
 import { cn, displayNode } from '@/shared/lib'
 import type { CardStats } from '../model/card-stats'
-import { CategoryBar } from './category-bar'
+import { CategoryBar } from '@/entities/item'
 
 function Section({ title, items, empty }: { title: string; items: Item[]; empty: string }) {
   return (
@@ -58,7 +58,7 @@ export function NodeCard({
         </div>
         {toolbar}
       </header>
-      <CategoryBar counts={stats.counts} total={stats.total} labels={labels} />
+      <CategoryBar counts={stats.counts} labels={labels} />
       <div className="grid grid-cols-2 gap-3">
         <Section title="Quick wins" items={stats.quickWins} empty="None — size XS/S × impact high" />
         <Section title="Blockers" items={stats.blockers} empty="Nothing blocked" />

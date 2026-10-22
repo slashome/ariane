@@ -14,8 +14,15 @@ export function MatrixPage() {
   const [includeClosed, setIncludeClosed] = useState(false)
 
   const scoped = useMemo(
-    () => filterItems(items, { ...emptyFilters, query: filters.query, node: filters.node }),
-    [items, filters.query, filters.node],
+    () =>
+      filterItems(items, {
+        ...emptyFilters,
+        query: filters.query,
+        node: filters.node,
+        includeArchived: filters.includeArchived,
+        kinds: ['task'],
+      }),
+    [items, filters.query, filters.node, filters.includeArchived],
   )
   const matrix = useMemo(() => placeItems(scoped, schema, includeClosed), [scoped, schema, includeClosed])
 

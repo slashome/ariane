@@ -1,10 +1,11 @@
 export type Category = 'backlog' | 'todo' | 'in_progress' | 'blocked' | 'done' | 'dropped'
 
-export type Kind = 'backlog' | 'task' | 'story' | 'reflexion' | 'ressource' | 'unknown'
+export type Kind = 'task' | 'story' | 'reflexion' | 'ressource' | 'unknown'
 
 export interface Item {
   node: string
   id: string | null
+  reference: string | null
   title: string | null
   kind: Kind
   archived: boolean
@@ -14,9 +15,43 @@ export interface Item {
   impact: string | null
   priority: string | null
   created: string | null
+  type: string | null
+  release: string | null
+  milestone: string | null
+  parent: string | null
+  depends_on: string[]
   external: string[]
   version: number | null
   path: string
+  updated?: string | null
+  body?: string
+}
+
+export interface Relations {
+  parent: Item | null
+  children: Item[]
+  depends_on: Item[]
+  dependents: Item[]
+  unresolved: string[]
+}
+
+export interface ItemDetail extends Item {
+  header: Record<string, unknown> | null
+  body: string
+  relations: Relations
+}
+
+export type Severity = 'error' | 'warning'
+
+export type Remedy = { kind: 'command'; command: string } | { kind: 'human'; resolutions: string[] }
+
+export interface Finding {
+  check: string
+  severity: Severity
+  node: string | null
+  path: string | null
+  message: string
+  remedy: Remedy
 }
 
 export interface WorkflowStatus {

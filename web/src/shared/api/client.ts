@@ -1,4 +1,17 @@
-import type { CommitResult, Dashboard, DiscardResult, FileDiff, Item, ItemPatch, NodeSummary, Repo, Schema } from './types'
+import type {
+  CommitResult,
+  Dashboard,
+  DiscardResult,
+  FileDiff,
+  Finding,
+  Item,
+  ItemDetail,
+  ItemPatch,
+  Kind,
+  NodeSummary,
+  Repo,
+  Schema,
+} from './types'
 
 export class ApiError extends Error {
   constructor(
@@ -46,6 +59,11 @@ async function request<T>(method: string, url: string, payload?: unknown): Promi
 }
 
 export const fetchItems = () => request<Item[]>('GET', '/api/items')
+export const fetchItemsWithBody = (kind: Kind) =>
+  request<Item[]>('GET', `/api/items?${new URLSearchParams({ kind, body: '1' }).toString()}`)
+export const fetchItem = (reference: string) =>
+  request<ItemDetail>('GET', `/api/show?${new URLSearchParams({ ref: reference }).toString()}`)
+export const fetchDoctor = () => request<Finding[]>('GET', '/api/doctor')
 export const fetchNodes = () => request<NodeSummary[]>('GET', '/api/nodes')
 export const fetchSchema = () => request<Schema>('GET', '/api/schema')
 export const fetchRepo = () => request<Repo>('GET', '/api/repo')
