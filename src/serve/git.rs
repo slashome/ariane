@@ -240,12 +240,14 @@ pub fn discard(root: &Path, paths: &[PathBuf]) -> Result<Discarded> {
     ))
 }
 
-/// The diff of one file under `tree/` against `HEAD`, as unified-diff text.
+/// The diff of one path under `tree/` against `HEAD`, as unified-diff text.
 ///
 /// A file git knows (in `HEAD` or in the index) is compared with
 /// `git diff HEAD`; an untracked file is compared with an empty file through
 /// `git diff --no-index`, which exits `1` when the two differ: that is its
-/// normal answer, not an error. The text is empty when nothing differs.
+/// normal answer, not an error. An untracked directory, which `git status`
+/// reports as one entry, gives the diffs of the untracked files inside it. The
+/// text is empty when nothing differs.
 ///
 /// # Errors
 ///
@@ -264,18 +266,50 @@ pub fn diff(root: &Path, path: &str) -> Result<String> {
             &["cat-file", "-e", &format!("HEAD:{}", path.display())],
         )
         .is_ok();
-    let mut command = git_literal(root);
-    command.args(["diff", "--no-color", "--no-ext-diff"]);
     if known {
-        command.args(["HEAD", "--"]).arg(&path);
-    } else {
-        command.args(["--no-index", "--", "/dev/null"]).arg(&path);
+        return diff_with(root, &["HEAD", "--"], &path, false);
     }
-    let output = command.output().context("running git diff")?;
-    match output.status.code() {
-        Some(0) => {}
-        Some(1) if !known => {}
-        _ => bail!("{}", String::from_utf8_lossy(&output.stderr).trim()),
+    if !root.join(&path).is_dir() {
+        return diff_with(root, &["--no-index", "--", "/dev/null"], &path, true);
+    }
+    let listed = git_literal(root)
+        .args(["ls-files", "--others", "--exclude-standard", "-z", "--"])
+        .arg(&path)
+        .output()
+        .context("running git ls-files")?;
+    if !listed.status.success() {
+        bail!("{}", String::from_utf8_lossy(&listed.stderr).trim());
+    }
+    let mut text = String::new();
+    for file in listed
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter(|file| !file.is_empty())
+    {
+        let file = PathBuf::from(OsString::from_vec(file.to_vec()));
+        text.push_str(&diff_with(
+            root,
+            &["--no-index", "--", "/dev/null"],
+            &file,
+            true,
+        )?);
+    }
+    Ok(text)
+}
+
+/// Runs `git diff <args> <path>` without colour nor external driver. With
+/// `no_index`, exit code `1` means the files differ and is accepted, unless git
+/// also wrote an error.
+fn diff_with(root: &Path, args: &[&str], path: &Path, no_index: bool) -> Result<String> {
+    let output = git_literal(root)
+        .args(["diff", "--no-color", "--no-ext-diff"])
+        .args(args)
+        .arg(path)
+        .output()
+        .context("running git diff")?;
+    let differs = no_index && output.status.code() == Some(1) && output.stderr.is_empty();
+    if !output.status.success() && !differs {
+        bail!("{}", String::from_utf8_lossy(&output.stderr).trim());
     }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
@@ -575,8 +609,13 @@ mod tests {
         std::fs::write(dir.path().join("tree/new.md"), "fresh\n").unwrap();
         let untracked = diff(dir.path(), "tree/new.md").unwrap();
         assert!(untracked.contains("+fresh"), "{untracked}");
+        std::fs::create_dir_all(dir.path().join("tree/node")).unwrap();
+        std::fs::write(dir.path().join("tree/node/b.md"), "inside\n").unwrap();
+        let folder = diff(dir.path(), "tree/node/").unwrap();
+        assert!(folder.contains("+inside"), "{folder}");
         std::fs::remove_file(dir.path().join("tree/a.md")).unwrap();
         assert!(diff(dir.path(), "tree/a.md").unwrap().contains("-a"));
+        assert!(diff(dir.path(), "tree/missing.md").is_err());
         assert!(diff(dir.path(), "../etc/passwd").is_err());
     }
 
