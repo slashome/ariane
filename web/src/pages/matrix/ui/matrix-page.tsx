@@ -46,7 +46,13 @@ export function MatrixPage() {
           Include done and dropped
         </label>
       </div>
-      <DragArea onDragEnd={onDragEnd}>
+      <DragArea
+        onDragEnd={onDragEnd}
+        renderOverlay={(id) => {
+          const item = scoped.find((entry) => entry.path === id)
+          return item ? <ItemCard item={item} showNode className="shadow-lg" /> : null
+        }}
+      >
         <div
           className="grid gap-2"
           style={{ gridTemplateColumns: `6rem repeat(${matrix.sizes.length}, minmax(11rem, 1fr))` }}
