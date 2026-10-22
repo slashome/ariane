@@ -16,6 +16,7 @@ describe('doctor findings', () => {
   it('keep those of the node in scope, and those about the whole tree', () => {
     expect(scopeFindings(findings, 'cmc').map((entry) => entry.node)).toEqual(['cmc/cmc-lib', 'cmc', null])
     expect(scopeFindings(findings, null)).toHaveLength(4)
+    expect(scopeFindings(findings, 'cmc', false).map((entry) => entry.node)).toEqual(['cmc', null])
   })
 
   it('count errors and warnings and name their check', () => {

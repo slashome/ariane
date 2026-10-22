@@ -15,7 +15,7 @@ function StoryProgress({ detail }: { detail: ItemDetail }) {
   const { filters } = useItemFilters()
   const labels = (category: Category) => schema?.categories.find((entry) => entry.id === category)?.label ?? category
   const children = useMemo(
-    () => scopeItems(detail.relations.children, { node: null, includeArchived: filters.includeArchived }),
+    () => scopeItems(detail.relations.children, { node: null, includeArchived: filters.includeArchived, includeDescendants: false }),
     [detail.relations.children, filters.includeArchived],
   )
   const rows = useMemo(() => storyTasks(children, items), [children, items])

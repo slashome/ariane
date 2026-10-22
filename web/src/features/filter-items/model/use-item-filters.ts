@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router'
 import type { Category, Kind } from '@/shared/api'
 import { searchParamKeys } from '@/shared/config'
+import { setIncludeDescendants, useIncludeDescendants } from './descendants'
 import type { ItemFilters } from './filter-items'
 
 function list<T extends string>(params: URLSearchParams, key: string): T[] {
@@ -10,6 +11,7 @@ function list<T extends string>(params: URLSearchParams, key: string): T[] {
 
 export function useItemFilters() {
   const [params, setParams] = useSearchParams()
+  const includeDescendants = useIncludeDescendants()
 
   const filters = useMemo<ItemFilters>(
     () => ({
@@ -18,8 +20,9 @@ export function useItemFilters() {
       kinds: list<Kind>(params, searchParamKeys.kinds),
       categories: list<Category>(params, searchParamKeys.categories),
       includeArchived: params.get(searchParamKeys.archived) === '1',
+      includeDescendants,
     }),
-    [params],
+    [params, includeDescendants],
   )
 
   const update = useCallback(
@@ -45,5 +48,6 @@ export function useItemFilters() {
     setKinds: (kinds: Kind[]) => update(searchParamKeys.kinds, kinds.join(',')),
     setCategories: (categories: Category[]) => update(searchParamKeys.categories, categories.join(',')),
     setIncludeArchived: (include: boolean) => update(searchParamKeys.archived, include ? '1' : null),
+    setIncludeDescendants,
   }
 }

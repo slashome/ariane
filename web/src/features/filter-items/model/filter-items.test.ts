@@ -42,13 +42,16 @@ describe('filterItems', () => {
     expect(ids(filterItems(items, { ...emptyFilters, includeArchived: true }))).toHaveLength(4)
   })
 
-  it('keeps a node and its descendants, not a sibling sharing a prefix', () => {
-    expect(ids(filterItems(items, { ...emptyFilters, node: 'acme/web' }))).toEqual(['T001'])
-    expect(ids(filterItems(items, { ...emptyFilters, node: 'acme' }))).toEqual(['T001', 'T003', 'R001'])
+  it('keeps a node and, when asked, its descendants, never a sibling sharing a prefix', () => {
+    const withSubNodes = { ...emptyFilters, includeDescendants: true }
+    expect(ids(filterItems(items, { ...withSubNodes, node: 'acme/web' }))).toEqual(['T001'])
+    expect(ids(filterItems(items, { ...withSubNodes, node: 'acme' }))).toEqual(['T001', 'T003', 'R001'])
+    expect(ids(filterItems(items, { ...emptyFilters, node: 'acme' }))).toEqual(['R001'])
   })
 
-  it('treats the home node as the whole tree', () => {
-    expect(ids(filterItems(items, { ...emptyFilters, node: '' }))).toEqual(['T001', 'T003', 'R001'])
+  it('treats the home node with its sub-nodes as the whole tree, alone as its own items', () => {
+    expect(ids(filterItems(items, { ...emptyFilters, node: '', includeDescendants: true }))).toEqual(['T001', 'T003', 'R001'])
+    expect(ids(filterItems(items, { ...emptyFilters, node: '' }))).toEqual([])
   })
 
   it('filters by kind and by status category', () => {
@@ -65,9 +68,12 @@ describe('filterItems', () => {
 
 describe('scopeItems', () => {
   it('applies the archive toggle and the node scope of every view, and the kinds asked', () => {
-    expect(ids(scopeItems(items, { node: null, includeArchived: false }))).toEqual(['T001', 'T003', 'R001'])
-    expect(ids(scopeItems(items, { node: null, includeArchived: true }))).toEqual(['T001', 'T002', 'T003', 'R001'])
-    expect(ids(scopeItems(items, { node: 'acme/web', includeArchived: true }, ['task']))).toEqual(['T001', 'T002'])
+    const scope = { node: null, includeArchived: false, includeDescendants: false }
+    expect(ids(scopeItems(items, scope))).toEqual(['T001', 'T003', 'R001'])
+    expect(ids(scopeItems(items, { ...scope, includeArchived: true }))).toEqual(['T001', 'T002', 'T003', 'R001'])
+    expect(ids(scopeItems(items, { ...scope, node: 'acme/web', includeArchived: true }, ['task']))).toEqual(['T001', 'T002'])
+    expect(ids(scopeItems(items, { ...scope, node: 'acme' }))).toEqual(['R001'])
+    expect(ids(scopeItems(items, { ...scope, node: 'acme', includeDescendants: true }, ['task']))).toEqual(['T001', 'T003'])
   })
 
   it('searches the body when the item carries one', () => {

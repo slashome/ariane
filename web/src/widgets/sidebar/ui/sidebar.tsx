@@ -22,9 +22,9 @@ import { scopeFindings, useDoctor } from '@/entities/doctor'
 import { isClosed, useItems } from '@/entities/item'
 import { useDashboard } from '@/entities/node'
 import { useRepo } from '@/entities/repo'
-import { scopeItems, useItemFilters } from '@/features/filter-items'
+import { inScope, scopeItems, useItemFilters } from '@/features/filter-items'
 import { routes, scopeSearch, searchParamKeys } from '@/shared/config'
-import { cn, displayNode, isWithinNode } from '@/shared/lib'
+import { cn, displayNode } from '@/shared/lib'
 import { navCounts } from '../model/nav-counts'
 
 const collapsedKey = 'ariane.sidebar.collapsed'
@@ -129,16 +129,22 @@ export function Sidebar() {
   const scope = scopeSearch(search)
 
   const counts = useMemo(
-    () => navCounts(scopeItems(items, filters), scopeFindings(findings, filters.node)),
+    () => navCounts(scopeItems(items, filters), scopeFindings(findings, filters.node, filters.includeDescendants)),
     [items, findings, filters],
   )
   const pins = useMemo(
     () =>
       (dashboard?.pinned ?? []).map((path) => ({
         path,
-        open: items.filter((item) => !item.archived && isWithinNode(item.node, path) && item.category !== null && !isClosed(item.category)).length,
+        open: items.filter(
+          (item) =>
+            !item.archived &&
+            inScope(item.node, path, filters.includeDescendants) &&
+            item.category !== null &&
+            !isClosed(item.category),
+        ).length,
       })),
-    [dashboard, items],
+    [dashboard, items, filters.includeDescendants],
   )
 
   const toggle = (id: string) =>

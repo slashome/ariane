@@ -29,7 +29,7 @@ export function StatusBar() {
   const { data: findings = [] } = useDoctor()
   const { data: items = [] } = useItems()
   const { filters } = useItemFilters()
-  const { errors, warnings } = countBySeverity(scopeFindings(findings, filters.node))
+  const { errors, warnings } = countBySeverity(scopeFindings(findings, filters.node, filters.includeDescendants))
   const visible = scopeItems(items, filters).length
   const uncommitted = repo?.uncommitted.length ?? 0
   return (
@@ -58,6 +58,7 @@ export function StatusBar() {
       <Cell label="Node every view is scoped to">
         <Network className="size-3.5" aria-hidden />
         <span className="font-mono">{filters.node === null ? 'all nodes' : displayNode(filters.node)}</span>
+        {filters.node !== null && filters.includeDescendants && <span>+ sub-nodes</span>}
       </Cell>
       <Cell label={`${visible} items in scope`}>{visible} items</Cell>
       <Cell

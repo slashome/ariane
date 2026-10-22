@@ -36,6 +36,7 @@ export function BacklogPage() {
       ...emptyFilters,
       node: filters.node,
       includeArchived: filters.includeArchived,
+      includeDescendants: filters.includeDescendants,
       kinds: ['task'],
       categories: ['backlog'],
       query: filters.query,
