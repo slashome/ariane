@@ -56,6 +56,10 @@ pub enum Command {
     Serve(ServeArgs),
     #[command(about = "Create, read and change the configuration file")]
     Config(ConfigArgs),
+    #[command(
+        about = "Read and change the settings versioned with the content: theme, dashboard pins"
+    )]
+    Settings(SettingsArgs),
     #[command(about = "Keep `ariane serve` running in the background (launchd, systemd)")]
     Service(ServiceArgs),
 }
@@ -246,6 +250,32 @@ pub enum ConfigCommand {
     Edit,
     #[command(about = "Print the commented example generated from the schema")]
     Example,
+}
+
+/// Arguments of `ariane settings`: an optional subcommand, and `json` to print
+/// the settings as JSON.
+#[derive(Args)]
+pub struct SettingsArgs {
+    #[command(subcommand)]
+    pub command: Option<SettingsCommand>,
+
+    #[arg(long)]
+    pub json: bool,
+}
+
+/// The subcommands of `ariane settings`. `Set` takes a dotted key such as
+/// `theme.primary`.
+#[derive(Subcommand)]
+pub enum SettingsCommand {
+    #[command(
+        about = "Set a key: theme.primary, theme.secondary (#rrggbb) or dashboard.pinned (a, b)"
+    )]
+    Set {
+        #[arg(help = "Dotted key, such as theme.primary")]
+        key: String,
+        #[arg(help = "New value: a color `#rrggbb`, or nodes written `a, b`")]
+        value: String,
+    },
 }
 
 /// Arguments of `ariane service`: the subcommand to run.

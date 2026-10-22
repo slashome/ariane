@@ -34,8 +34,6 @@ pub enum Kind {
     Path,
     /// A TCP port, from 1 to 65535.
     Port,
-    /// A list of strings.
-    Strings,
 }
 
 /// One key of the configuration file.
@@ -58,7 +56,7 @@ pub struct Key {
 }
 
 /// Every key the configuration knows, in the order of the example file.
-pub const KEYS: [Key; 4] = [
+pub const KEYS: [Key; 3] = [
     Key {
         name: "version",
         kind: Kind::Version,
@@ -83,14 +81,6 @@ pub const KEYS: [Key; 4] = [
         doc: "Port `ariane serve` listens on, on 127.0.0.1 only. `--port` overrides it.",
         settable: true,
     },
-    Key {
-        name: "dashboard.pinned",
-        kind: Kind::Strings,
-        default: Some("[]"),
-        example: None,
-        doc: "Nodes pinned on the dashboard, in the order of their cards.",
-        settable: true,
-    },
 ];
 
 /// The typed configuration. Missing keys take their default, so an empty or
@@ -104,8 +94,6 @@ pub struct Config {
     pub repo: Option<String>,
     /// The `[server]` table.
     pub server: Server,
-    /// The `[dashboard]` table.
-    pub dashboard: Dashboard,
 }
 
 /// The `[server]` table of the configuration.
@@ -116,21 +104,12 @@ pub struct Server {
     pub port: u16,
 }
 
-/// The `[dashboard]` table of the configuration.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
-#[serde(default)]
-pub struct Dashboard {
-    /// See [`KEYS`]: `dashboard.pinned`.
-    pub pinned: Vec<String>,
-}
-
 impl Default for Config {
     fn default() -> Config {
         Config {
             version: VERSION,
             repo: None,
             server: Server::default(),
-            dashboard: Dashboard::default(),
         }
     }
 }
@@ -329,7 +308,6 @@ mod tests {
         let loaded = parse("repo = \"~/content\"\n").unwrap();
         assert_eq!(loaded.config.server.port, DEFAULT_PORT);
         assert_eq!(loaded.config.version, VERSION);
-        assert!(loaded.config.dashboard.pinned.is_empty());
     }
 
     #[test]

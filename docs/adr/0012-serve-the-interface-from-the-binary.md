@@ -44,6 +44,8 @@ Two constraints are already settled elsewhere. ADR-0005 puts the CLI in Rust, as
 - **Kanban**, one column per status of the node's workflow (ADR-0008); on a multi-node view, one column per status category.
 - **Size × impact matrix**, sizes XS–XL by impact low/medium/high, for tasks and stories.
 
+> **Amended 2026-10-23.** Pins and their order, and the interface's theme, live in `settings.toml` at the root of the content repository, not in `config.toml`, which is versioned nowhere ([ADR-0013](0013-define-the-configuration-schema-in-code.md), amended). The interface's git actions cover `settings.toml` next to `tree/`.
+
 **Permanent availability.**
 
 - `ariane service install | uninstall | status | logs` generates and loads a **launchd agent** on macOS, a **systemd `--user` unit** on Linux, pointing at `ariane serve`. The binary never daemonizes itself.

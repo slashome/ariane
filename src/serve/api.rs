@@ -8,6 +8,7 @@
 //! the tree, released before anything is sent.
 //!
 //! The writing endpoints — `PATCH /api/items`, `PUT /api/dashboard`,
+//! `PUT /api/settings/theme`,
 //! `POST /api/commit`, `POST /api/push`, `POST /api/discard` — run on the
 //! blocking pool under the state's `busy` lock, one at a time, and never commit
 //! unless asked.
@@ -28,8 +29,8 @@ use tokio_stream::wrappers::{BroadcastStream, WatchStream};
 use tokio_stream::{Stream, StreamExt};
 
 use super::State;
+use super::git;
 use super::write::{self, Patch, Refusal};
-use super::{dashboard as pins, git};
 use crate::item::Kind;
 use crate::tree::Tree;
 
@@ -312,10 +313,11 @@ pub struct Pins {
     pub pinned: Vec<String>,
 }
 
-/// `GET /api/dashboard`: the pinned nodes, in card order.
+/// `GET /api/dashboard`: the pinned nodes, in card order, from the content's
+/// `settings.toml`.
 pub async fn dashboard(Shared(state): Shared<Arc<State>>) -> Response {
-    match pins::read(&state.config) {
-        Ok(pinned) => Json(json!({ "pinned": pinned })).into_response(),
+    match crate::settings::load(&state.root) {
+        Ok(settings) => Json(json!({ "pinned": settings.dashboard.pinned })).into_response(),
         Err(failure) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
     }
 }
@@ -348,8 +350,50 @@ pub async fn pin(Shared(state): Shared<Arc<State>>, Json(body): Json<Pins>) -> R
                 &format!("not nodes of the tree: {}", unknown.join(", ")),
             );
         }
-        match pins::write(&state.config, &body.pinned) {
+        match crate::settings::set_pinned(&state.root, &body.pinned) {
             Ok(()) => Json(json!({ "pinned": body.pinned })).into_response(),
+            Err(failure) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
+        }
+    })
+    .await
+}
+
+/// `GET /api/settings`: the settings versioned with the content, as
+/// `ariane settings --json`.
+pub async fn settings(Shared(state): Shared<Arc<State>>) -> Response {
+    match crate::settings::load(&state.root) {
+        Ok(settings) => Json(settings).into_response(),
+        Err(failure) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
+    }
+}
+
+/// The body of `PUT /api/settings/theme`.
+#[derive(Debug, Deserialize)]
+pub struct ThemeRequest {
+    pub primary: String,
+    pub secondary: String,
+}
+
+/// `PUT /api/settings/theme`: sets both theme colors in `settings.toml`, as
+/// `ariane settings set`, and answers the settings; `422` for a color that is
+/// not `#rrggbb`.
+pub async fn theme(
+    Shared(state): Shared<Arc<State>>,
+    Json(request): Json<ThemeRequest>,
+) -> Response {
+    exclusive(state, move |state| {
+        for color in [&request.primary, &request.secondary] {
+            if !crate::settings::is_color(color) {
+                return error(
+                    StatusCode::UNPROCESSABLE_ENTITY,
+                    &format!("`{color}` is not a color written `#rrggbb`"),
+                );
+            }
+        }
+        match crate::settings::set_theme(&state.root, &request.primary, &request.secondary)
+            .and_then(|()| crate::settings::load(&state.root))
+        {
+            Ok(settings) => Json(settings).into_response(),
             Err(failure) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
         }
     })
@@ -378,9 +422,10 @@ pub async fn commit(
     exclusive(state, move |state| {
         match git::commit(&state.root, &request.message) {
             Ok(git::Committed::Commit(hash)) => Json(json!({ "commit": hash })).into_response(),
-            Ok(git::Committed::NothingToCommit) => {
-                error(StatusCode::CONFLICT, "nothing to commit under tree/")
-            }
+            Ok(git::Committed::NothingToCommit) => error(
+                StatusCode::CONFLICT,
+                "nothing to commit in tree/ or settings.toml",
+            ),
             Err(failure) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
         }
     })
@@ -423,7 +468,7 @@ pub async fn discard(
         }
         Some(paths) => match paths
             .iter()
-            .map(|path| git::under_tree(path))
+            .map(|path| git::in_content(path))
             .collect::<anyhow::Result<Vec<_>>>()
         {
             Ok(paths) => paths,
@@ -444,9 +489,10 @@ pub async fn discard(
                 }))
                 .into_response()
             }
-            Ok(git::Discarded::NothingToDiscard) => {
-                error(StatusCode::CONFLICT, "nothing to discard under tree/")
-            }
+            Ok(git::Discarded::NothingToDiscard) => error(
+                StatusCode::CONFLICT,
+                "nothing to discard in tree/ or settings.toml",
+            ),
             Err(failure) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
         }
     })
@@ -464,7 +510,7 @@ pub struct DiffQuery {
 /// `HEAD`, an untracked file being compared with an empty one; `400` when the
 /// path is absolute, holds `..` or is outside `tree/`.
 pub async fn diff(Shared(state): Shared<Arc<State>>, Query(query): Query<DiffQuery>) -> Response {
-    if let Err(failure) = git::under_tree(&query.path) {
+    if let Err(failure) = git::in_content(&query.path) {
         return error(StatusCode::BAD_REQUEST, &format!("{failure:#}"));
     }
     let root = state.root.clone();

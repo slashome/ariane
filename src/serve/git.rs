@@ -6,8 +6,9 @@
 //! [`OsString`] without assuming UTF-8 (ADR-0005).
 //!
 //! It also dates each node by its latest commit, and runs the git actions the
-//! interface offers: commit what changed under `tree/`, push, discard changes
-//! under `tree/`, and show the diff of one file. Commit and push use the
+//! interface offers on the content it edits — `tree/` and `settings.toml`:
+//! commit what changed there, push, discard changes there, and show the diff
+//! of one file. Commit and push use the
 //! machine's own git identity and configured upstream; nothing here sets an
 //! author or a remote.
 
@@ -17,6 +18,11 @@ use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, Result, bail};
+
+use crate::settings::FILE as SETTINGS;
+
+/// The paths the interface edits, and the only ones its git actions touch.
+const CONTENT: [&str; 2] = ["tree", SETTINGS];
 
 /// One uncommitted path and its two-letter porcelain code, such as ` M` or `??`.
 #[derive(Debug, PartialEq, Eq)]
@@ -84,13 +90,16 @@ pub fn last_change(root: &Path, relative: &Path) -> Option<String> {
 pub enum Committed {
     /// A commit was made; its abbreviated hash.
     Commit(String),
-    /// Nothing under `tree/` differed from `HEAD`.
+    /// Nothing in the content differed from `HEAD`.
     NothingToCommit,
 }
 
-/// Stages every change under `tree/` and commits it with `message`.
+/// Stages every change of the content — `tree/` and `settings.toml` — and
+/// commits it with `message`.
 ///
-/// Staging is limited to `tree/`, the content the interface edits. Whether
+/// Staging is limited to what the interface edits. `settings.toml` is staged
+/// only when it exists or git knows it: a pathspec that matches nothing makes
+/// `git add` fail. Whether
 /// anything is staged is asked to `git diff --cached --quiet`, which exits `1`
 /// when there is something to commit.
 ///
@@ -98,7 +107,15 @@ pub enum Committed {
 ///
 /// Fails when a git command cannot run or reports an error.
 pub fn commit(root: &Path, message: &str) -> Result<Committed> {
-    run(root, &["add", "-A", "--", "tree"])?;
+    let mut paths = vec!["tree"];
+    if root.join(SETTINGS).exists()
+        || run(root, &["ls-files", "--error-unmatch", "--", SETTINGS]).is_ok()
+    {
+        paths.push(SETTINGS);
+    }
+    let mut args = vec!["add", "-A", "--"];
+    args.extend(paths);
+    run(root, &args)?;
     let staged = Command::new("git")
         .arg("-C")
         .arg(root)
@@ -140,16 +157,17 @@ fn run(root: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-/// Checks that `path` names something under `tree/`, relative to the repository
-/// root, and returns it as a path.
+/// Checks that `path` names content the interface edits — something under
+/// `tree/`, or `settings.toml` — relative to the repository root, and returns
+/// it as a path.
 ///
 /// Only plain components are accepted: an absolute path, `.` or `..` anywhere
-/// is refused, so the result can never leave `tree/`.
+/// is refused, so the result can never leave the content.
 ///
 /// # Errors
 ///
 /// Fails with the reason the path is refused.
-pub fn under_tree(path: &str) -> Result<PathBuf> {
+pub fn in_content(path: &str) -> Result<PathBuf> {
     let candidate = Path::new(path);
     if !candidate
         .components()
@@ -157,8 +175,11 @@ pub fn under_tree(path: &str) -> Result<PathBuf> {
     {
         bail!("{path} is not a plain relative path");
     }
+    if candidate == Path::new(SETTINGS) {
+        return Ok(candidate.to_path_buf());
+    }
     if candidate.components().next() != Some(Component::Normal(OsStr::new("tree"))) {
-        bail!("{path} is not under tree/");
+        bail!("{path} is neither under tree/ nor {SETTINGS}");
     }
     Ok(candidate.to_path_buf())
 }
@@ -172,31 +193,32 @@ pub enum Discarded {
     NothingToDiscard,
 }
 
-/// Throws away the uncommitted changes under `paths`, or under all of `tree/`
-/// when `paths` is empty.
+/// Throws away the uncommitted changes under `paths`, or of all the content
+/// (`tree/` and `settings.toml`) when `paths` is empty.
 ///
-/// The changed paths are read from `git status` over `tree/`, then kept when
+/// The changed paths are read from `git status` over the content, then kept when
 /// they fall under one of `paths` (a status limited to a path would not see the
 /// original of a rename, which lies outside it). A
 /// tracked one is restored from `HEAD` in both the index and the working tree,
 /// an untracked one (`??`) is removed with `git clean`. The original path of a
-/// rename is restored too when it is under `tree/`. Pathspecs are literal, so a
+/// rename is restored too when it is content. Pathspecs are literal, so a
 /// `*` or a `:` in a name is never read as a pattern.
 ///
 /// # Errors
 ///
-/// Fails when a path is not under `tree/`, or a git command reports an error.
+/// Fails when a path is not content, or a git command reports an error.
 pub fn discard(root: &Path, paths: &[PathBuf]) -> Result<Discarded> {
     let scope = if paths.is_empty() {
-        vec![PathBuf::from("tree")]
+        CONTENT.iter().map(PathBuf::from).collect()
     } else {
         paths.to_vec()
     };
     for path in &scope {
-        under_tree(&path.to_string_lossy())?;
+        in_content(&path.to_string_lossy())?;
     }
     let output = git_literal(root)
-        .args(["status", "--porcelain=v1", "-z", "--", "tree"])
+        .args(["status", "--porcelain=v1", "-z", "--"])
+        .args(CONTENT)
         .output()
         .context("running git status")?;
     if !output.status.success() {
@@ -220,7 +242,7 @@ pub fn discard(root: &Path, paths: &[PathBuf]) -> Result<Discarded> {
         }
         tracked.push(entry.path.clone());
         if let Some(origin) = &entry.origin
-            && under_tree(&origin.to_string_lossy()).is_ok()
+            && in_content(&origin.to_string_lossy()).is_ok()
         {
             tracked.push(origin.clone());
         }
@@ -240,7 +262,7 @@ pub fn discard(root: &Path, paths: &[PathBuf]) -> Result<Discarded> {
     ))
 }
 
-/// The diff of one path under `tree/` against `HEAD`, as unified-diff text.
+/// The diff of one path of the content against `HEAD`, as unified-diff text.
 ///
 /// A file git knows (in `HEAD` or in the index) is compared with
 /// `git diff HEAD`; an untracked file is compared with an empty file through
@@ -251,9 +273,9 @@ pub fn discard(root: &Path, paths: &[PathBuf]) -> Result<Discarded> {
 ///
 /// # Errors
 ///
-/// Fails when the path is not under `tree/`, or git reports an error.
+/// Fails when the path is not content, or git reports an error.
 pub fn diff(root: &Path, path: &str) -> Result<String> {
-    let path = under_tree(path)?;
+    let path = in_content(path)?;
     let known = git_literal(root)
         .args(["ls-files", "--error-unmatch", "--"])
         .arg(&path)
@@ -499,6 +521,12 @@ mod tests {
         let untracked = status(dir.path()).unwrap();
         assert_eq!(untracked.entries.len(), 1);
         assert_eq!(untracked.entries[0].path, OsString::from("outside.md"));
+        std::fs::write(dir.path().join("settings.toml"), "version = 1\n").unwrap();
+        assert!(matches!(
+            commit(dir.path(), "theme").unwrap(),
+            Committed::Commit(_)
+        ));
+        assert_eq!(status(dir.path()).unwrap().entries.len(), 1);
     }
 
     #[test]
@@ -521,9 +549,10 @@ mod tests {
     }
 
     #[test]
-    fn only_plain_paths_under_tree_are_accepted() {
-        assert!(under_tree("tree/a.md").is_ok());
-        assert!(under_tree("tree").is_ok());
+    fn only_plain_paths_of_the_content_are_accepted() {
+        assert!(in_content("tree/a.md").is_ok());
+        assert!(in_content("tree").is_ok());
+        assert!(in_content("settings.toml").is_ok());
         for refused in [
             "/etc/passwd",
             "tree/../outside.md",
@@ -531,9 +560,11 @@ mod tests {
             "./tree/a.md",
             "outside.md",
             "treehouse/a.md",
+            "settings.toml/x",
+            "tree/../settings.toml",
             "",
         ] {
-            assert!(under_tree(refused).is_err(), "{refused} was accepted");
+            assert!(in_content(refused).is_err(), "{refused} was accepted");
         }
     }
 

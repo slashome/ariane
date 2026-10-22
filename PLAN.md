@@ -98,6 +98,7 @@ Core commands:
 - **`ariane migrate`** — brings items and configuration to the current schema version through ordered, idempotent migrations; dry-run by default ([ADR-0009](docs/adr/0009-migrate-content-with-versioned-migrations.md)).
 - **`ariane serve`** — serves the interface (dashboard, task list, kanban, size × impact matrix) on `127.0.0.1:4317`; it writes items, never commits. **`ariane service install | uninstall | status | logs`** keeps it running through a launchd agent or a systemd user unit ([ADR-0012](docs/adr/0012-serve-the-interface-from-the-binary.md)).
 - **`ariane config`** — `path`, `init`, `get`, `set`, `edit` and `example` on `config.toml`, whose schema is defined in code; `config.example.toml` is generated from it ([ADR-0013](docs/adr/0013-define-the-configuration-schema-in-code.md)).
+- **`ariane settings`** — reads and sets `settings.toml`, the preferences versioned with the content: the interface's theme and the dashboard pins (ADR-0013, amended 2026-10-23).
 - **`ariane status`** — renames or removes a workflow status in `node.toml` and rewrites the items that use it ([ADR-0008](docs/adr/0008-give-every-item-a-versioned-front-matter.md)).
 - **`ariane sync <connector>`** — bidirectional sync with an external tracker; conflicts are reported, never guessed ([ADR-0011](docs/adr/0011-sync-external-trackers-through-connectors.md)).
 

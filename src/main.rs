@@ -44,6 +44,8 @@ mod schema;
 mod serve;
 /// `ariane service`: the server as a background service.
 mod service;
+/// `settings.toml`: the preferences versioned with the content.
+mod settings;
 /// `ariane show`: one item with its header, body and relations.
 mod show;
 /// `ariane tasks`: the list of items.
@@ -98,6 +100,7 @@ fn run() -> Result<ExitCode> {
             tasks::run(&tree, &args, scope.as_ref())
         }
         cli::Command::Show(args) => show::run(&tree, &args, here.filter(|node| !node.is_home())),
+        cli::Command::Settings(args) => settings::run(&location.root, &args),
         cli::Command::Doctor(args) => {
             let scope = scope(args.node.as_deref(), args.all, here);
             doctor::run(&tree, &args, scope.as_ref())

@@ -10,7 +10,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use anyhow::{Context, Result, bail};
-use toml_edit::{Array, DocumentMut, Item, Table, Value, value};
+use toml_edit::{DocumentMut, Item, Table, Value, value};
 
 use super::{KEYS, Kind, example, key, load, parse};
 use crate::cli::{ConfigArgs, ConfigCommand};
@@ -73,10 +73,6 @@ pub fn get(file: &Path, name: &str) -> Result<String> {
         "version" => config.version.to_string(),
         "repo" => config.repo.unwrap_or_default(),
         "server.port" => config.server.port.to_string(),
-        "dashboard.pinned" => {
-            let list: Array = config.dashboard.pinned.iter().map(String::as_str).collect();
-            list.to_string()
-        }
         other => unreachable!("key {other} is in KEYS but not read here"),
     })
 }
@@ -85,8 +81,7 @@ pub fn get(file: &Path, name: &str) -> Result<String> {
 /// when needed.
 ///
 /// `raw` is validated against the key's [`Kind`]: a port must be a number from
-/// 1 to 65535, a list is either TOML (`["a", "b"]`) or comma-separated
-/// (`a, b`), a path is taken as written. The whole file is parsed again before
+/// 1 to 65535, a path is taken as written. The whole file is parsed again before
 /// it is written, so an invalid result never reaches the disk.
 ///
 /// # Errors
@@ -191,27 +186,6 @@ fn parse_value(kind: Kind, raw: &str) -> Result<Value> {
             }
             Ok(Value::from(i64::from(port)))
         }
-        Kind::Strings => {
-            let trimmed = raw.trim();
-            if trimmed.starts_with('[') {
-                let parsed: Value = trimmed
-                    .parse()
-                    .with_context(|| format!("`{raw}` is not a TOML list"))?;
-                let all_strings = parsed
-                    .as_array()
-                    .is_some_and(|list| list.iter().all(|entry| entry.as_str().is_some()));
-                if !all_strings {
-                    bail!("`{raw}` must be a list of strings");
-                }
-                return Ok(parsed);
-            }
-            let list: Array = trimmed
-                .split(',')
-                .map(str::trim)
-                .filter(|entry| !entry.is_empty())
-                .collect();
-            Ok(Value::Array(list))
-        }
     }
 }
 
@@ -287,7 +261,6 @@ mod tests {
     fn get_falls_back_to_the_default_and_rejects_unknown_keys() {
         let (_dir, file) = temp();
         assert_eq!(get(&file, "server.port").unwrap(), "4317");
-        assert_eq!(get(&file, "dashboard.pinned").unwrap(), "[]");
         assert!(get(&file, "server.host").is_err());
     }
 
@@ -311,13 +284,9 @@ mod tests {
     #[test]
     fn set_creates_the_file_and_the_table() {
         let (_dir, file) = temp();
-        set(&file, "dashboard.pinned", "cmc, slashome/me").unwrap();
-        assert_eq!(
-            get(&file, "dashboard.pinned").unwrap(),
-            r#"["cmc", "slashome/me"]"#
-        );
-        set(&file, "dashboard.pinned", r#"["a"]"#).unwrap();
-        assert_eq!(load(&file).unwrap().config.dashboard.pinned, ["a"]);
+        set(&file, "server.port", "9000").unwrap();
+        assert_eq!(get(&file, "server.port").unwrap(), "9000");
+        assert!(std::fs::read_to_string(&file).unwrap().contains("[server]"));
     }
 
     #[test]
@@ -327,7 +296,6 @@ mod tests {
         assert!(set(&file, "server.port", "http").is_err());
         assert!(set(&file, "version", "2").is_err());
         assert!(set(&file, "repo", " ").is_err());
-        assert!(set(&file, "dashboard.pinned", "[1, 2]").is_err());
         assert!(set(&file, "nope", "1").is_err());
         assert!(!file.exists());
     }

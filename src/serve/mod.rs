@@ -7,13 +7,13 @@
 //! tells the browsers through Server-Sent Events, so there is no Rescan button.
 //!
 //! The interface writes too, within limits: it edits four header keys of an
-//! item ([`mod@write`]), the dashboard pins in `config.toml` ([`dashboard`]), and
-//! commits or pushes only when the owner asks ([`git`]). Writes and git actions
+//! item ([`mod@write`]), the theme and the dashboard pins in the content's
+//! `settings.toml` ([`crate::settings`]), and commits or pushes only when the
+//! owner asks ([`git`]). Writes and git actions
 //! are serialized, one at a time.
 
 mod api;
 mod assets;
-mod dashboard;
 mod git;
 mod watch;
 mod write;
@@ -26,15 +26,15 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use anyhow::{Context, Result};
 use axum::Router;
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use tokio::sync::{broadcast, watch as signal};
 
 use crate::cli::ServeArgs;
 use crate::tree::{NodePath, Tree};
 
 /// What every request handler shares: the repository root, the tree loaded from
-/// it with the date of each node's latest commit, the configuration file, and
-/// the channel that announces each reload to the open event streams.
+/// it with the date of each node's latest commit and of each file, and the
+/// channel that announces each reload to the open event streams.
 ///
 /// The tree sits behind a [`RwLock`]: handlers take short read locks to build
 /// their response, the watcher takes a write lock only to swap in a freshly
@@ -49,8 +49,6 @@ pub struct State {
     /// Date of the latest commit of each item file, by path relative to the
     /// root, recomputed with every load.
     pub dates: RwLock<HashMap<PathBuf, String>>,
-    /// The `config.toml` holding the dashboard pins (ADR-0013).
-    pub config: PathBuf,
     /// Held for the whole of a write or a git action, so that two of them never
     /// interleave.
     pub busy: Mutex<()>,
@@ -66,7 +64,7 @@ impl State {
     ///
     /// `Arc` is a reference-counted pointer: cloning it is cheap and every clone
     /// points to the same state, which is how axum hands it to each request.
-    pub fn new(root: PathBuf, tree: Tree, config: PathBuf) -> Arc<State> {
+    pub fn new(root: PathBuf, tree: Tree) -> Arc<State> {
         let (changes, _) = broadcast::channel(16);
         let (stopping, _) = signal::channel(false);
         let last_change = RwLock::new(last_changes(&root, &tree));
@@ -76,7 +74,6 @@ impl State {
             tree: RwLock::new(tree),
             last_change,
             dates,
-            config,
             busy: Mutex::new(()),
             changes,
             stopping,
@@ -136,6 +133,8 @@ pub fn router(state: Arc<State>) -> Router {
         .route("/api/items", get(api::items).patch(api::patch_item))
         .route("/api/show", get(api::show))
         .route("/api/dashboard", get(api::dashboard).put(api::pin))
+        .route("/api/settings", get(api::settings))
+        .route("/api/settings/theme", put(api::theme))
         .route("/api/commit", post(api::commit))
         .route("/api/push", post(api::push))
         .route("/api/discard", post(api::discard))
@@ -166,12 +165,16 @@ pub fn run(root: PathBuf, tree: Tree, args: &ServeArgs) -> Result<ExitCode> {
         .enable_all()
         .build()
         .context("starting the async runtime")?;
-    let config = crate::config::file();
     let port = match args.port {
         Some(port) => port,
-        None => crate::config::load(&config)?.config.server.port,
+        None => {
+            crate::config::load(&crate::config::file())?
+                .config
+                .server
+                .port
+        }
     };
-    runtime.block_on(serve(root, tree, config, port, args.open))?;
+    runtime.block_on(serve(root, tree, port, args.open))?;
     Ok(ExitCode::SUCCESS)
 }
 
@@ -180,8 +183,8 @@ pub fn run(root: PathBuf, tree: Tree, args: &ServeArgs) -> Result<ExitCode> {
 /// # Errors
 ///
 /// Fails when the port cannot be bound or the watcher cannot be installed.
-async fn serve(root: PathBuf, tree: Tree, config: PathBuf, port: u16, open: bool) -> Result<()> {
-    let state = State::new(root.clone(), tree, config);
+async fn serve(root: PathBuf, tree: Tree, port: u16, open: bool) -> Result<()> {
+    let state = State::new(root.clone(), tree);
     let _watcher = watch::start(state.clone()).context("watching the content repository")?;
     let address = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
     let listener = tokio::net::TcpListener::bind(address)
@@ -263,11 +266,7 @@ mod tests {
 
     /// Sends a GET to a router over `repo` and returns the status and body.
     async fn get(repo: &Repo, path: &str) -> (StatusCode, Vec<u8>, Option<String>) {
-        let state = State::new(
-            repo.root().to_path_buf(),
-            Tree::load(repo.root()).unwrap(),
-            repo.root().join("config.toml"),
-        );
+        let state = State::new(repo.root().to_path_buf(), Tree::load(repo.root()).unwrap());
         let response = router(state)
             .oneshot(Request::get(path).body(Body::empty()).unwrap())
             .await
@@ -415,20 +414,15 @@ mod tests {
         assert!(String::from_utf8(body).unwrap().contains("<html"));
     }
 
-    /// Sends a request with a JSON body to a router over `repo`, whose dashboard
-    /// pins live in `config`, and returns the status and the parsed body.
+    /// Sends a request with a JSON body to a router over `repo` and returns the
+    /// status and the parsed body.
     async fn send(
         repo: &Repo,
-        config: &std::path::Path,
         method: &str,
         path: &str,
         body: serde_json::Value,
     ) -> (StatusCode, serde_json::Value) {
-        let state = State::new(
-            repo.root().to_path_buf(),
-            Tree::load(repo.root()).unwrap(),
-            config.to_path_buf(),
-        );
+        let state = State::new(repo.root().to_path_buf(), Tree::load(repo.root()).unwrap());
         let request = Request::builder()
             .method(method)
             .uri(path)
@@ -444,88 +438,80 @@ mod tests {
     #[tokio::test]
     async fn patching_an_item_answers_its_updated_row_or_the_reason_it_was_refused() {
         let repo = sample();
-        let config = repo.root().join("config.toml");
         let path = "tree/p/tasks/T001-a.md";
         let edit = |from: &str, to: &str| serde_json::json!({ "path": path, "changes": { "status": { "from": from, "to": to } } });
-        let (status, body) = send(
-            &repo,
-            &config,
-            "PATCH",
-            "/api/items",
-            edit("a-faire", "zzz"),
-        )
-        .await;
+        let (status, body) = send(&repo, "PATCH", "/api/items", edit("a-faire", "zzz")).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
         assert!(body["error"].is_string());
-        let (status, body) = send(
-            &repo,
-            &config,
-            "PATCH",
-            "/api/items",
-            edit("other", "a-faire"),
-        )
-        .await;
+        let (status, body) = send(&repo, "PATCH", "/api/items", edit("other", "a-faire")).await;
         assert_eq!(status, StatusCode::CONFLICT);
         assert_eq!(body["current"]["status"], "a-faire");
         let outside = serde_json::json!({ "path": "Cargo.toml", "changes": { "size": { "from": null, "to": "S" } } });
-        let (status, _) = send(&repo, &config, "PATCH", "/api/items", outside).await;
+        let (status, _) = send(&repo, "PATCH", "/api/items", outside).await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
         let sized =
             serde_json::json!({ "path": path, "changes": { "size": { "from": null, "to": "M" } } });
-        let (status, body) = send(&repo, &config, "PATCH", "/api/items", sized).await;
+        let (status, body) = send(&repo, "PATCH", "/api/items", sized).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["size"], "M");
         assert_eq!(body["id"], "T001");
     }
 
     #[tokio::test]
-    async fn the_dashboard_pins_round_trip_through_the_config_file() {
+    async fn the_dashboard_pins_round_trip_through_the_settings_file() {
         let repo = sample();
-        let config = repo.root().join("ariane/config.toml");
-        std::fs::create_dir_all(config.parent().unwrap()).unwrap();
-        std::fs::write(&config, "# keep me\nrepo = \"x\"\n").unwrap();
-        let (status, body) = send(
-            &repo,
-            &config,
-            "GET",
-            "/api/dashboard",
-            serde_json::Value::Null,
-        )
-        .await;
+        let settings = repo.root().join("settings.toml");
+        std::fs::write(&settings, "# keep me\nversion = 1\n").unwrap();
+        let (status, body) = send(&repo, "GET", "/api/dashboard", serde_json::Value::Null).await;
         assert_eq!(status, StatusCode::OK);
         assert_eq!(body["pinned"], serde_json::json!([]));
         let (status, _) = send(
             &repo,
-            &config,
             "PUT",
             "/api/dashboard",
             serde_json::json!({ "pinned": ["p", ""] }),
         )
         .await;
         assert_eq!(status, StatusCode::OK);
-        let (_, body) = send(
-            &repo,
-            &config,
-            "GET",
-            "/api/dashboard",
-            serde_json::Value::Null,
-        )
-        .await;
+        let (_, body) = send(&repo, "GET", "/api/dashboard", serde_json::Value::Null).await;
         assert_eq!(body["pinned"], serde_json::json!(["p", ""]));
         assert!(
-            std::fs::read_to_string(&config)
+            std::fs::read_to_string(&settings)
                 .unwrap()
-                .starts_with("# keep me\nrepo = \"x\"\n")
+                .starts_with("# keep me\nversion = 1\n")
         );
         let (status, _) = send(
             &repo,
-            &config,
             "PUT",
             "/api/dashboard",
             serde_json::json!({ "pinned": ["nope"] }),
         )
         .await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[tokio::test]
+    async fn the_theme_is_read_and_set_through_the_settings_file() {
+        let repo = sample();
+        let (status, body, _) = get(&repo, "/api/settings").await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            json(&body)["theme"]["primary"],
+            crate::settings::DEFAULT_COLOR
+        );
+        let theme = serde_json::json!({ "primary": "#AA0000", "secondary": "#00aa00" });
+        let (status, body) = send(&repo, "PUT", "/api/settings/theme", theme).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["theme"]["primary"], "#aa0000");
+        let (_, body, _) = get(&repo, "/api/settings").await;
+        assert_eq!(
+            json(&body),
+            serde_json::to_value(crate::settings::load(repo.root()).unwrap()).unwrap()
+        );
+        let bad = serde_json::json!({ "primary": "red", "secondary": "#00aa00" });
+        let (status, body) = send(&repo, "PUT", "/api/settings/theme", bad).await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(body["error"].as_str().unwrap().contains("red"));
     }
 
     /// Replaces the fixture's repository by a fresh one with its own identity,
@@ -551,11 +537,9 @@ mod tests {
     #[tokio::test]
     async fn committing_needs_a_message_and_something_to_commit() {
         let repo = sample();
-        let config = repo.root().join("config.toml");
         reinit_git(&repo);
         let (status, _) = send(
             &repo,
-            &config,
             "POST",
             "/api/commit",
             serde_json::json!({ "message": "  " }),
@@ -564,7 +548,6 @@ mod tests {
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
         let (status, body) = send(
             &repo,
-            &config,
             "POST",
             "/api/commit",
             serde_json::json!({ "message": "import" }),
@@ -574,7 +557,6 @@ mod tests {
         assert!(body["commit"].is_string());
         let (status, _) = send(
             &repo,
-            &config,
             "POST",
             "/api/commit",
             serde_json::json!({ "message": "again" }),
@@ -586,11 +568,9 @@ mod tests {
     #[tokio::test]
     async fn a_changed_file_shows_its_diff_and_can_be_discarded() {
         let repo = sample();
-        let config = repo.root().join("config.toml");
         reinit_git(&repo);
         send(
             &repo,
-            &config,
             "POST",
             "/api/commit",
             serde_json::json!({ "message": "import" }),
@@ -610,7 +590,6 @@ mod tests {
         for refused in ["/etc/passwd", "tree/../config.toml", "config.toml"] {
             let (status, _) = send(
                 &repo,
-                &config,
                 "POST",
                 "/api/discard",
                 serde_json::json!({ "paths": [refused] }),
@@ -620,7 +599,6 @@ mod tests {
         }
         let (status, body) = send(
             &repo,
-            &config,
             "POST",
             "/api/discard",
             serde_json::json!({ "paths": ["tree/p/tasks/T001-a.md"] }),
@@ -632,25 +610,14 @@ mod tests {
             serde_json::json!(["tree/p/tasks/T001-a.md"])
         );
         assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
-        let (status, _) = send(
-            &repo,
-            &config,
-            "POST",
-            "/api/discard",
-            serde_json::json!({}),
-        )
-        .await;
+        let (status, _) = send(&repo, "POST", "/api/discard", serde_json::json!({})).await;
         assert_eq!(status, StatusCode::CONFLICT);
     }
 
     #[tokio::test]
     async fn the_event_stream_ends_when_the_server_stops() {
         let repo = sample();
-        let state = State::new(
-            repo.root().to_path_buf(),
-            Tree::load(repo.root()).unwrap(),
-            repo.root().join("config.toml"),
-        );
+        let state = State::new(repo.root().to_path_buf(), Tree::load(repo.root()).unwrap());
         let response = router(state.clone())
             .oneshot(Request::get("/api/events").body(Body::empty()).unwrap())
             .await
@@ -670,11 +637,7 @@ mod tests {
     #[tokio::test]
     async fn a_reload_swaps_the_tree_and_notifies_subscribers() {
         let repo = sample();
-        let state = State::new(
-            repo.root().to_path_buf(),
-            Tree::load(repo.root()).unwrap(),
-            repo.root().join("config.toml"),
-        );
+        let state = State::new(repo.root().to_path_buf(), Tree::load(repo.root()).unwrap());
         let mut changes = state.changes.subscribe();
         repo.write(
             "p/tasks/T002-b.md",

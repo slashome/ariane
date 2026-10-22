@@ -4,8 +4,9 @@
 //! inotify on Linux). They come in bursts — a `git checkout` touches hundreds of
 //! files — so they are debounced: after the first event the watcher waits for
 //! [`QUIET`] without new ones, then reloads the whole tree once and announces it
-//! (ADR-0012). `tree/` is watched recursively; `.git/` only at its top level,
-//! where `HEAD` and `index` change on checkout, commit and staging.
+//! (ADR-0012). `tree/` is watched recursively; the repository root and `.git/`
+//! only at their top level: the root holds `settings.toml`, and `.git/` holds
+//! `HEAD` and `index`, which change on checkout, commit and staging.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -19,7 +20,7 @@ use super::State;
 /// How long the disk must stay quiet before a burst of events triggers a reload.
 const QUIET: Duration = Duration::from_millis(300);
 
-/// Starts watching `tree/` and `.git/` and reloading `state` after each burst.
+/// Starts watching `tree/`, the root and `.git/` and reloading `state` after each burst.
 ///
 /// The returned watcher must be kept alive: dropping it stops the watch. The OS
 /// callback runs on a thread of `notify`, so it only forwards a signal through
@@ -40,6 +41,9 @@ pub fn start(state: Arc<State>) -> Result<RecommendedWatcher> {
     watcher
         .watch(&state.root.join("tree"), RecursiveMode::Recursive)
         .context("watching tree/")?;
+    watcher
+        .watch(&state.root, RecursiveMode::NonRecursive)
+        .context("watching the repository root")?;
     let git = state.root.join(".git");
     if git.is_dir() {
         watcher
