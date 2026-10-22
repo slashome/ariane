@@ -2,7 +2,7 @@
 //!
 //! `ariane` manages an Ariane content repository: a git repository whose `tree/`
 //! directory mirrors the user's projects as nodes, each holding items (tasks,
-//! stories, backlog items, reflexions, ressources) as Markdown files with a YAML
+//! stories, reflexions, ressources) as Markdown files with a YAML
 //! front-matter (SPEC.md §1, ADR-0008).
 //!
 //! This file only wires things together: it parses the command line ([`cli`]),

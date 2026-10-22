@@ -341,6 +341,31 @@ category = "done"
     }
 
     #[test]
+    fn an_item_of_the_former_backlog_directory_is_a_task_to_move() {
+        let repo = base();
+        repo.write("p/backlog/T1-a.md", &task("p", "T1", ""));
+        only(&repo, Check::LegacyDirectory);
+        let tree = Tree::load(repo.root()).unwrap();
+        let finding = diagnose(&tree, None, false).remove(0);
+        assert_eq!(finding.severity, Severity::Error);
+        assert_eq!(
+            finding.remedy,
+            Remedy::Command {
+                command: "ariane fix --node p".to_owned()
+            }
+        );
+        repo.write("p/archives/backlog/x.md", "# x\n");
+        assert_eq!(
+            checks(&repo),
+            vec![
+                Check::LegacyDirectory,
+                Check::NoHeader,
+                Check::LegacyDirectory
+            ]
+        );
+    }
+
+    #[test]
     fn a_file_named_by_its_bare_id_or_another_id_is_reported() {
         let repo = base();
         repo.write("p/tasks/T1.md", &task("p", "T1", ""));

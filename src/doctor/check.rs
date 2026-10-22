@@ -4,7 +4,8 @@
 //!
 //! 1. **structural**: unreadable files, invalid `node.toml`, nodes without
 //!    `INDEX.md`;
-//! 2. **per item**: the schema version first (a file that needs `migrate` gets
+//! 2. **per item**: the directory first (an item still in the former
+//!    `backlog/` is reported, and checked on), then the schema version (a file that needs `migrate` gets
 //!    that single finding and nothing else), then every core key by iterating
 //!    the declarative table [`CORE_KEYS`](crate::schema::CORE_KEYS), then the checks that depend on
 //!    context: `node` against the file's location, `status` against the node's
@@ -105,6 +106,13 @@ fn check_item(
     found: &mut Vec<Finding>,
 ) {
     let mut report = Reporter { tree, item, found };
+    if item.legacy {
+        report.error(
+            Check::LegacyDirectory,
+            "the item sits in `backlog/`, which is no longer an item directory: a backlog item is a task whose status is in the `backlog` category",
+            Remedy::fix(&item.node),
+        );
+    }
     let mapping = match &item.document.header {
         Header::Missing => {
             report.error(

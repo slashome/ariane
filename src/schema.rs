@@ -155,7 +155,6 @@ pub const CORE_KEYS: &[CoreKey] = &[
         by_kind: &[
             (Kind::Task, Requirement::Must),
             (Kind::Story, Requirement::Must),
-            (Kind::Backlog, Requirement::Must),
             (Kind::Reflexion, Requirement::Must),
             (Kind::Ressource, Requirement::MustNot),
         ],
@@ -174,10 +173,9 @@ pub const CORE_KEYS: &[CoreKey] = &[
 ];
 
 /// Every item kind, in the order `ariane schema --json` lists them.
-pub const KINDS: [Kind; 6] = [
+pub const KINDS: [Kind; 5] = [
     Kind::Task,
     Kind::Story,
-    Kind::Backlog,
     Kind::Reflexion,
     Kind::Ressource,
     Kind::Unknown,
@@ -201,13 +199,13 @@ pub fn keys_of_type(value: ValueType) -> impl Iterator<Item = &'static str> {
         .map(|key| key.name)
 }
 
-/// Letter that starts a new id for an item of `kind`: T task or backlog, S story, R reflexion, D ressource (SPEC.md §1.4).
+/// Letter that starts a new id for an item of `kind`: T task, S story, R reflexion, D ressource (SPEC.md §1.4).
 pub fn id_prefix(kind: Kind) -> char {
     match kind {
         Kind::Story => 'S',
         Kind::Reflexion => 'R',
         Kind::Ressource => 'D',
-        Kind::Task | Kind::Backlog | Kind::Unknown => 'T',
+        Kind::Task | Kind::Unknown => 'T',
     }
 }
 
@@ -349,7 +347,6 @@ mod tests {
     #[test]
     fn ids_take_a_prefix_by_kind() {
         assert_eq!(id_prefix(Kind::Task), 'T');
-        assert_eq!(id_prefix(Kind::Backlog), 'T');
         assert_eq!(id_prefix(Kind::Story), 'S');
         assert_eq!(id_prefix(Kind::Reflexion), 'R');
         assert_eq!(id_prefix(Kind::Ressource), 'D');

@@ -12,9 +12,11 @@ Decided in [ADR-0008](docs/adr/0008-give-every-item-a-versioned-front-matter.md)
 
 ### 1.1 Scope
 
-An **item** is a Markdown file inside one of a node's item directories (`backlog/`, `tasks/`, `stories/`, `reflexions/`, `ressources/`, `archives/` and their subdirectories). `INDEX.md`, `HANDOFF.md` and `README.md` are not items.
+An **item** is a Markdown file inside one of a node's item directories (`tasks/`, `stories/`, `reflexions/`, `ressources/`, `archives/` and their subdirectories). `INDEX.md`, `HANDOFF.md` and `README.md` are not items.
 
 The **kind** of an item is given by its directory. The header MUST NOT carry it.
+
+A backlog item is a task whose status belongs to the `backlog` category (§1.5), not a kind of its own. `backlog/` is a former item directory: an item found there MUST be moved into `tasks/` (`archives/backlog/` into `archives/tasks/`). Until it is, tools read it as a task.
 
 ### 1.2 Form
 
@@ -30,7 +32,7 @@ Keys MUST be written in English, in lower case, with `_` as the word separator. 
 | `node` | string | **MUST** | The logical path of the node holding the file, e.g. `cmc/cmc-lib`. MUST equal the file's location under `tree/`; for an item of the home node, directly under `tree/`, it is the empty string `''`. |
 | `id` | string | **MUST** | Matches `^[A-Za-z][A-Za-z0-9-]*$`. Unique within the node. |
 | `title` | string | **MUST** | Non-empty. |
-| `status` | string | MUST for tasks, stories and backlog items; MUST for reflexions; MUST NOT for ressources | A status id from the node's workflow (§1.5). Reflexions use `open`, `trial` (a decision applied on trial, not yet confirmed) or `settled`. |
+| `status` | string | MUST for tasks and stories; MUST for reflexions; MUST NOT for ressources | A status id from the node's workflow (§1.5). Reflexions use `open`, `trial` (a decision applied on trial, not yet confirmed) or `settled`. |
 | `type` | string | MAY | A classification declared by the node (`[fields.type]` in `node.toml`); free when undeclared. |
 | `parent` | reference | MAY | One item reference (§1.4). |
 | `depends_on` | list of references | MAY | Item references (§1.4). |
@@ -53,7 +55,7 @@ The body of the item MUST NOT restate in prose a fact the header carries.
 - Inside the same node, an item is referenced by its bare id: `T022`.
 - Across nodes, an item is referenced as `<node>#<id>`: `slashome/pharmakon#T022`.
 - A file name MUST begin with the item's id followed by `-` and a slug: `T022-tirage-du-temperament.md`.
-- An id SHOULD start with the prefix of its kind followed by a number: `T` for tasks and backlog items, `S` for stories, `R` for reflexions, `D` for ressources (`T038`, `S004`, `R012`, `D002`). `ariane migrate` allocates ids this way, per node and per prefix.
+- An id SHOULD start with the prefix of its kind followed by a number: `T` for tasks, `S` for stories, `R` for reflexions, `D` for ressources (`T038`, `S004`, `R012`, `D002`). `ariane migrate` allocates ids this way, per node and per prefix.
 
 ### 1.5 `node.toml`
 
@@ -104,6 +106,7 @@ The order of entries is the display order.
 | A custom key declared in `node.toml` has a value of the wrong type | error |
 | A required custom key is missing | error |
 | A file name that does not begin with the item's `id`, `-` and a slug | error — remedy: `ariane fix` (renames to `<id>-<current name>` and rewrites the links); a human when the name is the bare id |
+| An item in `backlog/` or `archives/backlog/` | error — remedy: `ariane fix` (moves it into `tasks/` or `archives/tasks/` and rewrites the links) |
 | A custom key not declared in any applicable `node.toml` | warning |
 
 ### 1.7 Examples
