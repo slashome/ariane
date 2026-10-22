@@ -26,7 +26,7 @@ use crate::schema::{
     self, CORE_KEYS, CoreKey, REFLEXION_CLOSED, REFLEXION_STATUSES, Requirement, ValueType,
     is_date, is_external, is_valid_id,
 };
-use crate::tree::{Item, NodePath, Tree};
+use crate::tree::{Item, NodePath, Tree, parse_reference};
 
 /// Runs every check on the items of `scope` (the whole tree when `None`) and
 /// returns the findings in report order.
@@ -637,17 +637,6 @@ fn mismatch(decl: &FieldDecl, value: &Value, node: &NodePath) -> Option<String> 
         FieldType::ListOfRefs => "a list of references".to_owned(),
         FieldType::Enum => format!("one of: {}", decl.values.join(", ")),
     })
-}
-
-/// Parses a reference: `T022` stands for an item of the `current` node,
-/// `node/path#T022` for an item of another node. `None` when the id part is not
-/// a valid id. `bool::then` turns a condition into an `Option`.
-pub fn parse_reference(raw: &str, current: &NodePath) -> Option<(NodePath, String)> {
-    let (node, id) = match raw.split_once('#') {
-        Some((node, id)) => (NodePath::new(node), id),
-        None => (current.clone(), raw),
-    };
-    is_valid_id(id).then(|| (node, id.to_owned()))
 }
 
 /// The value as a string when it is one and is not blank.

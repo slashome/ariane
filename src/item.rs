@@ -21,7 +21,10 @@ pub const LEGACY_BACKLOG: &str = "backlog";
 
 /// The nature of an item, given by the directory it sits in, never by its header
 /// (SPEC.md §1.1).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+///
+/// `clap::ValueEnum` lets `ariane tasks --kind` accept the same words the JSON
+/// uses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, clap::ValueEnum)]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
     /// An item in `tasks/`, or in the former `backlog/` directory (SPEC.md §1.1).

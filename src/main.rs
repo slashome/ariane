@@ -10,6 +10,7 @@
 //! hands it to the module that implements the requested command:
 //!
 //! - `ariane tasks` → [`tasks`], lists items;
+//! - `ariane show` → [`show`], one item with its body and relations ([`relations`]);
 //! - `ariane doctor` → [`doctor`], checks items without writing (ADR-0004);
 //! - `ariane migrate` → [`migrate`], upgrades items to the current schema (ADR-0009);
 //! - `ariane schema` → [`schema`], prints the header schema; it needs no repository;
@@ -26,12 +27,16 @@ mod config;
 mod doctor;
 /// `ariane fix`: the deterministic repairs of `doctor` findings.
 mod fix;
+/// When each item file last changed, according to git.
+mod history;
 /// One item file: its front-matter and its body.
 mod item;
 /// `ariane migrate`: schema migrations of item files.
 mod migrate;
 /// `node.toml`: custom fields and status workflows of a node.
 mod node;
+/// Parents, children, dependencies and dependents of items.
+mod relations;
 /// Discovery of the content repository on disk.
 mod repo;
 /// The core header schema, declared once as data.
@@ -39,6 +44,8 @@ mod schema;
 mod serve;
 /// `ariane service`: the server as a background service.
 mod service;
+/// `ariane show`: one item with its header, body and relations.
+mod show;
 /// `ariane tasks`: the list of items.
 mod tasks;
 /// The whole content repository loaded in memory.
@@ -90,6 +97,7 @@ fn run() -> Result<ExitCode> {
             let scope = scope(args.node.as_deref(), args.all, here);
             tasks::run(&tree, &args, scope.as_ref())
         }
+        cli::Command::Show(args) => show::run(&tree, &args, here.filter(|node| !node.is_home())),
         cli::Command::Doctor(args) => {
             let scope = scope(args.node.as_deref(), args.all, here);
             doctor::run(&tree, &args, scope.as_ref())

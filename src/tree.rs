@@ -21,6 +21,7 @@ use serde::Serialize;
 
 use crate::item::{Document, Kind, LEGACY_BACKLOG};
 use crate::node::Configs;
+use crate::schema::is_valid_id;
 
 /// File that makes a directory a node even when it holds no item (PLAN §2).
 const INDEX: &str = "INDEX.md";
@@ -103,6 +104,24 @@ impl fmt::Display for NodePath {
     }
 }
 
+/// Parses a reference (SPEC.md §1.4): `T022` stands for an item of the
+/// `current` node, `node/path#T022` for an item of another node, `#T022` for
+/// an item of the home node. `None` when the id part is not a valid id.
+/// `bool::then` turns a condition into an `Option`.
+pub fn parse_reference(raw: &str, current: &NodePath) -> Option<(NodePath, String)> {
+    let (node, id) = match raw.split_once('#') {
+        Some((node, id)) => (NodePath::new(node), id),
+        None => (current.clone(), raw),
+    };
+    is_valid_id(id).then(|| (node, id.to_owned()))
+}
+
+/// The reference of the item `id` of `node` written so that it reads the same
+/// from any node: `<node>#<id>`, `#<id>` for the home node.
+pub fn full_reference(node: &NodePath, id: &str) -> String {
+    format!("{}#{id}", node.as_str())
+}
+
 /// A directory of the tree that is a node.
 #[derive(Debug)]
 pub struct Node {
@@ -129,6 +148,18 @@ pub struct Item {
     pub relative: PathBuf,
     /// The parsed header and the body.
     pub document: Document,
+}
+
+impl Item {
+    /// The item's `id`, when its header carries a valid one.
+    pub fn id(&self) -> Option<&str> {
+        self.document.text("id").filter(|id| is_valid_id(id))
+    }
+
+    /// The item's reference as read from any node, `<node>#<id>`.
+    pub fn reference(&self) -> Option<String> {
+        self.id().map(|id| full_reference(&self.node, id))
+    }
 }
 
 /// The whole content repository: nodes, items, `node.toml` files, and what could not be read.
