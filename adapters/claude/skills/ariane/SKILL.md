@@ -37,7 +37,7 @@ external:
 
 - Keys are English; the content keeps its language. The kind comes from the directory, never from the header.
 - `id`: `T` task or backlog item, `S` story, `R` reflexion, `D` ressource, numbered after the highest id of that prefix in the node; unique within the node; referenced across nodes as `acme/web#T009`.
-- File name: the id, a `-` and a slug of the title — `T009-login-form.md`. A new id (promotion) renames the file; `ariane doctor` reports any other name as an error with its `git mv`.
+- File name: the id, a `-` and a slug of the title — `T009-login-form.md`. Never rename by hand: after a new id (promotion), `ariane fix --apply` renames the file and rewrites the links to it.
 - `status`: an id of the node's workflow (its `node.toml`, inherited from ancestors, else the default `backlog`, `todo`, `in_progress`, `blocked`, `done`, `dropped`). Reflexions use `open`, `trial` or `settled`; ressources have no status.
 - `size` `XS`…`XL`, `impact` and `priority` `low`/`medium`/`high`, `created` `YYYY-MM-DD` — only when actually known, never from git.
 - `external`: the item's own ticket, `monday:<pulse id>` — never a board id, never another item's ticket.
@@ -62,6 +62,7 @@ external:
 | `ariane tasks --json` | State of the items: id, title, status and category, size, impact, priority, created, path. |
 | `ariane doctor` | Check after every write. Exit `0` clean, `1` a command repairs it, `2` a human decision. Writes nothing. |
 | `ariane migrate` | Legacy items to the current header: dry run by default, `--apply` to write. |
+| `ariane fix` | The repairs `doctor` names as `ariane fix`: file names after the id, links rewritten. Dry run by default, `--apply` to write. |
 | `ariane schema --json` | Core keys and vocabularies. |
 | `ariane serve --open` | The interface: dashboard, task list, kanban, size × impact. |
 | `ariane config get\|set <key>` | The configuration; set the content repository with `ariane config set repo <path>`. |

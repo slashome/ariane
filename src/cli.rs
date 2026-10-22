@@ -42,6 +42,10 @@ pub enum Command {
     Doctor(DoctorArgs),
     #[command(about = "Bring items to the current schema version")]
     Migrate(MigrateArgs),
+    #[command(
+        about = "Apply the repairs doctor names: item files named after their id, links kept"
+    )]
+    Fix(FixArgs),
     #[command(about = "Print the item header schema")]
     Schema(SchemaArgs),
     #[command(about = "Serve the web interface on 127.0.0.1")]
@@ -120,6 +124,33 @@ pub struct MigrateArgs {
     #[arg(
         long,
         help = "Write the migrated files. Without it, print the changes and write nothing"
+    )]
+    pub apply: bool,
+
+    #[arg(long)]
+    pub json: bool,
+}
+
+/// Arguments of `ariane fix`: an optional node scope, `apply` to write the
+/// repairs (a dry run otherwise), and `json` to print the plan as JSON.
+#[derive(Args)]
+pub struct FixArgs {
+    #[arg(
+        long,
+        help = "Only repair the items of this node and its descendants (default: the node of the current directory)"
+    )]
+    pub node: Option<String>,
+
+    #[arg(
+        long,
+        conflicts_with = "node",
+        help = "Cover the whole tree, wherever the command runs"
+    )]
+    pub all: bool,
+
+    #[arg(
+        long,
+        help = "Write the repairs. Without it, print the plan and write nothing"
     )]
     pub apply: bool,
 

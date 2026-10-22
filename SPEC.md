@@ -103,7 +103,7 @@ The order of entries is the display order.
 | `size`, `impact`, `priority` or `created` outside its vocabulary or format | error |
 | A custom key declared in `node.toml` has a value of the wrong type | error |
 | A required custom key is missing | error |
-| A file name that does not begin with the item's `id`, `-` and a slug | error — remedy: `git mv` to `<id>-<current name>` |
+| A file name that does not begin with the item's `id`, `-` and a slug | error — remedy: `ariane fix` (renames to `<id>-<current name>` and rewrites the links); a human when the name is the bare id |
 | A custom key not declared in any applicable `node.toml` | warning |
 
 ### 1.7 Examples
