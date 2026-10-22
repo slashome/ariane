@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { useItemFilters } from '@/features/filter-items'
@@ -21,10 +21,13 @@ const items = [
   makeItem({ node: 'slashome/ariane', id: 'T5' }),
 ]
 
-const options = () =>
-  within(screen.getByRole('combobox', { name: 'Node' }))
-    .getAllByRole('option')
-    .map((option) => option.textContent?.replace(/\u00a0/g, ' '))
+// Opens the node select and reads its options, then closes it.
+async function options(): Promise<string[]> {
+  await userEvent.click(screen.getByRole('combobox', { name: 'Node' }))
+  const labels = (await screen.findAllByRole('option')).map((option) => option.textContent ?? '')
+  await userEvent.keyboard('{Escape}')
+  return labels
+}
 
 function Scope() {
   const { filters } = useItemFilters()
@@ -55,10 +58,8 @@ afterEach(() => {
 describe('NodeSwitcher', () => {
   it('lists the nodes as a tree and shows the full path of the one in scope', async () => {
     renderAt('/?node=cmc/cmc-lib')
-    const select = screen.getByRole('combobox', { name: 'Node' })
-    await within(select).findByRole('option', { name: /cmc-lib/ })
-    await within(select).findByRole('option', { name: /cmc-lib \(2\)/ })
-    expect(options()).toEqual([
+    await screen.findByText('(2)')
+    expect(await options()).toEqual([
       'All nodes',
       '(home) (0)',
       'cmc (1)',
@@ -78,10 +79,12 @@ describe('NodeSwitcher', () => {
     expect(screen.getByLabelText('scope')).toHaveTextContent('cmc without sub-nodes')
     await userEvent.click(toggle)
     expect(screen.getByLabelText('scope')).toHaveTextContent('cmc with sub-nodes')
-    expect(options()).toContain('cmc (3)')
-    expect(options()).toContain('(home) (4)')
+    const withSubNodes = await options()
+    expect(withSubNodes).toContain('cmc (3)')
+    expect(withSubNodes).toContain('(home) (4)')
     expect(localStorage.getItem('ariane.scope.descendants')).toBe('1')
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Node' }), '*')
+    await userEvent.click(screen.getByRole('combobox', { name: 'Node' }))
+    await userEvent.click(await screen.findByRole('option', { name: 'All nodes' }))
     expect(screen.queryByRole('switch', { name: 'Include the sub-nodes' })).not.toBeInTheDocument()
   })
 })
@@ -89,7 +92,8 @@ describe('NodeSwitcher', () => {
 describe('NodeSwitcher counts', () => {
   it('count the archived items when the archive toggle is on', async () => {
     renderAt('/?node=cmc/cmc-frontend&archived=1')
-    await within(screen.getByRole('combobox', { name: 'Node' })).findByRole('option', { name: /cmc-frontend \(1\)/ })
+    await screen.findByText('(1)')
+    expect(await options()).toContain('├─ cmc-frontend (1)')
     expect(screen.getByText('cmc/cmc-frontend')).toBeInTheDocument()
   })
 })
