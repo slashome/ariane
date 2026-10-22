@@ -35,6 +35,8 @@ pub struct Row<'a> {
     pub impact: Option<&'a str>,
     pub priority: Option<&'a str>,
     pub created: Option<&'a str>,
+    /// Links to external trackers, as `<connector>:<id>` (ADR-0011); empty when unbound.
+    pub external: Vec<&'a str>,
     /// Schema version of the file; `None` for a file not migrated yet.
     pub version: Option<u64>,
     /// Path of the file relative to the repository root.
@@ -84,6 +86,7 @@ pub fn row<'a>(tree: &Tree, item: &'a Item) -> Row<'a> {
         impact: document.text("impact"),
         priority: document.text("priority"),
         created: document.text("created"),
+        external: document.texts("external"),
         version: document.version(),
         path: item.relative.to_string_lossy().into_owned(),
     }
