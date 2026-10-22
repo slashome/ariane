@@ -24,6 +24,8 @@ mod cli;
 mod config;
 /// `ariane doctor`: validation of items and nodes.
 mod doctor;
+/// `ariane fix`: the deterministic repairs of `doctor` findings.
+mod fix;
 /// One item file: its front-matter and its body.
 mod item;
 /// `ariane migrate`: schema migrations of item files.
@@ -95,6 +97,10 @@ fn run() -> Result<ExitCode> {
         cli::Command::Migrate(args) => {
             let scope = scope(args.node.as_deref(), args.all, here);
             migrate::run(&tree, &args, scope.as_ref())
+        }
+        cli::Command::Fix(args) => {
+            let scope = scope(args.node.as_deref(), args.all, here);
+            fix::run(&tree, &args, scope.as_ref())
         }
         cli::Command::Schema(args) => schema_command(&args),
         cli::Command::Serve(args) => serve::run(location.root, tree, &args),

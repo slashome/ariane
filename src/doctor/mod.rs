@@ -335,8 +335,7 @@ category = "done"
         assert_eq!(
             finding.remedy,
             Remedy::Command {
-                command: "git mv tree/p/tasks/alleger-la-doc.md tree/p/tasks/T2-alleger-la-doc.md"
-                    .to_owned()
+                command: "ariane fix --node p".to_owned()
             }
         );
     }

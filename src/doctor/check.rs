@@ -18,6 +18,7 @@ use std::path::Path;
 use yaml_serde::{Mapping, Value};
 
 use super::finding::{Check, Finding, Remedy, Severity};
+use crate::fix;
 use crate::item::{Header, SCHEMA_VERSION};
 use crate::node::{Effective, FILE as NODE_FILE, FieldDecl, FieldType};
 use crate::schema::{
@@ -345,8 +346,8 @@ impl Reporter<'_> {
 
     /// Reports a file whose name does not begin with the item's `id`, a `-` and
     /// a slug (SPEC.md §1.4). Only a valid `id` is compared: a missing or
-    /// malformed one is already reported. The remedy keeps the current name as
-    /// the slug, unless that name is the bare id.
+    /// malformed one is already reported. `ariane fix` repairs it, links
+    /// included, unless no slug is left to keep: then a human chooses one.
     fn file_name(&mut self, mapping: &Mapping) {
         let Some(id) = mapping.get("id").and_then(Value::as_str) else {
             return;
@@ -362,36 +363,17 @@ impl Reporter<'_> {
         else {
             return;
         };
-        let prefix = format!("{id}-");
-        if stem
-            .strip_prefix(&prefix)
-            .is_some_and(|slug| !slug.is_empty())
-        {
+        if fix::conforms(id, &stem) {
             return;
         }
-        let message = format!("the file name does not begin with `{prefix}` followed by a slug");
-        if stem == id {
-            self.error(
-                Check::FileName,
-                message,
-                Remedy::human([format!(
-                    "rename the file `{prefix}<slug>.md`, the slug summing up its title"
-                )]),
-            );
-            return;
-        }
-        let from = relative(self.tree, &self.item.file);
-        let to = relative(
-            self.tree,
-            &self.item.file.with_file_name(format!("{prefix}{stem}.md")),
-        );
-        self.error(
-            Check::FileName,
-            message,
-            Remedy::Command {
-                command: format!("git mv {from} {to}"),
-            },
-        );
+        let message = format!("the file name does not begin with `{id}-` followed by a slug");
+        let remedy = match fix::target_stem(id, &stem) {
+            Some(_) => Remedy::fix(&self.item.node),
+            None => Remedy::human([format!(
+                "rename the file `{id}-<slug>.md`, the slug summing up its title, with `git mv`, and update the links to it"
+            )]),
+        };
+        self.error(Check::FileName, message, remedy);
     }
 
     /// Reports a `node` key that disagrees with where the file sits.

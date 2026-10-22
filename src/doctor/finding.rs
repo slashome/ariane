@@ -51,6 +51,16 @@ impl Remedy {
         Remedy::Command { command }
     }
 
+    /// The remedy `ariane fix`, scoped to `node` unless it is the home node.
+    pub fn fix(node: &NodePath) -> Remedy {
+        let command = if node.is_home() {
+            "ariane fix".to_owned()
+        } else {
+            format!("ariane fix --node {}", node.as_str())
+        };
+        Remedy::Command { command }
+    }
+
     /// A human remedy built from any list of strings.
     ///
     /// The generic parameters accept an array of `&str`, a `Vec<String>`, or any

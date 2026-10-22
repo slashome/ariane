@@ -41,6 +41,7 @@ The `ariane` CLI ([ADR-0005](../../docs/adr/0005-write-ariane-in-rust.md)) is ho
 | `ariane tasks --json` | The state of every item: id, title, status and its category, size, impact, priority, created. |
 | `ariane doctor` | After every write. Exit `0` clean, `1` repairable by a command, `2` a human decision. Never writes. |
 | `ariane migrate` | Bringing legacy items to the current header: dry run first, `--apply` to write. |
+| `ariane fix` | Applying the repairs `doctor` names as `ariane fix` — today, file names after the id with their links rewritten: dry run first, `--apply` to write. |
 | `ariane schema --json` | The core keys and vocabularies, when a value's validity is in doubt. |
 | `ariane serve` | The interface (dashboard, task list, kanban, size × impact) — she points the user to it. |
 | `ariane config` | `path`, `get`, `set`, `edit`, `init`: the configuration file. The content repository used from anywhere is set with `ariane config set repo <path>`. |
@@ -54,7 +55,7 @@ The `ariane` CLI ([ADR-0005](../../docs/adr/0005-write-ariane-in-rust.md)) is ho
 | "Where are we?" | Reads the node's `INDEX.md` for priorities and blockers, `ariane tasks --json` for the live state, and flags what contradicts. |
 | "What's next?" | Returns the top actionable item according to the `INDEX.md` priorities, with its id and path. |
 | "Note this idea: …" | Creates a reflexion with a versioned header (`R` id, `status: open`) at the right node; runs `ariane doctor`. |
-| "Promote X to a task" | Moves the item to `tasks/`, gives it a `T` id if its prefix changes and renames the file to match, sets a `todo` status of the workflow; runs `ariane doctor`. |
+| "Promote X to a task" | Moves the item to `tasks/`, gives it a `T` id if its prefix changes, sets a `todo` status of the workflow, runs `ariane fix --apply` to rename the file and its links, then `ariane doctor`. |
 | "We finished X" | Sets a `done` status of the workflow, moves the item under `archives/`, updates the links to it; runs `ariane doctor`. |
 | "Set up project Y" | Creates the node in the content tree (`INDEX.md` from template, a `node.toml` if it needs its own workflow), registers it in the parent index, points to materialization (`_ariane` symlink). |
 | "I'm switching machines" / "write a handoff" | Writes `HANDOFF.md` — situation, background with pointers, what is blocked and on whose decision, next action — in the same commit as the work. **On this explicit request only.** |
