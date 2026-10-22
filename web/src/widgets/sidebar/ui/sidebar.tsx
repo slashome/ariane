@@ -14,6 +14,8 @@ import {
   ListTodo,
   NotebookPen,
   Pin,
+  Settings,
+  Spool,
   type LucideIcon,
 } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
@@ -72,7 +74,7 @@ function Entry({
         cn(
           'flex items-center gap-2.5 rounded-md py-1.5 pr-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground',
           nested ? 'pl-8' : 'pl-3',
-          isActive && 'bg-primary/10 font-medium text-foreground',
+          isActive && 'bg-accent/15 font-medium text-foreground shadow-[inset_2px_0_0_var(--color-accent)]',
         )
       }
     >
@@ -172,7 +174,7 @@ export function Sidebar() {
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-sidebar">
       <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4 font-semibold">
-        <span className="size-2.5 rounded-full bg-primary" aria-hidden />
+        <Spool className="size-5 text-primary" aria-hidden />
         Ariane
       </div>
       <nav aria-label="Main" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
@@ -186,7 +188,7 @@ export function Sidebar() {
               aria-current={filters.node === pin.path ? 'true' : undefined}
               className={cn(
                 'flex items-center gap-2.5 rounded-md py-1.5 pr-2 pl-8 text-sm text-muted-foreground hover:bg-muted hover:text-foreground',
-                filters.node === pin.path && 'font-medium text-foreground',
+                filters.node === pin.path && 'bg-accent/10 font-medium text-foreground',
               )}
               title={`Scope every view to ${displayNode(pin.path)}`}
             >
@@ -225,6 +227,7 @@ export function Sidebar() {
           tone={(repo?.uncommitted.length ?? 0) > 0 ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : undefined}
           search={scope}
         />
+        <Entry to={routes.settings} label="Settings" icon={Settings} search={scope} />
       </nav>
     </aside>
   )

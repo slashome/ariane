@@ -63,7 +63,7 @@ export function RepoPanel() {
               <Upload className="size-3.5" aria-hidden />
               {push.isPending ? 'Pushing…' : 'Push'}
             </Button>
-            {files.some((file) => file.path.startsWith('tree/')) && (
+            {files.some((file) => file.path.startsWith('tree/') || file.path === 'settings.toml') && (
               <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400" onClick={() => setDiscarding({ path: null })}>
                 <Undo2 className="size-3.5" aria-hidden />
                 Discard all

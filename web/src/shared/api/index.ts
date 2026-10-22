@@ -11,9 +11,11 @@ export {
   fetchNodes,
   fetchRepo,
   fetchSchema,
+  fetchSettings,
   patchItem,
   pushChanges,
   saveDashboard,
+  saveTheme,
 } from './client'
 export { subscribeToChanges } from './events'
 export { queryKeys } from './keys'
@@ -36,8 +38,10 @@ export type {
   Remedy,
   Repo,
   Severity,
+  Theme,
   Schema,
   SchemaKey,
+  Settings,
   Tracker,
   UncommittedFile,
   WorkflowStatus,

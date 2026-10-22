@@ -7,7 +7,7 @@ import { useDiscard, usePush } from '../api/use-git-actions'
 import { CommitForm } from './commit-form'
 import { DiffDialog } from './diff-dialog'
 
-const discardable = (file: UncommittedFile) => file.path.startsWith('tree/')
+const discardable = (file: UncommittedFile) => file.path.startsWith('tree/') || file.path === 'settings.toml'
 
 export function UncommittedList({
   files,

@@ -13,6 +13,7 @@ export const routes = {
   ressources: '/ressources',
   health: '/health',
   repo: '/repo',
+  settings: '/settings',
 } as const
 
 const sections: Record<Kind, string> = {

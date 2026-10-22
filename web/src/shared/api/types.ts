@@ -120,6 +120,17 @@ export interface Dashboard {
   pinned: string[]
 }
 
+export interface Theme {
+  primary: string
+  secondary: string
+}
+
+export interface Settings {
+  version: number
+  theme: Theme
+  dashboard: Dashboard
+}
+
 export interface CommitResult {
   commit: string
 }

@@ -8,6 +8,7 @@ import { MatrixPage } from '@/pages/matrix'
 import { JournalPage, ReflexionsPage } from '@/pages/reflexions'
 import { RepoPage } from '@/pages/repo'
 import { RessourcesPage } from '@/pages/ressources'
+import { SettingsPage } from '@/pages/settings'
 import { StoriesPage } from '@/pages/stories'
 import { StoryPage } from '@/pages/story'
 import { TasksPage } from '@/pages/tasks'
@@ -43,6 +44,7 @@ export const routeTree: RouteObject[] = [
       { path: 'ressources/*', element: <ItemPage sectionLabel="Ressources" /> },
       { path: 'health', element: <HealthPage /> },
       { path: 'repo', element: <RepoPage /> },
+      { path: 'settings', element: <SettingsPage /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

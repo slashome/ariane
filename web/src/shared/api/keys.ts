@@ -10,4 +10,5 @@ export const queryKeys = {
   diff: (path: string) => ['diff', path] as const,
   diffs: ['diff'],
   dashboard: ['dashboard'],
+  settings: ['settings'],
 } as const
