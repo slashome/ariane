@@ -52,7 +52,7 @@ The body of the item MUST NOT restate in prose a fact the header carries.
 - An `id` identifies an item **within its node**.
 - Inside the same node, an item is referenced by its bare id: `T022`.
 - Across nodes, an item is referenced as `<node>#<id>`: `slashome/pharmakon#T022`.
-- A file name SHOULD begin with the item's id followed by `-` and a slug: `T022-tirage-du-temperament.md`.
+- A file name MUST begin with the item's id followed by `-` and a slug: `T022-tirage-du-temperament.md`.
 - An id SHOULD start with the prefix of its kind followed by a number: `T` for tasks and backlog items, `S` for stories, `R` for reflexions, `D` for ressources (`T038`, `S004`, `R012`, `D002`). `ariane migrate` allocates ids this way, per node and per prefix.
 
 ### 1.5 `node.toml`
@@ -103,6 +103,7 @@ The order of entries is the display order.
 | `size`, `impact`, `priority` or `created` outside its vocabulary or format | error |
 | A custom key declared in `node.toml` has a value of the wrong type | error |
 | A required custom key is missing | error |
+| A file name that does not begin with the item's `id`, `-` and a slug | error — remedy: `git mv` to `<id>-<current name>` |
 | A custom key not declared in any applicable `node.toml` | warning |
 
 ### 1.7 Examples
