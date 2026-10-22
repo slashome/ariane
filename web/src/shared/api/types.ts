@@ -21,6 +21,8 @@ export interface Item {
   parent: string | null
   depends_on: string[]
   external: string[]
+  branches: string[]
+  pull_requests: string[]
   version: number | null
   path: string
   updated?: string | null

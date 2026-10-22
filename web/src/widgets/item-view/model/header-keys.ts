@@ -16,6 +16,8 @@ const shown = new Set([
   'milestone',
   'refs',
   'external',
+  'branches',
+  'pull_requests',
 ])
 
 export function customEntries(header: Record<string, unknown> | null): [string, string][] {

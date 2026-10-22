@@ -39,6 +39,8 @@ const base: Item = {
   parent: null,
   depends_on: [],
   external: [],
+  branches: [],
+  pull_requests: [],
   version: 1,
   path: 'tree/acme/web/tasks/T001.md',
 }

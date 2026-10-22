@@ -20,6 +20,8 @@ const item: Item = {
   parent: null,
   depends_on: [],
   external: [],
+  branches: [],
+  pull_requests: [],
   version: 1,
   path: 'tree/game/tasks/T001.md',
 }

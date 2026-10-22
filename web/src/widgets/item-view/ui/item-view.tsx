@@ -1,4 +1,4 @@
-import { ChevronRight, ExternalLink, FileQuestion } from 'lucide-react'
+import { ChevronRight, ExternalLink, FileQuestion, GitBranch, GitPullRequest, type LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 import { StatusBadge, useItem, useItems } from '@/entities/item'
@@ -8,6 +8,7 @@ import type { ItemDetail, NodeSummary } from '@/shared/api'
 import { scopeSearch, sectionOf } from '@/shared/config'
 import { displayNode } from '@/shared/lib'
 import { Badge, EmptyState, ErrorState, LoadingState } from '@/shared/ui'
+import { branchLink, pullRequestLink, type CodeLink } from '../model/code-links'
 import { customEntries, refsOf } from '../model/header-keys'
 import { ItemBody } from './item-body'
 import { RelatedList, Unresolved } from './related-list'
@@ -44,6 +45,33 @@ function Externals({ detail, nodes }: { detail: ItemDetail; nodes: NodeSummary[]
         )
       })}
     </ul>
+  )
+}
+
+function CodeLinks({ title, icon: Icon, links }: { title: string; icon: LucideIcon; links: CodeLink[] }) {
+  if (links.length === 0) {
+    return null
+  }
+  return (
+    <section className="space-y-1.5">
+      <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+        {title} <span className="font-normal">({links.length})</span>
+      </h3>
+      <ul className="space-y-1">
+        {links.map((link) => (
+          <li key={link.label} className="flex items-start gap-1.5 font-mono text-xs">
+            <Icon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+            {link.url ? (
+              <a href={link.url} target="_blank" rel="noreferrer" className="min-w-0 break-all text-primary hover:underline">
+                {link.label}
+              </a>
+            ) : (
+              <span className="min-w-0 break-all">{link.label}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
   )
 }
 
@@ -124,6 +152,8 @@ export function ItemView({
               <code className="font-mono text-xs">{detail.path}</code>
             </Field>
           </dl>
+          <CodeLinks title="Branches" icon={GitBranch} links={detail.branches.map(branchLink)} />
+          <CodeLinks title="Pull requests" icon={GitPullRequest} links={detail.pull_requests.map(pullRequestLink)} />
           <RelatedList title="Parent" items={relations.parent ? [relations.parent] : []} scope={detail.node} />
           <RelatedList title="Children" items={relations.children} scope={detail.node} />
           <RelatedList title="Depends on" items={relations.depends_on} scope={detail.node} />

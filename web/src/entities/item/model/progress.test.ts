@@ -21,6 +21,8 @@ const item = (id: string, extra: Partial<Item> = {}): Item => ({
   parent: null,
   depends_on: [],
   external: [],
+  branches: [],
+  pull_requests: [],
   version: 1,
   path: `tree/p/tasks/${id}.md`,
   ...extra,

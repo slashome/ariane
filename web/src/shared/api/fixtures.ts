@@ -23,6 +23,8 @@ export function makeItem(overrides: Partial<Item> = {}): Item {
     parent: null,
     depends_on: [],
     external: [],
+    branches: [],
+    pull_requests: [],
     version: 1,
     path: `tree/${node}/tasks/${id}.md`,
     ...overrides,
