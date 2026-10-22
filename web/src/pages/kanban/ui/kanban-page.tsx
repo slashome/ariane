@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { changesFor, useItems, useUpdateItem } from '@/entities/item'
+import { changesFor, ItemCard, useItems, useUpdateItem } from '@/entities/item'
 import { useNodes } from '@/entities/node'
 import { useSchema } from '@/entities/schema'
 import { emptyFilters, filterItems, useItemFilters } from '@/features/filter-items'
@@ -69,7 +69,13 @@ export function KanbanPage() {
               : `${displayNode(filters.node)} — its workflow`}
         </p>
       </div>
-      <DragArea onDragEnd={onDragEnd}>
+      <DragArea
+        onDragEnd={onDragEnd}
+        renderOverlay={(id) => {
+          const item = scoped.find((entry) => entry.path === id)
+          return item ? <ItemCard item={item} showNode={item.node !== filters.node} className="shadow-lg" /> : null
+        }}
+      >
         <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
           {columns.map((column) => (
             <KanbanColumn
