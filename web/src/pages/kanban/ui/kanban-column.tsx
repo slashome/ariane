@@ -1,5 +1,6 @@
-import { ChevronDown, ChevronRight } from 'lucide-react'
+import { ChevronDown, ChevronRight, Eye } from 'lucide-react'
 import { categoryTone, ItemCard } from '@/entities/item'
+import type { Item } from '@/shared/api'
 import { cn } from '@/shared/lib'
 import { Draggable, DropZone } from '@/shared/ui'
 import type { KanbanColumn as Column } from '../model/columns'
@@ -9,11 +10,13 @@ export function KanbanColumn({
   collapsed,
   scope,
   onToggle,
+  onOpen,
 }: {
   column: Column
   collapsed: boolean
   scope: string | null
   onToggle: () => void
+  onOpen: (item: Item) => void
 }) {
   return (
     <DropZone
@@ -43,7 +46,23 @@ export function KanbanColumn({
         <div className="flex min-h-24 flex-1 flex-col gap-2 overflow-y-auto p-2">
           {column.items.map((item) => (
             <Draggable key={item.path} id={item.path}>
-              <ItemCard item={item} showNode={item.node !== scope} />
+              <ItemCard
+                item={item}
+                showNode={item.node !== scope}
+                action={
+                  <button
+                    type="button"
+                    aria-label={`Open ${item.title ?? item.path}`}
+                    title="Open details"
+                    className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    onPointerDown={(event) => event.stopPropagation()}
+                    onKeyDown={(event) => event.stopPropagation()}
+                    onClick={() => onOpen(item)}
+                  >
+                    <Eye className="size-3.5" aria-hidden />
+                  </button>
+                }
+              />
             </Draggable>
           ))}
         </div>

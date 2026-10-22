@@ -1,8 +1,9 @@
+import { ExternalLink } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { StatusBadge } from '@/entities/item'
-import { statusLabel, useNodes } from '@/entities/node'
+import { externalUrl, statusLabel, trackerOf, useNodes } from '@/entities/node'
 import { kindLabel } from '@/entities/schema'
-import type { Item } from '@/shared/api'
+import type { Item, Tracker } from '@/shared/api'
 import { displayNode } from '@/shared/lib'
 import { Sheet } from '@/shared/ui'
 
@@ -12,6 +13,28 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
       <dt className="text-muted-foreground">{label}</dt>
       <dd className="min-w-0 break-words">{value ?? <span className="text-muted-foreground">—</span>}</dd>
     </div>
+  )
+}
+
+function ExternalLinks({ entries, tracker }: { entries: string[]; tracker: Tracker | null }) {
+  return (
+    <ul className="space-y-0.5">
+      {entries.map((entry) => {
+        const url = externalUrl(tracker, entry)
+        return (
+          <li key={entry} className="font-mono text-xs">
+            {url ? (
+              <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline">
+                {entry}
+                <ExternalLink className="size-3" aria-hidden />
+              </a>
+            ) : (
+              entry
+            )}
+          </li>
+        )
+      })}
+    </ul>
   )
 }
 
@@ -33,6 +56,12 @@ export function ItemDetails({ item, onClose }: { item: Item | null; onClose: () 
           <Field label="Size" value={item.size} />
           <Field label="Impact" value={item.impact} />
           <Field label="Created" value={item.created} />
+          <Field label="External" value={
+              item.external.length > 0 ? (
+                <ExternalLinks entries={item.external} tracker={trackerOf(nodes, item.node)} />
+              ) : null
+            }
+          />
           <Field label="Schema" value={item.version === null ? 'not versioned' : `version ${item.version}`} />
           <Field label="Path" value={<code className="font-mono text-xs">{item.path}</code>} />
         </dl>

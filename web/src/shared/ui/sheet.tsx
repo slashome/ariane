@@ -15,7 +15,7 @@ export function Sheet({ open, onOpenChange, title, description, children }: Shee
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/30" />
-        <Dialog.Content className="fixed inset-y-0 right-0 z-50 flex w-[28rem] max-w-full flex-col gap-4 overflow-y-auto border-l border-border bg-background p-5 shadow-xl focus:outline-none">
+        <Dialog.Content className="fixed inset-y-0 right-0 z-50 flex w-[42rem] max-w-full flex-col gap-4 overflow-y-auto border-l border-border bg-background p-5 shadow-xl focus:outline-none">
           <div className="flex items-start justify-between gap-3">
             <div className="space-y-1">
               <Dialog.Title className="text-base font-semibold">{title}</Dialog.Title>

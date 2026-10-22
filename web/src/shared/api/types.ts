@@ -14,6 +14,7 @@ export interface Item {
   impact: string | null
   priority: string | null
   created: string | null
+  external: string[]
   version: number | null
   path: string
 }
@@ -24,11 +25,19 @@ export interface WorkflowStatus {
   category: Category
 }
 
+export interface Tracker {
+  kind?: string
+  account?: string
+  board?: number | string
+  [key: string]: unknown
+}
+
 export interface NodeSummary {
   path: string
   has_index: boolean
   items: number
   workflow: WorkflowStatus[]
+  tracker?: Tracker | null
   last_change?: string | null
 }
 
@@ -78,4 +87,13 @@ export interface Dashboard {
 
 export interface CommitResult {
   commit: string
+}
+
+export interface DiscardResult {
+  discarded: string[]
+}
+
+export interface FileDiff {
+  path: string
+  diff: string
 }

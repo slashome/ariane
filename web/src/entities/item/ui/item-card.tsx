@@ -10,9 +10,10 @@ export function ItemCard({
   item,
   showNode,
   aside,
+  action,
   className,
   ...props
-}: { item: Item; showNode?: boolean; aside?: ReactNode } & HTMLAttributes<HTMLDivElement>) {
+}: { item: Item; showNode?: boolean; aside?: ReactNode; action?: ReactNode } & HTMLAttributes<HTMLDivElement>) {
   const chips = [
     item.size && `size ${item.size}`,
     item.impact && `impact ${item.impact}`,
@@ -33,6 +34,10 @@ export function ItemCard({
         {chips.map((chip) => (
           <Chip key={chip}>{chip}</Chip>
         ))}
+        {item.external.map((link) => (
+          <Chip key={link}>{link}</Chip>
+        ))}
+        {action && <span className="ml-auto">{action}</span>}
       </div>
     </div>
   )
