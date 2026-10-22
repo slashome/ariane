@@ -5,14 +5,15 @@
 //! are never quoted, so a path is kept as raw bytes and turned into an
 //! [`OsString`] without assuming UTF-8 (ADR-0005).
 //!
-//! It also dates each node by its latest commit, and runs the two git actions
-//! the interface offers: commit what changed under `tree/`, and push. Both use
-//! the machine's own git identity and configured upstream; nothing here sets
-//! an author or a remote.
+//! It also dates each node by its latest commit, and runs the git actions the
+//! interface offers: commit what changed under `tree/`, push, discard changes
+//! under `tree/`, and show the diff of one file. Commit and push use the
+//! machine's own git identity and configured upstream; nothing here sets an
+//! author or a remote.
 
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::os::unix::ffi::OsStringExt;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, Result, bail};
@@ -24,6 +25,8 @@ pub struct Entry {
     pub code: String,
     /// The path relative to the repository root, as git reported it.
     pub path: OsString,
+    /// The original path of a rename or a copy, `None` otherwise.
+    pub origin: Option<OsString>,
 }
 
 /// The current branch and the uncommitted paths.
@@ -137,11 +140,173 @@ fn run(root: &Path, args: &[&str]) -> Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
+/// Checks that `path` names something under `tree/`, relative to the repository
+/// root, and returns it as a path.
+///
+/// Only plain components are accepted: an absolute path, `.` or `..` anywhere
+/// is refused, so the result can never leave `tree/`.
+///
+/// # Errors
+///
+/// Fails with the reason the path is refused.
+pub fn under_tree(path: &str) -> Result<PathBuf> {
+    let candidate = Path::new(path);
+    if !candidate
+        .components()
+        .all(|component| matches!(component, Component::Normal(_)))
+    {
+        bail!("{path} is not a plain relative path");
+    }
+    if candidate.components().next() != Some(Component::Normal(OsStr::new("tree"))) {
+        bail!("{path} is not under tree/");
+    }
+    Ok(candidate.to_path_buf())
+}
+
+/// What a discard request came to.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Discarded {
+    /// These paths were restored from `HEAD` or removed.
+    Paths(Vec<OsString>),
+    /// Nothing under the requested paths differed from `HEAD`.
+    NothingToDiscard,
+}
+
+/// Throws away the uncommitted changes under `paths`, or under all of `tree/`
+/// when `paths` is empty.
+///
+/// The changed paths are read from `git status` over `tree/`, then kept when
+/// they fall under one of `paths` (a status limited to a path would not see the
+/// original of a rename, which lies outside it). A
+/// tracked one is restored from `HEAD` in both the index and the working tree,
+/// an untracked one (`??`) is removed with `git clean`. The original path of a
+/// rename is restored too when it is under `tree/`. Pathspecs are literal, so a
+/// `*` or a `:` in a name is never read as a pattern.
+///
+/// # Errors
+///
+/// Fails when a path is not under `tree/`, or a git command reports an error.
+pub fn discard(root: &Path, paths: &[PathBuf]) -> Result<Discarded> {
+    let scope = if paths.is_empty() {
+        vec![PathBuf::from("tree")]
+    } else {
+        paths.to_vec()
+    };
+    for path in &scope {
+        under_tree(&path.to_string_lossy())?;
+    }
+    let output = git_literal(root)
+        .args(["status", "--porcelain=v1", "-z", "--", "tree"])
+        .output()
+        .context("running git status")?;
+    if !output.status.success() {
+        bail!("{}", String::from_utf8_lossy(&output.stderr).trim());
+    }
+    let mut entries = parse(&output.stdout).entries;
+    entries.retain(|entry| {
+        scope
+            .iter()
+            .any(|path| Path::new(&entry.path).starts_with(path))
+    });
+    if entries.is_empty() {
+        return Ok(Discarded::NothingToDiscard);
+    }
+    let mut tracked = Vec::new();
+    let mut untracked = Vec::new();
+    for entry in &entries {
+        if entry.code == "??" {
+            untracked.push(entry.path.clone());
+            continue;
+        }
+        tracked.push(entry.path.clone());
+        if let Some(origin) = &entry.origin
+            && under_tree(&origin.to_string_lossy()).is_ok()
+        {
+            tracked.push(origin.clone());
+        }
+    }
+    if !tracked.is_empty() {
+        run_literal(
+            root,
+            &["restore", "--source=HEAD", "--staged", "--worktree", "--"],
+            &tracked,
+        )?;
+    }
+    if !untracked.is_empty() {
+        run_literal(root, &["clean", "-f", "-d", "-q", "--"], &untracked)?;
+    }
+    Ok(Discarded::Paths(
+        entries.into_iter().map(|entry| entry.path).collect(),
+    ))
+}
+
+/// The diff of one file under `tree/` against `HEAD`, as unified-diff text.
+///
+/// A file git knows (in `HEAD` or in the index) is compared with
+/// `git diff HEAD`; an untracked file is compared with an empty file through
+/// `git diff --no-index`, which exits `1` when the two differ: that is its
+/// normal answer, not an error. The text is empty when nothing differs.
+///
+/// # Errors
+///
+/// Fails when the path is not under `tree/`, or git reports an error.
+pub fn diff(root: &Path, path: &str) -> Result<String> {
+    let path = under_tree(path)?;
+    let known = git_literal(root)
+        .args(["ls-files", "--error-unmatch", "--"])
+        .arg(&path)
+        .output()
+        .context("running git ls-files")?
+        .status
+        .success()
+        || run(
+            root,
+            &["cat-file", "-e", &format!("HEAD:{}", path.display())],
+        )
+        .is_ok();
+    let mut command = git_literal(root);
+    command.args(["diff", "--no-color", "--no-ext-diff"]);
+    if known {
+        command.args(["HEAD", "--"]).arg(&path);
+    } else {
+        command.args(["--no-index", "--", "/dev/null"]).arg(&path);
+    }
+    let output = command.output().context("running git diff")?;
+    match output.status.code() {
+        Some(0) => {}
+        Some(1) if !known => {}
+        _ => bail!("{}", String::from_utf8_lossy(&output.stderr).trim()),
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+/// A `git -C root --literal-pathspecs` command, to which arguments are added.
+fn git_literal(root: &Path) -> Command {
+    let mut command = Command::new("git");
+    command.arg("-C").arg(root).arg("--literal-pathspecs");
+    command
+}
+
+/// Runs `git -C root --literal-pathspecs <args> <paths>`, failing with git's
+/// stderr when it exits with an error.
+fn run_literal(root: &Path, args: &[&str], paths: &[OsString]) -> Result<()> {
+    let output = git_literal(root)
+        .args(args)
+        .args(paths)
+        .output()
+        .with_context(|| format!("running git {}", args[0]))?;
+    if !output.status.success() {
+        bail!("{}", String::from_utf8_lossy(&output.stderr).trim());
+    }
+    Ok(())
+}
+
 /// Parses the NUL-separated porcelain output.
 ///
-/// The first record is the `## <branch>...<upstream> [ahead n]` header. A rename
-/// or copy (`R` or `C` in either column) is followed by an extra record holding
-/// the original path, which is skipped: the indicator shows the new path.
+/// The first record is the `## <branch>...<upstream> [ahead n]` header, absent
+/// when `--branch` is not passed. A rename or copy (`R` or `C` in either column)
+/// is followed by an extra record holding the original path, kept as the
+/// entry's `origin`: the indicator shows the new path.
 pub fn parse(output: &[u8]) -> Status {
     let mut records = output
         .split(|byte| *byte == 0)
@@ -163,10 +328,14 @@ pub fn parse(output: &[u8]) -> Status {
         }
         let code = String::from_utf8_lossy(&record[..2]).into_owned();
         let path = OsString::from_vec(record[3..].to_vec());
-        if code.contains(['R', 'C']) {
-            records.next();
-        }
-        status.entries.push(Entry { code, path });
+        let origin = if code.contains(['R', 'C']) {
+            records
+                .next()
+                .map(|origin| OsString::from_vec(origin.to_vec()))
+        } else {
+            None
+        };
+        status.entries.push(Entry { code, path, origin });
     }
     status
 }
@@ -315,6 +484,100 @@ mod tests {
         let local = run(dir.path(), &["rev-parse", "HEAD"]).unwrap();
         let pushed = run(remote.path(), &["rev-parse", "HEAD"]).unwrap();
         assert_eq!(local, pushed);
+    }
+
+    #[test]
+    fn only_plain_paths_under_tree_are_accepted() {
+        assert!(under_tree("tree/a.md").is_ok());
+        assert!(under_tree("tree").is_ok());
+        for refused in [
+            "/etc/passwd",
+            "tree/../outside.md",
+            "../tree/a.md",
+            "./tree/a.md",
+            "outside.md",
+            "treehouse/a.md",
+            "",
+        ] {
+            assert!(under_tree(refused).is_err(), "{refused} was accepted");
+        }
+    }
+
+    #[test]
+    fn discards_one_path_and_leaves_the_others() {
+        let dir = repository();
+        std::fs::write(dir.path().join("tree/a.md"), "changed\n").unwrap();
+        std::fs::write(dir.path().join("tree/b.md"), "new\n").unwrap();
+        let discarded = discard(dir.path(), &[PathBuf::from("tree/a.md")]).unwrap();
+        assert_eq!(
+            discarded,
+            Discarded::Paths(vec![OsString::from("tree/a.md")])
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("tree/a.md")).unwrap(),
+            "a\n"
+        );
+        assert!(dir.path().join("tree/b.md").exists());
+    }
+
+    #[test]
+    fn discarding_everything_restores_tracked_files_and_removes_untracked_ones_under_tree_only() {
+        let dir = repository();
+        std::fs::write(dir.path().join("tree/a.md"), "changed\n").unwrap();
+        git(dir.path(), &["add", "tree/a.md"]);
+        std::fs::create_dir_all(dir.path().join("tree/new")).unwrap();
+        std::fs::write(dir.path().join("tree/new/b.md"), "new\n").unwrap();
+        std::fs::write(dir.path().join("tree/*.md"), "a pattern name\n").unwrap();
+        std::fs::write(dir.path().join("outside.md"), "kept\n").unwrap();
+        let Discarded::Paths(paths) = discard(dir.path(), &[]).unwrap() else {
+            panic!("expected discarded paths");
+        };
+        assert_eq!(paths.len(), 3);
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("tree/a.md")).unwrap(),
+            "a\n"
+        );
+        assert!(!dir.path().join("tree/new").exists());
+        assert!(!dir.path().join("tree/*.md").exists());
+        let left = status(dir.path()).unwrap();
+        assert_eq!(left.entries.len(), 1);
+        assert_eq!(left.entries[0].path, OsString::from("outside.md"));
+        assert_eq!(
+            discard(dir.path(), &[]).unwrap(),
+            Discarded::NothingToDiscard
+        );
+    }
+
+    #[test]
+    fn discarding_a_staged_rename_brings_the_original_back() {
+        let dir = repository();
+        git(dir.path(), &["mv", "tree/a.md", "tree/renamed.md"]);
+        discard(dir.path(), &[PathBuf::from("tree/renamed.md")]).unwrap();
+        assert!(dir.path().join("tree/a.md").exists());
+        assert!(!dir.path().join("tree/renamed.md").exists());
+        assert!(status(dir.path()).unwrap().entries.is_empty());
+    }
+
+    #[test]
+    fn a_discard_outside_tree_is_refused_before_git_runs() {
+        let dir = repository();
+        std::fs::write(dir.path().join("outside.md"), "kept\n").unwrap();
+        assert!(discard(dir.path(), &[PathBuf::from("tree/../outside.md")]).is_err());
+        assert!(dir.path().join("outside.md").exists());
+    }
+
+    #[test]
+    fn diffs_a_tracked_file_against_head_and_an_untracked_one_against_nothing() {
+        let dir = repository();
+        std::fs::write(dir.path().join("tree/a.md"), "b\n").unwrap();
+        let tracked = diff(dir.path(), "tree/a.md").unwrap();
+        assert!(tracked.contains("-a\n+b\n"), "{tracked}");
+        std::fs::write(dir.path().join("tree/new.md"), "fresh\n").unwrap();
+        let untracked = diff(dir.path(), "tree/new.md").unwrap();
+        assert!(untracked.contains("+fresh"), "{untracked}");
+        std::fs::remove_file(dir.path().join("tree/a.md")).unwrap();
+        assert!(diff(dir.path(), "tree/a.md").unwrap().contains("-a"));
+        assert!(diff(dir.path(), "../etc/passwd").is_err());
     }
 
     #[test]

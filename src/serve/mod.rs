@@ -127,6 +127,8 @@ pub fn router(state: Arc<State>) -> Router {
         .route("/api/dashboard", get(api::dashboard).put(api::pin))
         .route("/api/commit", post(api::commit))
         .route("/api/push", post(api::push))
+        .route("/api/discard", post(api::discard))
+        .route("/api/diff", get(api::diff))
         .route("/api/nodes", get(api::nodes))
         .route("/api/schema", get(api::schema))
         .route("/api/doctor", get(api::doctor))
@@ -238,11 +240,11 @@ mod tests {
         repo.write("p/INDEX.md", "# p\n")
             .write(
                 "p/node.toml",
-                "[[workflow]]\nid = \"a-faire\"\nlabel = \"À faire\"\ncategory = \"todo\"\n",
+                "[[workflow]]\nid = \"a-faire\"\nlabel = \"À faire\"\ncategory = \"todo\"\n\n[tracker]\nkind = \"monday\"\nboard = 7\n",
             )
             .write(
                 "p/tasks/T001-a.md",
-                "---\nariane: 1\nnode: p\nid: T001\ntitle: A\nstatus: a-faire\n---\n# A\n",
+                "---\nariane: 1\nnode: p\nid: T001\ntitle: A\nstatus: a-faire\nexternal: [monday:42]\n---\n# A\n",
             )
             .write("p/tasks/legacy.md", "# Legacy\n");
         repo
@@ -288,6 +290,7 @@ mod tests {
             .unwrap();
         assert_eq!(task["category"], "todo");
         assert_eq!(task["node"], "p");
+        assert_eq!(task["external"], serde_json::json!(["monday:42"]));
     }
 
     #[tokio::test]
@@ -306,6 +309,15 @@ mod tests {
         assert_eq!(node["has_index"], true);
         assert_eq!(node["workflow"][0]["id"], "a-faire");
         assert_eq!(node["workflow"][0]["category"], "todo");
+        assert_eq!(node["tracker"]["kind"], "monday");
+        assert_eq!(node["tracker"]["board"], 7);
+        let root = nodes
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|node| node["path"] == "")
+            .unwrap();
+        assert!(root["tracker"].is_null());
     }
 
     #[tokio::test]
@@ -458,10 +470,9 @@ mod tests {
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     }
 
-    #[tokio::test]
-    async fn committing_needs_a_message_and_something_to_commit() {
-        let repo = sample();
-        let config = repo.root().join("config.toml");
+    /// Replaces the fixture's repository by a fresh one with its own identity,
+    /// so commits run as in production without touching the machine's config.
+    fn reinit_git(repo: &Repo) {
         std::fs::remove_dir_all(repo.root().join(".git")).unwrap();
         for args in [
             &["init", "-q"][..],
@@ -477,6 +488,13 @@ mod tests {
                 .success();
             assert!(ok);
         }
+    }
+
+    #[tokio::test]
+    async fn committing_needs_a_message_and_something_to_commit() {
+        let repo = sample();
+        let config = repo.root().join("config.toml");
+        reinit_git(&repo);
         let (status, _) = send(
             &repo,
             &config,
@@ -502,6 +520,66 @@ mod tests {
             "POST",
             "/api/commit",
             serde_json::json!({ "message": "again" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CONFLICT);
+    }
+
+    #[tokio::test]
+    async fn a_changed_file_shows_its_diff_and_can_be_discarded() {
+        let repo = sample();
+        let config = repo.root().join("config.toml");
+        reinit_git(&repo);
+        send(
+            &repo,
+            &config,
+            "POST",
+            "/api/commit",
+            serde_json::json!({ "message": "import" }),
+        )
+        .await;
+        let path = repo.root().join("tree/p/tasks/T001-a.md");
+        let original = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(&path, original.replace("title: A", "title: Changed")).unwrap();
+
+        let (status, body, _) = get(&repo, "/api/diff?path=tree/p/tasks/T001-a.md").await;
+        assert_eq!(status, StatusCode::OK);
+        let diff = json(&body)["diff"].as_str().unwrap().to_owned();
+        assert!(diff.contains("-title: A\n+title: Changed"), "{diff}");
+        let (status, _, _) = get(&repo, "/api/diff?path=tree/../config.toml").await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+
+        for refused in ["/etc/passwd", "tree/../config.toml", "config.toml"] {
+            let (status, _) = send(
+                &repo,
+                &config,
+                "POST",
+                "/api/discard",
+                serde_json::json!({ "paths": [refused] }),
+            )
+            .await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "{refused}");
+        }
+        let (status, body) = send(
+            &repo,
+            &config,
+            "POST",
+            "/api/discard",
+            serde_json::json!({ "paths": ["tree/p/tasks/T001-a.md"] }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(
+            body["discarded"],
+            serde_json::json!(["tree/p/tasks/T001-a.md"])
+        );
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), original);
+        let (status, _) = send(
+            &repo,
+            &config,
+            "POST",
+            "/api/discard",
+            serde_json::json!({}),
         )
         .await;
         assert_eq!(status, StatusCode::CONFLICT);

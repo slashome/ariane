@@ -7,15 +7,16 @@
 //! the tree, released before anything is sent.
 //!
 //! The writing endpoints — `PATCH /api/items`, `PUT /api/dashboard`,
-//! `POST /api/commit`, `POST /api/push` — run on the blocking pool under the
-//! state's `busy` lock, one at a time, and never commit unless asked.
+//! `POST /api/commit`, `POST /api/push`, `POST /api/discard` — run on the
+//! blocking pool under the state's `busy` lock, one at a time, and never commit
+//! unless asked.
 
 use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
 
 use axum::Json;
-use axum::extract::State as Shared;
+use axum::extract::{Query, State as Shared};
 use axum::http::StatusCode;
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{IntoResponse, Response};
@@ -65,8 +66,9 @@ pub async fn items(Shared(state): Shared<Arc<State>>) -> Response {
 }
 
 /// `GET /api/nodes`: every node with its entry point, item count, effective
-/// workflow (after `node.toml` inheritance, ADR-0008) and the date of its latest
-/// commit, computed when the tree was loaded.
+/// workflow and tracker binding (after `node.toml` inheritance, ADR-0008 and
+/// ADR-0011) and the date of its latest commit, computed when the tree was
+/// loaded. The tracker is the raw `[tracker]` table, or `null`.
 pub async fn nodes(Shared(state): Shared<Arc<State>>) -> Response {
     let dates = match state.last_change.read() {
         Ok(dates) => dates.clone(),
@@ -87,11 +89,13 @@ pub async fn nodes(Shared(state): Shared<Arc<State>>) -> Response {
                     .iter()
                     .filter(|item| item.node == node.path)
                     .count();
+                let effective = tree.configs.effective(&node.path);
                 json!({
                     "path": node.path,
                     "has_index": node.has_index,
                     "items": items,
-                    "workflow": tree.configs.effective(&node.path).workflow,
+                    "workflow": effective.workflow,
+                    "tracker": effective.tracker,
                     "last_change": dates.get(&node.path).cloned().flatten(),
                 })
             })
@@ -328,6 +332,85 @@ pub async fn push(Shared(state): Shared<Arc<State>>) -> Response {
         Err(failure) => error(StatusCode::BAD_GATEWAY, &format!("{failure:#}")),
     })
     .await
+}
+
+/// The body of `POST /api/discard`.
+#[derive(Debug, Default, Deserialize)]
+pub struct DiscardRequest {
+    /// Paths under `tree/` to discard; absent means everything under `tree/`.
+    #[serde(default)]
+    pub paths: Option<Vec<String>>,
+}
+
+/// `POST /api/discard`: throws away the uncommitted changes of `paths`, or of
+/// everything under `tree/` when `paths` is absent. A tracked file is restored
+/// from `HEAD`, an untracked one is deleted. `400` when a path is absolute,
+/// holds `..` or is outside `tree/`; `409` when nothing changed there.
+///
+/// The tree is reloaded at once, so the items fetched right after already
+/// reflect the restored files.
+pub async fn discard(
+    Shared(state): Shared<Arc<State>>,
+    Json(request): Json<DiscardRequest>,
+) -> Response {
+    let paths = match request.paths {
+        None => Vec::new(),
+        Some(paths) if paths.is_empty() => {
+            return error(StatusCode::CONFLICT, "no path to discard");
+        }
+        Some(paths) => match paths
+            .iter()
+            .map(|path| git::under_tree(path))
+            .collect::<anyhow::Result<Vec<_>>>()
+        {
+            Ok(paths) => paths,
+            Err(failure) => return error(StatusCode::BAD_REQUEST, &format!("{failure:#}")),
+        },
+    };
+    exclusive(state, move |state| {
+        match git::discard(&state.root, &paths) {
+            Ok(git::Discarded::Paths(discarded)) => {
+                if let Err(failure) = state.reload() {
+                    return error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}"));
+                }
+                Json(json!({
+                    "discarded": discarded
+                        .iter()
+                        .map(|path| path.to_string_lossy())
+                        .collect::<Vec<_>>(),
+                }))
+                .into_response()
+            }
+            Ok(git::Discarded::NothingToDiscard) => {
+                error(StatusCode::CONFLICT, "nothing to discard under tree/")
+            }
+            Err(failure) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
+        }
+    })
+    .await
+}
+
+/// The query of `GET /api/diff`.
+#[derive(Debug, Deserialize)]
+pub struct DiffQuery {
+    /// The file under `tree/` whose diff is asked.
+    pub path: String,
+}
+
+/// `GET /api/diff?path=…`: the unified diff of one file under `tree/` against
+/// `HEAD`, an untracked file being compared with an empty one; `400` when the
+/// path is absolute, holds `..` or is outside `tree/`.
+pub async fn diff(Shared(state): Shared<Arc<State>>, Query(query): Query<DiffQuery>) -> Response {
+    if let Err(failure) = git::under_tree(&query.path) {
+        return error(StatusCode::BAD_REQUEST, &format!("{failure:#}"));
+    }
+    let root = state.root.clone();
+    let path = query.path.clone();
+    match tokio::task::spawn_blocking(move || git::diff(&root, &path)).await {
+        Ok(Ok(diff)) => Json(json!({ "path": query.path, "diff": diff })).into_response(),
+        Ok(Err(failure)) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
+        Err(_) => error(StatusCode::INTERNAL_SERVER_ERROR, "git diff did not finish"),
+    }
 }
 
 /// Any `/api/…` path that is not an endpoint: a JSON `404`.

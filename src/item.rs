@@ -115,6 +115,17 @@ impl Document {
     pub fn text(&self, key: &str) -> Option<&str> {
         self.mapping()?.get(key)?.as_str()
     }
+
+    /// The string entries of `key` when it is a list, such as `external`; empty
+    /// when the key is missing or not a list, and entries that are not strings
+    /// are skipped.
+    pub fn texts(&self, key: &str) -> Vec<&str> {
+        self.mapping()
+            .and_then(|mapping| mapping.get(key))
+            .and_then(Value::as_sequence)
+            .map(|entries| entries.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default()
+    }
 }
 
 /// Builds the text of an item file from a header mapping and a body.
@@ -165,6 +176,14 @@ mod tests {
         assert_eq!(document.version(), Some(1));
         assert_eq!(document.text("id"), Some("T001"));
         assert_eq!(document.body, "# Title\n");
+    }
+
+    #[test]
+    fn a_list_key_gives_its_strings_and_anything_else_gives_none() {
+        let document = Document::parse("---\nexternal: [monday:1, 2, monday:3]\nid: T001\n---\n");
+        assert_eq!(document.texts("external"), ["monday:1", "monday:3"]);
+        assert!(document.texts("id").is_empty());
+        assert!(document.texts("missing").is_empty());
     }
 
     #[test]
