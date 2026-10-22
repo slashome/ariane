@@ -1,10 +1,13 @@
 import { ChevronDown } from 'lucide-react'
+import { useMemo } from 'react'
 import { useSearchParams } from 'react-router'
+import { useItems } from '@/entities/item'
 import { findNode, hasDescendants, nodeTree, useNodes } from '@/entities/node'
 import { useItemFilters } from '@/features/filter-items'
 import { searchParamKeys } from '@/shared/config'
 import { displayNode } from '@/shared/lib'
 import { Switch } from '@/shared/ui'
+import { nodeCounts } from '../model/node-counts'
 
 const allNodes = '*'
 
@@ -14,7 +17,13 @@ const allNodes = '*'
 export function NodeSwitcher() {
   const { data: nodes = [] } = useNodes()
   const [params, setParams] = useSearchParams()
+  const { data: items = [] } = useItems()
   const { filters, setIncludeDescendants } = useItemFilters()
+  const { includeArchived, includeDescendants } = filters
+  const counts = useMemo(
+    () => nodeCounts(items, nodes.map((node) => node.path), { includeArchived, includeDescendants }),
+    [items, nodes, includeArchived, includeDescendants],
+  )
   const current = params.get(searchParamKeys.node)
   const home = findNode(nodes, '')
 
@@ -32,13 +41,13 @@ export function NodeSwitcher() {
       { replace: true },
     )
 
-  const count = current === null ? null : findNode(nodes, current)?.items
+  const count = current === null ? undefined : counts.get(current)
   return (
     <div className="flex items-center gap-3">
       <div className="relative inline-flex h-9 max-w-80 min-w-48 items-center rounded-md border border-border bg-background pr-8 pl-2.5 text-sm has-[select:focus-visible]:outline-2 has-[select:focus-visible]:outline-ring">
         <span className="truncate font-mono text-xs" aria-hidden>
           {current === null ? 'All nodes' : displayNode(current)}
-          {count !== undefined && count !== null && <span className="text-muted-foreground"> ({count})</span>}
+          {count !== undefined && <span className="text-muted-foreground"> ({count})</span>}
         </span>
         <ChevronDown className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
         <select
@@ -48,10 +57,10 @@ export function NodeSwitcher() {
           onChange={(event) => select(event.target.value)}
         >
           <option value={allNodes}>All nodes</option>
-          {home && <option value="">(home) ({home.items})</option>}
+          {home && <option value="">(home) ({counts.get('') ?? 0})</option>}
           {nodeTree(nodes).map((row) => (
             <option key={row.node.path} value={row.node.path}>
-              {`${row.prefix.replace(/ /g, '\u00a0')}${row.name} (${row.node.items})`}
+              {`${row.prefix.replace(/ /g, '\u00a0')}${row.name} (${counts.get(row.node.path) ?? 0})`}
             </option>
           ))}
         </select>
