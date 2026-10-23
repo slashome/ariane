@@ -43,6 +43,8 @@ mod migrate;
 mod monday;
 /// `node.toml`: custom fields and status workflows of a node.
 mod node;
+/// `ariane people`: whom items may wait for.
+mod people;
 /// Parents, children, dependencies and dependents of items.
 mod relations;
 /// Discovery of the content repository on disk.
@@ -106,6 +108,11 @@ fn run() -> Result<ExitCode> {
                 cli::HookHarness::ClaudeCode => hook::run(),
             });
         }
+        cli::Command::People(cli::PeopleArgs {
+            command: Some(cli::PeopleCommand::Find { account, name }),
+            json,
+            ..
+        }) => return monday::find_users(account, name, *json),
         cli::Command::Connect(args) => {
             return match args.connector {
                 cli::Connector::Monday => monday::connect(&args.account),
@@ -130,6 +137,10 @@ fn run() -> Result<ExitCode> {
         }
         cli::Command::Hook(_) | cli::Command::Connect(_) => {
             unreachable!("answered before loading the tree")
+        }
+        cli::Command::People(args) => {
+            let scope = args.node.as_deref().map(tree::NodePath::new);
+            people::run(&tree, &args, scope.as_ref())
         }
         cli::Command::Sync(args) => {
             let scope = scope(args.node.as_deref(), args.all, here);

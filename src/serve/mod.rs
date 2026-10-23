@@ -137,6 +137,14 @@ pub fn router(state: Arc<State>) -> Router {
         .route("/api/settings/theme", put(api::theme))
         .route("/api/commit", post(api::commit))
         .route("/api/sync/monday", post(api::sync_monday))
+        .route(
+            "/api/people",
+            get(api::people)
+                .post(api::add_person)
+                .patch(api::change_person)
+                .delete(api::remove_person),
+        )
+        .route("/api/monday/users", get(api::monday_users))
         .route("/api/push", post(api::push))
         .route("/api/discard", post(api::discard))
         .route("/api/diff", get(api::diff))
@@ -534,6 +542,61 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn the_people_are_listed_added_renamed_and_kept_while_awaited() {
+        let repo = sample();
+        repo.write(
+            "p/tasks/T002-b.md",
+            "---\nariane: 1\nnode: p\nid: T002\ntitle: B\nstatus: a-faire\n---\n",
+        );
+        let person = |extra: serde_json::Value| {
+            let mut body = serde_json::json!({ "node": "p", "handle": "keyvan" });
+            body.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            body
+        };
+        let (status, body) = send(
+            &repo,
+            "POST",
+            "/api/people",
+            person(serde_json::json!({ "name": "Keyvan", "monday": 42 })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body[0]["node"], "p");
+        assert_eq!(body[0]["people"][0]["monday"], 42);
+        let (status, body) = send(
+            &repo,
+            "PATCH",
+            "/api/people",
+            person(serde_json::json!({ "monday": null, "rename_to": "kcoen" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body[0]["people"][0]["handle"], "kcoen");
+        assert!(body[0]["people"][0]["monday"].is_null());
+        let (status, _) = send(
+            &repo,
+            "POST",
+            "/api/people",
+            person(serde_json::json!({ "handle": "Bad", "name": "X" })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        let (status, body, _) = get(&repo, "/api/people").await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(json(&body)[0]["people"].as_array().unwrap().len(), 1);
+        let (status, _) = send(
+            &repo,
+            "DELETE",
+            "/api/people",
+            serde_json::json!({ "node": "p", "handle": "kcoen" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
     }
 
     /// Replaces the fixture's repository by a fresh one with its own identity,

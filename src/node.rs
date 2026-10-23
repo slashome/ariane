@@ -188,6 +188,8 @@ pub struct Effective {
     pub people: BTreeMap<String, Person>,
     /// The nearest tracker binding, if any.
     pub tracker: Option<toml::Table>,
+    /// Node that declared the tracker binding.
+    pub tracker_from: Option<NodePath>,
 }
 
 impl Effective {
@@ -244,6 +246,7 @@ impl Configs {
             workflow_from: None,
             people: BTreeMap::new(),
             tracker: None,
+            tracker_from: None,
         };
         for ancestor in node.ancestors_from_root() {
             let Some(file) = self.files.get(&ancestor) else {
@@ -265,6 +268,7 @@ impl Configs {
             }
             if let Some(tracker) = &file.tracker {
                 effective.tracker = Some(tracker.clone());
+                effective.tracker_from = Some(ancestor.clone());
             }
         }
         effective

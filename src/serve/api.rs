@@ -161,6 +161,7 @@ pub async fn nodes(Shared(state): Shared<Arc<State>>) -> Response {
                     "workflow": effective.workflow,
                     "people": effective.people,
                     "tracker": effective.tracker,
+                    "tracker_from": effective.tracker_from,
                     "last_change": dates.get(&node.path).cloned().flatten(),
                 })
             })
@@ -444,6 +445,164 @@ pub async fn sync_monday(
         }
     })
     .await
+}
+
+/// `GET /api/people`: the nodes that declare a tracker or people, with their
+/// people and who waits for each, as `ariane people --json`.
+pub async fn people(Shared(state): Shared<Arc<State>>) -> Response {
+    with_tree(&state, |tree| {
+        serde_json::to_value(crate::people::list(tree, None)).unwrap_or(Value::Null)
+    })
+}
+
+/// The body of the writes of `/api/people`.
+#[derive(Debug, Deserialize)]
+pub struct PersonRequest {
+    pub node: String,
+    pub handle: String,
+    #[serde(default)]
+    pub name: Option<String>,
+    /// `null` removes the monday id; absent keeps it.
+    #[serde(default, deserialize_with = "present")]
+    pub monday: Option<Option<i64>>,
+    /// A new handle, rewritten in the items that wait for the person.
+    #[serde(default)]
+    pub rename_to: Option<String>,
+}
+
+/// Tells an absent key (`None`) from a `null` one (`Some(None)`).
+fn present<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<Option<i64>>, D::Error> {
+    Option::<i64>::deserialize(deserializer).map(Some)
+}
+
+/// Runs one change of the directory, reloads the tree and answers the new
+/// directory; `422` for a refused change, `409` with the items for a person
+/// still awaited.
+async fn change_people(
+    state: Arc<State>,
+    change: impl FnOnce(&crate::tree::Tree) -> anyhow::Result<Result<(), crate::people::Refusal>>
+    + Send
+    + 'static,
+) -> Response {
+    exclusive(state, move |state| {
+        let outcome = match state.tree.read() {
+            Ok(tree) => change(&tree),
+            Err(_) => return error(StatusCode::INTERNAL_SERVER_ERROR, "the tree lock is poisoned"),
+        };
+        match outcome {
+            Err(failure) => return error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
+            Ok(Err(crate::people::Refusal::Awaited(items))) => {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(json!({ "error": crate::people::Refusal::Awaited(items.clone()).to_string(), "items": items })),
+                )
+                    .into_response();
+            }
+            Ok(Err(refusal)) => return error(StatusCode::UNPROCESSABLE_ENTITY, &refusal.to_string()),
+            Ok(Ok(())) => {}
+        }
+        if let Err(failure) = state.reload() {
+            return error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}"));
+        }
+        with_tree(state, |tree| serde_json::to_value(crate::people::list(tree, None)).unwrap_or(Value::Null))
+    })
+    .await
+}
+
+/// `POST /api/people`: declares a person, as `ariane people add`.
+pub async fn add_person(
+    Shared(state): Shared<Arc<State>>,
+    Json(request): Json<PersonRequest>,
+) -> Response {
+    change_people(state, move |tree| {
+        crate::people::add(
+            tree,
+            &crate::tree::NodePath::new(&request.node),
+            &request.handle,
+            request.name.as_deref().unwrap_or_default(),
+            request.monday.flatten(),
+        )
+    })
+    .await
+}
+
+/// `PATCH /api/people`: changes a person's name or monday id, and renames
+/// the handle (items rewritten) when `rename_to` is given, as `ariane people
+/// set` and `rename`.
+pub async fn change_person(
+    Shared(state): Shared<Arc<State>>,
+    Json(request): Json<PersonRequest>,
+) -> Response {
+    change_people(state, move |tree| {
+        let node = crate::tree::NodePath::new(&request.node);
+        let change = crate::people::Change {
+            name: request.name.clone(),
+            monday: request.monday,
+        };
+        if let Err(refusal) = crate::people::set(tree, &node, &request.handle, &change)? {
+            return Ok(Err(refusal));
+        }
+        match request
+            .rename_to
+            .as_deref()
+            .filter(|to| *to != request.handle)
+        {
+            Some(to) => crate::people::rename(tree, &node, &request.handle, to)
+                .map(|outcome| outcome.map(|_| ())),
+            None => Ok(Ok(())),
+        }
+    })
+    .await
+}
+
+/// `DELETE /api/people`: removes a person no item waits for, as `ariane
+/// people remove`.
+pub async fn remove_person(
+    Shared(state): Shared<Arc<State>>,
+    Json(request): Json<PersonRequest>,
+) -> Response {
+    change_people(state, move |tree| {
+        crate::people::remove(
+            tree,
+            &crate::tree::NodePath::new(&request.node),
+            &request.handle,
+        )
+    })
+    .await
+}
+
+/// The query of `GET /api/monday/users`.
+#[derive(Debug, Deserialize)]
+pub struct UsersQuery {
+    pub account: String,
+    pub q: String,
+}
+
+/// `GET /api/monday/users?account=&q=`: the account's users whose name
+/// contains `q`, as `ariane people find`; `502` without a token or a reachable monday.
+pub async fn monday_users(Query(query): Query<UsersQuery>) -> Response {
+    let found = tokio::task::spawn_blocking(move || -> anyhow::Result<Vec<crate::monday::User>> {
+        let Some(token) = crate::secrets::token(&crate::secrets::file(), "monday", &query.account)?
+        else {
+            anyhow::bail!(
+                "no monday token for `{}`: run `ariane connect monday --account {}`",
+                query.account,
+                query.account
+            );
+        };
+        crate::monday::Http::new(token).users(&query.q)
+    })
+    .await;
+    match found {
+        Ok(Ok(users)) => Json(users).into_response(),
+        Ok(Err(failure)) => error(StatusCode::BAD_GATEWAY, &format!("{failure:#}")),
+        Err(_) => error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "the search did not finish",
+        ),
+    }
 }
 
 /// The body of `POST /api/commit`.

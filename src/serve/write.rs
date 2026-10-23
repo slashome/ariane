@@ -26,7 +26,8 @@ use crate::schema::{self, LEVELS, REFLEXION_STATUSES, SIZES, WAITING_REASONS};
 use crate::tree::{Item, Tree};
 
 /// The keys the interface is allowed to change.
-pub const EDITABLE: [&str; 7] = [
+pub const EDITABLE: [&str; 8] = [
+    "body",
     "status",
     "size",
     "impact",
@@ -106,14 +107,22 @@ pub fn apply(tree: &Tree, patch: &Patch) -> Result<std::path::PathBuf, Refusal> 
             "the item has no versioned header; run `ariane migrate` first".to_owned(),
         ));
     };
-    check_fresh(&header, &patch.changes)?;
+    check_fresh(&header, &document.body, &patch.changes)?;
+    let mut body = document.body.clone();
     for (key, change) in &patch.changes {
+        if key == "body" {
+            match &change.to {
+                Json::String(text) => body.clone_from(text),
+                _ => return Err(Refusal::Invalid("`body` must be a string".to_owned())),
+            }
+            continue;
+        }
         let wanted = wanted(key, &change.to)?;
         validate(tree, item, key, wanted.as_ref())?;
         set(&mut header, key, wanted);
     }
     settle_waiting(tree, item, &mut header)?;
-    let rewritten = item::render(&header, &document.body)
+    let rewritten = item::render(&header, &body)
         .map_err(|error| Refusal::Failed(format!("rendering {}: {error}", patch.path)))?;
     std::fs::write(&item.file, rewritten)
         .map_err(|error| Refusal::Failed(format!("writing {}: {error}", patch.path)))?;
@@ -132,10 +141,21 @@ fn find<'a>(tree: &'a Tree, path: &str) -> Result<&'a Item, Refusal> {
 }
 
 /// Refuses the whole edit when any requested key no longer holds its `from`.
-fn check_fresh(header: &Mapping, changes: &BTreeMap<String, Change>) -> Result<(), Refusal> {
+fn check_fresh(
+    header: &Mapping,
+    body: &str,
+    changes: &BTreeMap<String, Change>,
+) -> Result<(), Refusal> {
     let current: BTreeMap<String, Json> = changes
         .keys()
-        .map(|key| (key.clone(), current(header, key)))
+        .map(|key| {
+            let value = if key == "body" {
+                Json::String(body.to_owned())
+            } else {
+                current(header, key)
+            };
+            (key.clone(), value)
+        })
         .collect();
     let stale = changes
         .iter()
@@ -439,6 +459,27 @@ mod tests {
             &[("waiting_for", json!(["keyvan"]), json!(["keyvan"]))],
         );
         assert!(matches!(apply(&tree, &stale), Err(Refusal::Conflict(_))));
+    }
+
+    #[test]
+    fn the_body_is_replaced_only_from_the_text_last_read() {
+        let repo = sample();
+        let tree = Tree::load(repo.root()).unwrap();
+        let path = "tree/p/tasks/T001-a.md";
+        let stale = patch(path, &[("body", json!("old"), json!("# A\n\nNew\n"))]);
+        assert!(matches!(apply(&tree, &stale), Err(Refusal::Conflict(_))));
+        let fresh = patch(
+            path,
+            &[(
+                "body",
+                json!("# A\n\nBody  with  spaces\n"),
+                json!("# A\n\nNew\n"),
+            )],
+        );
+        apply(&tree, &fresh).unwrap();
+        let text = std::fs::read_to_string(repo.root().join(path)).unwrap();
+        assert!(text.ends_with("---\n# A\n\nNew\n"), "{text}");
+        assert!(text.contains("mod: Forge"));
     }
 
     /// Builds a patch from a path and `(key, from, to)` triples.

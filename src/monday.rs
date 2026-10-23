@@ -414,6 +414,65 @@ impl Http {
     }
 }
 
+/// A monday user, as `ariane people find` lists them.
+#[derive(Debug, Serialize)]
+pub struct User {
+    pub id: u64,
+    pub name: String,
+    pub email: Option<String>,
+}
+
+impl Http {
+    /// The users of the account whose name contains `name`.
+    ///
+    /// # Errors
+    ///
+    /// Fails when monday cannot be reached or refuses.
+    pub fn users(&self, name: &str) -> Result<Vec<User>> {
+        let body = self.query(
+            "query($name:String){users(name:$name,limit:20){id name email}}",
+            json!({ "name": name }),
+        )?;
+        Ok(body["data"]["users"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|user| {
+                Some(User {
+                    id: user["id"].as_str()?.parse().ok()?,
+                    name: user["name"].as_str()?.to_owned(),
+                    email: user["email"].as_str().map(str::to_owned),
+                })
+            })
+            .collect())
+    }
+}
+
+/// Runs `ariane people find --account <account> <name>`.
+///
+/// # Errors
+///
+/// Fails when no token is stored for the account, or monday refuses.
+pub fn find_users(account: &str, name: &str, as_json: bool) -> Result<ExitCode> {
+    let Some(token) = crate::secrets::token(&crate::secrets::file(), "monday", account)? else {
+        bail!("no monday token for `{account}`: run `ariane connect monday --account {account}`");
+    };
+    let users = Http::new(token).users(name)?;
+    if as_json {
+        println!("{}", serde_json::to_string_pretty(&users)?);
+    } else {
+        for user in &users {
+            println!(
+                "{:>12}  {}  {}",
+                user.id,
+                user.name,
+                user.email.as_deref().unwrap_or("")
+            );
+        }
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
 impl Api for Http {
     fn labels(&self, tickets: &[u64], column: &str) -> Result<BTreeMap<u64, Option<String>>> {
         let mut labels = BTreeMap::new();

@@ -53,6 +53,10 @@ pub enum Command {
     #[command(about = "Store a tracker's API token, one per account, in secrets.toml")]
     Connect(ConnectArgs),
     #[command(
+        about = "The people items may wait for: list, add, change, rename (items rewritten), remove"
+    )]
+    People(PeopleArgs),
+    #[command(
         about = "Send the items' statuses to their tracker (monday), refusing to guess on conflicts"
     )]
     Sync(SyncArgs),
@@ -169,6 +173,60 @@ pub struct LinksArgs {
 
     #[arg(long)]
     pub json: bool,
+}
+
+/// Arguments of `ariane people`: a subcommand, or none to list; a node scope
+/// and `json` for the list.
+#[derive(Args)]
+pub struct PeopleArgs {
+    #[command(subcommand)]
+    pub command: Option<PeopleCommand>,
+
+    #[arg(long, help = "Only the directories that concern this node")]
+    pub node: Option<String>,
+
+    #[arg(long)]
+    pub json: bool,
+}
+
+/// The subcommands of `ariane people`. Each names the node that declares the
+/// person (the one with the `[tracker]`).
+#[derive(Subcommand)]
+pub enum PeopleCommand {
+    #[command(about = "Declare a person in a node's node.toml")]
+    Add {
+        node: String,
+        handle: String,
+        #[arg(long)]
+        name: String,
+        #[arg(long, help = "The person's monday user id")]
+        monday: Option<i64>,
+    },
+    #[command(about = "Change a person's name or monday id; no item changes")]
+    Set {
+        node: String,
+        handle: String,
+        #[arg(long)]
+        name: Option<String>,
+        #[arg(long)]
+        monday: Option<i64>,
+        #[arg(long, conflicts_with = "monday", help = "Remove the monday id")]
+        no_monday: bool,
+    },
+    #[command(about = "Rename a handle, in node.toml and in every item that waits for the person")]
+    Rename {
+        node: String,
+        handle: String,
+        to: String,
+    },
+    #[command(about = "Remove a person no item waits for any more")]
+    Remove { node: String, handle: String },
+    #[command(about = "Find monday users by name, to get their id")]
+    Find {
+        #[arg(long)]
+        account: String,
+        name: String,
+    },
 }
 
 /// The trackers Ariane has a connector for (ADR-0011).
