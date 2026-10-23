@@ -27,7 +27,7 @@ import { useRepo } from '@/entities/repo'
 import { inScope, scopeItems, useItemFilters } from '@/features/filter-items'
 import { routes, scopeSearch, searchParamKeys } from '@/shared/config'
 import { cn, displayNode } from '@/shared/lib'
-import { SpoolLogo } from '@/shared/ui'
+import { Brand } from '@/shared/ui'
 import { navCounts } from '../model/nav-counts'
 
 const collapsedKey = 'ariane.sidebar.collapsed'
@@ -175,8 +175,7 @@ export function Sidebar() {
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-border bg-sidebar">
       <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4 font-semibold">
-        <SpoolLogo className="size-5 text-primary" />
-        Ariane
+        <Brand />
       </div>
       <nav aria-label="Main" className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto p-2">
         <Section id="home" label="Home" icon={Home} collapsed={collapsed.has('home')} onToggle={() => toggle('home')}>

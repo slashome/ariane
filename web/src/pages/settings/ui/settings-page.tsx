@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { defaultColor, previewTheme, readableOnLight, useSaveTheme, useSettings } from '@/entities/theme'
 import type { Theme } from '@/shared/api'
 import { cn } from '@/shared/lib'
-import { Button, ErrorState, LoadingState, PageHeader, SpoolLogo } from '@/shared/ui'
+import { Brand, Button, ErrorState, LoadingState, PageHeader } from '@/shared/ui'
 import { presets, sameTheme } from '../model/presets'
 import { ColorField } from './color-field'
 
@@ -11,8 +11,7 @@ function Preview() {
   return (
     <div className="space-y-3 rounded-lg border border-border p-4" aria-label="Preview">
       <div className="flex items-center gap-2 font-semibold">
-        <SpoolLogo className="size-5 text-primary" />
-        Ariane
+        <Brand />
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <Button size="sm">Primary button</Button>
