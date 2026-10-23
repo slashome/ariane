@@ -18,6 +18,9 @@ const shown = new Set([
   'external',
   'branches',
   'pull_requests',
+  'waiting_for',
+  'waiting_on',
+  'waiting_since',
 ])
 
 export function customEntries(header: Record<string, unknown> | null): [string, string][] {

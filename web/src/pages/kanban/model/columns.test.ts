@@ -45,6 +45,9 @@ function item(overrides: Partial<Item>): Item {
     external: [],
     branches: [],
     pull_requests: [],
+    waiting_for: [],
+    waiting_on: null,
+    waiting_since: null,
     version: 1,
     path: 'tree/game/tasks/T001.md',
     ...overrides,
@@ -82,13 +85,14 @@ describe('buildColumns', () => {
       'category:backlog',
       'category:todo',
       'category:in_progress',
+      'category:waiting',
       'category:blocked',
       'category:done',
       'category:dropped',
     ])
     expect(ids(at(columns, 1))).toEqual(['T001', 'T009'])
     expect(ids(at(columns, 2))).toEqual(['T002'])
-    expect(ids(at(columns, 4))).toEqual([])
+    expect(ids(at(columns, 5))).toEqual([])
   })
 })
 
@@ -97,7 +101,7 @@ describe('targetStatus', () => {
 
   it('maps a category column to the first status of that category in the item own workflow', () => {
     expect(targetStatus(at(items, 0), at(byCategory, 2), nodes)).toEqual({ ok: true, status: 'a-tester', category: 'in_progress' })
-    expect(targetStatus(at(items, 4), at(byCategory, 4), nodes)).toEqual({ ok: true, status: 'done', category: 'done' })
+    expect(targetStatus(at(items, 4), at(byCategory, 5), nodes)).toEqual({ ok: true, status: 'done', category: 'done' })
   })
 
   it('refuses a category the item workflow does not have', () => {

@@ -1,8 +1,8 @@
 import { ChevronRight, ExternalLink, FileQuestion, GitBranch, GitPullRequest, type LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
-import { StatusBadge, useItem, useItems } from '@/entities/item'
-import { externalUrl, statusLabel, trackerOf, useNodes } from '@/entities/node'
+import { StatusBadge, useItem, useItems, waitingSummary } from '@/entities/item'
+import { externalUrl, peopleOf, statusLabel, trackerOf, useNodes } from '@/entities/node'
 import { kindLabel } from '@/entities/schema'
 import type { ItemDetail, NodeSummary } from '@/shared/api'
 import { scopeSearch, sectionOf } from '@/shared/config'
@@ -130,6 +130,12 @@ export function ItemView({
         </div>
         <aside className="space-y-5 xl:border-l xl:border-border xl:pl-6">
           <dl className="space-y-1.5">
+            {detail.waiting_for.length > 0 && (
+              <Field label="Waiting for">
+                <span className="text-violet-700 dark:text-violet-300">{waitingSummary(detail, peopleOf(nodes, detail.node))}</span>
+                {detail.waiting_on && <span className="text-muted-foreground"> — {detail.waiting_on}</span>}
+              </Field>
+            )}
             <Field label="Priority">{detail.priority}</Field>
             <Field label="Size">{detail.size}</Field>
             <Field label="Impact">{detail.impact}</Field>

@@ -1,4 +1,4 @@
-import type { Category, NodeSummary, WorkflowStatus } from '@/shared/api'
+import type { Category, NodeSummary, Person, WorkflowStatus } from '@/shared/api'
 
 export function findNode(nodes: NodeSummary[], path: string): NodeSummary | undefined {
   return nodes.find((node) => node.path === path)
@@ -17,4 +17,9 @@ export function statusLabel(nodes: NodeSummary[], path: string, status: string |
 
 export function firstStatusOf(workflow: WorkflowStatus[], category: Category): WorkflowStatus | null {
   return workflow.find((entry) => entry.category === category) ?? null
+}
+
+// The people an item of `path` may wait for: its node's `[people]`, inherited ones included.
+export function peopleOf(nodes: NodeSummary[], path: string): Record<string, Person> {
+  return findNode(nodes, path)?.people ?? {}
 }

@@ -23,6 +23,9 @@ function item(overrides: Partial<Item>): Item {
     external: [],
     branches: [],
     pull_requests: [],
+    waiting_for: [],
+    waiting_on: null,
+    waiting_since: null,
     version: 1,
     path: 'tree/acme/web/tasks/T001.md',
     ...overrides,
@@ -50,7 +53,7 @@ describe('cardStats', () => {
   const stats = cardStats(items, nodes, 'acme/web')
 
   it('counts live items of the node and its descendants by category', () => {
-    expect(stats.counts).toEqual({ backlog: 0, todo: 3, in_progress: 0, blocked: 1, done: 1, dropped: 0 })
+    expect(stats.counts).toEqual({ backlog: 0, todo: 3, in_progress: 0, waiting: 0, blocked: 1, done: 1, dropped: 0 })
     expect(stats.total).toBe(5)
   })
 

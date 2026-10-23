@@ -14,6 +14,7 @@ const emptyCounts = (): Record<Category, number> => ({
   backlog: 0,
   todo: 0,
   in_progress: 0,
+  waiting: 0,
   blocked: 0,
   done: 0,
   dropped: 0,

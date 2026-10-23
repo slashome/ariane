@@ -11,12 +11,17 @@ export function KanbanColumn({
   scope,
   onToggle,
   onOpen,
+  selected,
+  waitingOf,
 }: {
   column: Column
   collapsed: boolean
   scope: string | null
   onToggle: () => void
   onOpen: (item: Item) => void
+  // Path of the item in the preview panel.
+  selected: string | null
+  waitingOf: (item: Item) => string | undefined
 }) {
   return (
     <DropZone
@@ -49,6 +54,8 @@ export function KanbanColumn({
               <ItemCard
                 item={item}
                 showNode={item.node !== scope}
+                selected={item.path === selected}
+                waiting={waitingOf(item)}
                 action={
                   <button
                     type="button"

@@ -1,6 +1,6 @@
 export { useNodes } from './api/use-nodes'
 export { sortNodes } from './lib/sort-nodes'
 export { externalUrl, trackerOf } from './model/tracker'
-export { findNode, firstStatusOf, statusLabel, workflowOf } from './model/workflow'
+export { findNode, firstStatusOf, peopleOf, statusLabel, workflowOf } from './model/workflow'
 export { useDashboard, useSaveDashboard } from './api/use-dashboard'
 export { hasDescendants, nodeTree, type TreeRow } from './lib/node-tree'

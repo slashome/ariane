@@ -22,6 +22,9 @@ const item: Item = {
   external: [],
   branches: [],
   pull_requests: [],
+  waiting_for: [],
+  waiting_on: null,
+  waiting_since: null,
   version: 1,
   path: 'tree/game/tasks/T001.md',
 }
@@ -33,6 +36,15 @@ describe('item model', () => {
       impact: { from: null, to: 'high' },
     })
     expect(changesFor(item, { size: 'M' })).toEqual({})
+  })
+
+  it('compares lists by value and treats an empty list as no value', () => {
+    const waiting = { ...item, waiting_for: ['keyvan'] }
+    expect(changesFor(waiting, { waiting_for: ['keyvan'] })).toEqual({})
+    expect(changesFor(waiting, { waiting_for: ['keyvan', 'doryan'] })).toEqual({
+      waiting_for: { from: ['keyvan'], to: ['keyvan', 'doryan'] },
+    })
+    expect(changesFor(item, { waiting_for: [] })).toEqual({})
   })
 
   it('tells closed categories and work items apart', () => {

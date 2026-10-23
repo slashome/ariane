@@ -1,7 +1,7 @@
-import { ExternalLink, Maximize2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, ExternalLink, Maximize2 } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { ItemLink, StatusBadge } from '@/entities/item'
-import { externalUrl, statusLabel, trackerOf, useNodes } from '@/entities/node'
+import { ItemLink, StatusBadge, waitingSummary } from '@/entities/item'
+import { externalUrl, peopleOf, statusLabel, trackerOf, useNodes } from '@/entities/node'
 import { kindLabel } from '@/entities/schema'
 import type { Item, Tracker } from '@/shared/api'
 import { displayNode } from '@/shared/lib'
@@ -38,7 +38,15 @@ function ExternalLinks({ entries, tracker }: { entries: string[]; tracker: Track
   )
 }
 
-export function ItemDetails({ item, onClose }: { item: Item | null; onClose: () => void }) {
+// Where the previewed item stands in the list it was opened from, to step through it.
+export interface Stepper {
+  position: number
+  count: number
+  onPrevious?: () => void
+  onNext?: () => void
+}
+
+export function ItemDetails({ item, onClose, stepper }: { item: Item | null; onClose: () => void; stepper?: Stepper }) {
   const { data: nodes = [] } = useNodes()
   return (
     <Sheet
@@ -58,6 +66,12 @@ export function ItemDetails({ item, onClose }: { item: Item | null; onClose: () 
           <Field label="Status" value={<StatusBadge status={item.status} category={item.category} label={statusLabel(nodes, item.node, item.status)} />} />
           <Field label="Kind" value={kindLabel(item.kind)} />
           <Field label="Archived" value={item.archived ? 'yes' : 'no'} />
+          {item.waiting_for.length > 0 && (
+            <Field
+              label="Waiting for"
+              value={`${waitingSummary(item, peopleOf(nodes, item.node))}${item.waiting_on ? ` — ${item.waiting_on}` : ''}`}
+            />
+          )}
           <Field label="Priority" value={item.priority} />
           <Field label="Size" value={item.size} />
           <Field label="Impact" value={item.impact} />
@@ -71,6 +85,19 @@ export function ItemDetails({ item, onClose }: { item: Item | null; onClose: () 
           <Field label="Schema" value={item.version === null ? 'not versioned' : `version ${item.version}`} />
           <Field label="Path" value={<code className="font-mono text-xs">{item.path}</code>} />
         </dl>
+      )}
+      {item && stepper && (
+        <nav aria-label="Step through the items" className="mt-auto flex items-center justify-between border-t border-border pt-3">
+          <button type="button" className="icon-button size-8" aria-label="Previous item" disabled={!stepper.onPrevious} onClick={stepper.onPrevious}>
+            <ChevronLeft className="size-5" aria-hidden />
+          </button>
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {stepper.position} / {stepper.count}
+          </span>
+          <button type="button" className="icon-button size-8" aria-label="Next item" disabled={!stepper.onNext} onClick={stepper.onNext}>
+            <ChevronRight className="size-5" aria-hidden />
+          </button>
+        </nav>
       )}
     </Sheet>
   )

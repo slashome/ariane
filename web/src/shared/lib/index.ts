@@ -1,3 +1,6 @@
 export { cn } from './cn'
 export { displayNode, isWithinNode } from './node-path'
 export { hostOf, isExternalLink, linksIn, resolveLink } from './repo-path'
+export { neighbours } from './neighbours'
+export { useSearchParam } from './use-search-param'
+export { useStoredSet } from './use-stored-set'

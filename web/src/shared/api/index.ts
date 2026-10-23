@@ -26,6 +26,7 @@ export type {
   DiscardResult,
   EditableField,
   FieldChange,
+  FieldValue,
   FileDiff,
   Finding,
   Item,
@@ -34,6 +35,7 @@ export type {
   ItemPatch,
   Kind,
   NodeSummary,
+  Person,
   Relations,
   Remedy,
   Repo,
@@ -44,6 +46,7 @@ export type {
   Settings,
   Tracker,
   UncommittedFile,
+  WaitingReason,
   WorkflowStatus,
 } from './types'
 export { makeItem } from './fixtures'

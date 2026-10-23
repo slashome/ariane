@@ -1,1 +1,1 @@
-export { ItemDetails } from './ui/item-details'
+export { ItemDetails, type Stepper } from './ui/item-details'

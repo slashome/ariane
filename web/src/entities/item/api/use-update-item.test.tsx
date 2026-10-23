@@ -26,6 +26,9 @@ const item: Item = {
   external: [],
   branches: [],
   pull_requests: [],
+  waiting_for: [],
+  waiting_on: null,
+  waiting_since: null,
   version: 1,
   path: 'tree/game/tasks/T001.md',
 }

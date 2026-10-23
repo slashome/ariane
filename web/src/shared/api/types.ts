@@ -1,4 +1,6 @@
-export type Category = 'backlog' | 'todo' | 'in_progress' | 'blocked' | 'done' | 'dropped'
+export type Category = 'backlog' | 'todo' | 'in_progress' | 'waiting' | 'blocked' | 'done' | 'dropped'
+
+export type WaitingReason = 'review' | 'answer' | 'other'
 
 export type Kind = 'task' | 'story' | 'reflexion' | 'ressource' | 'unknown'
 
@@ -23,6 +25,9 @@ export interface Item {
   external: string[]
   branches: string[]
   pull_requests: string[]
+  waiting_for: string[]
+  waiting_on: WaitingReason | null
+  waiting_since: string | null
   version: number | null
   path: string
   updated?: string | null
@@ -69,11 +74,18 @@ export interface Tracker {
   [key: string]: unknown
 }
 
+// One person of a node's directory, `[people.<handle>]`: a name, and ids in trackers such as `monday`.
+export interface Person {
+  name: string
+  [tracker: string]: unknown
+}
+
 export interface NodeSummary {
   path: string
   has_index: boolean
   items: number
   workflow: WorkflowStatus[]
+  people?: Record<string, Person>
   tracker?: Tracker | null
   last_change?: string | null
 }
@@ -104,11 +116,13 @@ export interface Repo {
   uncommitted: UncommittedFile[]
 }
 
-export type EditableField = 'status' | 'size' | 'impact' | 'priority'
+export type EditableField = 'status' | 'size' | 'impact' | 'priority' | 'waiting_for' | 'waiting_on' | 'waiting_since'
+
+export type FieldValue = string | string[] | null
 
 export interface FieldChange {
-  from: string | null
-  to: string | null
+  from: FieldValue
+  to: FieldValue
 }
 
 export type ItemChanges = Partial<Record<EditableField, FieldChange>>
