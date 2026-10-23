@@ -131,6 +131,7 @@ fn last_changes(root: &Path, tree: &Tree) -> BTreeMap<NodePath, Option<String>> 
 pub fn router(state: Arc<State>) -> Router {
     Router::new()
         .route("/api/items", get(api::items).patch(api::patch_item))
+        .route("/api/search", get(api::search))
         .route("/api/show", get(api::show))
         .route("/api/dashboard", get(api::dashboard).put(api::pin))
         .route("/api/settings", get(api::settings))
@@ -356,6 +357,40 @@ mod tests {
         assert_eq!(status, StatusCode::NOT_FOUND);
         assert!(json(&body)["error"].is_string());
         let (status, _, _) = get(&repo, "/api/show").await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn search_is_the_same_json_as_the_search_command() {
+        let repo = sample();
+        repo.write(
+            "p/archives/tasks/T009-z.md",
+            "---\nariane: 1\nnode: p\nid: T009\ntitle: Été\nstatus: a-faire\n---\nT001 again\n",
+        );
+        let (status, body, _) = get(&repo, "/api/search?q=t001").await;
+        assert_eq!(status, StatusCode::OK);
+        let tree = Tree::load(repo.root()).unwrap();
+        let dates = crate::history::file_dates(repo.root());
+        let options = crate::search::Options {
+            dates: Some(&dates),
+            ..crate::search::Options::default()
+        };
+        let expected =
+            serde_json::to_value(crate::search::search(&tree, None, "t001", &options)).unwrap();
+        assert_eq!(json(&body), expected);
+        assert_eq!(expected[0]["reference"], "p#T001");
+        assert_eq!(expected[0]["field"], "reference");
+        assert_eq!(expected.as_array().unwrap().len(), 1);
+        let (_, body, _) = get(&repo, "/api/search?q=T001&archived=1").await;
+        assert_eq!(json(&body)[1]["reference"], "p#T009");
+        assert_eq!(json(&body)[1]["field"], "body");
+        let (_, body, _) = get(&repo, "/api/search?q=ete&archived=true&kind=task&node=p").await;
+        assert_eq!(json(&body)[0]["highlights"], serde_json::json!([[0, 3]]));
+        let (_, body, _) = get(&repo, "/api/search?q=T001&node=q").await;
+        assert_eq!(json(&body), serde_json::json!([]));
+        let (_, body, _) = get(&repo, "/api/search").await;
+        assert_eq!(json(&body), serde_json::json!([]));
+        let (status, _, _) = get(&repo, "/api/search?q=a&kind=nope").await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
     }
 

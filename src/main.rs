@@ -10,6 +10,7 @@
 //! hands it to the module that implements the requested command:
 //!
 //! - `ariane tasks` → [`tasks`], lists items;
+//! - `ariane search` → [`search`], finds items by header and body;
 //! - `ariane show` → [`show`], one item with its body and relations ([`relations`]);
 //! - `ariane doctor` → [`doctor`], checks items without writing (ADR-0004);
 //! - `ariane migrate` → [`migrate`], upgrades items to the current schema (ADR-0009);
@@ -51,6 +52,8 @@ mod relations;
 mod repo;
 /// The core header schema, declared once as data.
 mod schema;
+/// `ariane search`: items found by header and body.
+mod search;
 /// `secrets.toml`: the trackers' tokens.
 mod secrets;
 mod serve;
@@ -133,6 +136,10 @@ fn run() -> Result<ExitCode> {
         cli::Command::Tasks(args) => {
             let scope = scope(args.node.as_deref(), args.all, here);
             tasks::run(&tree, &args, scope.as_ref())
+        }
+        cli::Command::Search(args) => {
+            let scope = scope(args.node.as_deref(), args.all, here);
+            search::run(&tree, &args, scope.as_ref())
         }
         cli::Command::Show(args) => show::run(&tree, &args, here.filter(|node| !node.is_home())),
         cli::Command::Settings(args) => settings::run(&location.root, &args),
