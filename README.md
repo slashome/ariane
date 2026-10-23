@@ -10,6 +10,14 @@ It defines a common **process** shared by everyone who uses it, while each user 
 
 🚧 **Work in progress** — the method is being bootstrapped. See [PLAN.md](./PLAN.md) for the design plan and roadmap.
 
+## Install
+
+```sh
+brew install slashome/tap/ariane
+```
+
+From a checkout, `make install` builds the front and installs the binary into `~/.cargo/bin`; `make` lists every target. `make release VERSION=x.y.z` tags a release, which the CI builds and publishes to the tap.
+
 ## License
 
 TBD
