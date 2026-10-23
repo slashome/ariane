@@ -115,7 +115,13 @@ fn run() -> Result<ExitCode> {
         }) => return monday::find_users(account, name, *json),
         cli::Command::Connect(args) => {
             return match args.connector {
-                cli::Connector::Monday => monday::connect(&args.account),
+                cli::Connector::Monday => {
+                    let known = repo::discover(cli.repo.as_deref())
+                        .and_then(|location| tree::Tree::load(&location.root))
+                        .map(|tree| monday::accounts(&tree))
+                        .unwrap_or_default();
+                    monday::connect(&args.account, &known)
+                }
             };
         }
         _ => {}

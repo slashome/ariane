@@ -165,6 +165,9 @@ pub struct LinksArgs {
     )]
     pub all: bool,
 
+    #[arg(long, help = "Only this item, `<node>#<id>`")]
+    pub item: Option<String>,
+
     #[arg(
         long,
         help = "Record the pull requests found. Without it, print them and write nothing"

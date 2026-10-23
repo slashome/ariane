@@ -10,6 +10,7 @@ export interface Waiting {
 
 const reasons: { value: WaitingReason; label: string; hint: string }[] = [
   { value: 'review', label: 'A review', hint: 'of the code or the work' },
+  { value: 'validation', label: 'A validation', hint: 'of the result, by a product manager or a client' },
   { value: 'answer', label: 'An answer', hint: 'a reply, a decision, an information' },
   { value: 'other', label: 'Something else', hint: '' },
 ]

@@ -216,7 +216,13 @@ pub fn plan(
                 Category::Waiting => wanted.is_some() && current == wanted,
                 _ => reads == Some(category),
             };
-            let action = if in_step {
+            let action = if !labels.contains_key(ticket) {
+                Action::Refused {
+                    reason: format!(
+                        "monday:{ticket} is not found: deleted, or not visible with this token"
+                    ),
+                }
+            } else if in_step {
                 Action::InStep
             } else if let Some(to) = wanted {
                 let monday_moved = last
@@ -295,6 +301,7 @@ pub fn waiting_update(
         .collect();
     let why = match on {
         Some("review") => " (revue)",
+        Some("validation") => " (validation)",
         Some("answer") => " (réponse)",
         _ => "",
     };
@@ -414,6 +421,65 @@ impl Http {
     }
 }
 
+/// The label id a status value holds: the `index` of its JSON value, or,
+/// for a ticket left on the column's default label (no value), the id whose
+/// name is the text monday shows.
+fn label_of(
+    value: Option<&str>,
+    text: Option<&str>,
+    names: &BTreeMap<String, String>,
+) -> Option<String> {
+    value
+        .and_then(|value| serde_json::from_str::<Value>(value).ok())
+        .and_then(|value| value["index"].as_u64())
+        .map(|index| index.to_string())
+        .or_else(|| {
+            let text = text?;
+            names
+                .iter()
+                .find(|(_, name)| name.as_str() == text)
+                .map(|(id, _)| id.clone())
+        })
+}
+
+/// Reads a status column's `settings_str` into label id → name; monday has
+/// written it as `{"labels": {"0": "Doing"}}` and as `{"labels": [{"id": 0, "name": "Doing"}]}`.
+fn label_names_from(settings: &str) -> BTreeMap<String, String> {
+    let Ok(settings) = serde_json::from_str::<Value>(settings) else {
+        return BTreeMap::new();
+    };
+    match &settings["labels"] {
+        Value::Object(labels) => labels
+            .iter()
+            .filter_map(|(id, name)| Some((id.clone(), name.as_str()?.to_owned())))
+            .collect(),
+        Value::Array(labels) => labels
+            .iter()
+            .filter_map(|label| {
+                Some((
+                    label["id"].as_u64()?.to_string(),
+                    label["name"].as_str()?.to_owned(),
+                ))
+            })
+            .collect(),
+        _ => BTreeMap::new(),
+    }
+}
+
+impl Http {
+    /// The label names of a board's status column, by label id.
+    fn label_names(&self, board: &str, column: &str) -> Result<BTreeMap<String, String>> {
+        let body = self.query(
+            "query($board:[ID!],$column:[String!]){boards(ids:$board){columns(ids:$column){settings_str}}}",
+            json!({ "board": [board], "column": [column] }),
+        )?;
+        Ok(body["data"]["boards"][0]["columns"][0]["settings_str"]
+            .as_str()
+            .map(label_names_from)
+            .unwrap_or_default())
+    }
+}
+
 /// A monday user, as `ariane people find` lists them.
 #[derive(Debug, Serialize)]
 pub struct User {
@@ -476,21 +542,29 @@ pub fn find_users(account: &str, name: &str, as_json: bool) -> Result<ExitCode> 
 impl Api for Http {
     fn labels(&self, tickets: &[u64], column: &str) -> Result<BTreeMap<u64, Option<String>>> {
         let mut labels = BTreeMap::new();
+        // The label names of each board's column, read once, for tickets left on the default label.
+        let mut names: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
         for chunk in tickets.chunks(100) {
             let ids: Vec<String> = chunk.iter().map(u64::to_string).collect();
+            // `items` answers 25 items unless asked for more.
             let body = self.query(
-                "query($ids:[ID!],$column:[String!]){items(ids:$ids){id column_values(ids:$column){value}}}",
+                "query($ids:[ID!],$column:[String!]){items(ids:$ids,limit:100){id board{id} column_values(ids:$column){value text}}}",
                 json!({ "ids": ids, "column": [column] }),
             )?;
             for item in body["data"]["items"].as_array().into_iter().flatten() {
                 let Some(id) = item["id"].as_str().and_then(|id| id.parse().ok()) else {
                     continue;
                 };
-                let label = item["column_values"][0]["value"]
-                    .as_str()
-                    .and_then(|value| serde_json::from_str::<Value>(value).ok())
-                    .and_then(|value| value["index"].as_u64())
-                    .map(|index| index.to_string());
+                let value = &item["column_values"][0];
+                let mut label = label_of(value["value"].as_str(), None, &BTreeMap::new());
+                if label.is_none()
+                    && let Some(board) = item["board"]["id"].as_str()
+                {
+                    if !names.contains_key(board) {
+                        names.insert(board.to_owned(), self.label_names(board, column)?);
+                    }
+                    label = label_of(None, value["text"].as_str(), &names[board]);
+                }
                 labels.insert(id, label);
             }
         }
@@ -585,6 +659,21 @@ pub fn sync(
     })
 }
 
+/// The monday accounts the nodes' `[tracker]` tables name, to catch a
+/// mistyped account before a token is stored under it.
+pub fn accounts(tree: &Tree) -> Vec<String> {
+    let mut accounts: Vec<String> = tree
+        .configs
+        .files
+        .values()
+        .filter_map(|file| Binding::from_tracker(file.tracker.as_ref()?))
+        .map(|binding| binding.account)
+        .collect();
+    accounts.sort();
+    accounts.dedup();
+    accounts
+}
+
 /// Runs `ariane connect monday --account <account>`: reads a token on
 /// standard input, without echo on a terminal, checks it against monday and
 /// stores it in `secrets.toml`.
@@ -592,7 +681,13 @@ pub fn sync(
 /// # Errors
 ///
 /// Fails when no token is given, monday refuses it, or it cannot be stored.
-pub fn connect(account: &str) -> Result<ExitCode> {
+pub fn connect(account: &str, known: &[String]) -> Result<ExitCode> {
+    if !known.is_empty() && !known.iter().any(|candidate| candidate == account) {
+        bail!(
+            "no node binds the monday account `{account}`; the [tracker] accounts are: {}",
+            known.join(", ")
+        );
+    }
     use std::io::{BufRead, IsTerminal};
     let terminal = std::io::stdin().is_terminal();
     if terminal {
@@ -845,6 +940,16 @@ mod tests {
     }
 
     #[test]
+    fn a_ticket_monday_does_not_know_is_refused_not_a_conflict() {
+        let tree = sample();
+        let bound = tickets(&tree, None, None);
+        let steps = plan(&tree, &bound, &BTreeMap::new(), &State::new());
+        assert!(
+            matches!(&steps[0].action, Action::Refused { reason } if reason.contains("not found"))
+        );
+    }
+
+    #[test]
     fn a_ticket_moved_in_monday_since_the_last_sync_is_a_conflict() {
         let tree = sample();
         let bound = tickets(&tree, None, None);
@@ -884,6 +989,28 @@ mod tests {
         );
         assert_eq!(state["1"], "3");
         assert_eq!(state["3"], "2");
+    }
+
+    #[test]
+    fn a_label_is_read_from_its_value_or_by_its_name_on_the_default_label() {
+        let names = label_names_from(r#"{"labels":{"5":"BACKLOG","0":"Doing"}}"#);
+        assert_eq!(
+            label_of(
+                Some(r#"{"index":11,"changed_at":"x"}"#),
+                Some("Réserve"),
+                &names
+            )
+            .as_deref(),
+            Some("11")
+        );
+        assert_eq!(
+            label_of(None, Some("BACKLOG"), &names).as_deref(),
+            Some("5")
+        );
+        assert_eq!(label_of(None, Some("Unknown"), &names), None);
+        let listed = label_names_from(r#"{"labels":[{"id":103,"name":"To validate"}]}"#);
+        assert_eq!(listed["103"], "To validate");
+        assert!(label_names_from("nope").is_empty());
     }
 
     #[test]

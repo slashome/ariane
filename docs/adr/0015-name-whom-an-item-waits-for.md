@@ -15,9 +15,10 @@ The `cmc` nodes are bound to the team's monday board, which has no "waiting" sta
 > **Waiting is a category of its own, and an item in it names the people it waits for by handles of a directory its node declares.**
 
 - **A seventh category, `waiting`,** between `in_progress` and `blocked`. The default workflow gains a `waiting` status; a node with its own workflow adds one if it wants the column.
-- **Three core keys,** meaningful only while the item waits: `waiting_for`, a list of handles (several people may be awaited); `waiting_on`, why — `review`, `answer` or `other`; `waiting_since`, a date. `doctor` requires `waiting_for` in the category, checks every handle, and warns about keys left after the wait. The interface asks for them when a card enters the waiting column and removes them when it leaves.
+- **Three core keys,** meaningful only while the item waits: `waiting_for`, a list of handles (several people may be awaited); `waiting_on`, why — `review`, `validation`, `answer` or `other`; `waiting_since`, a date. `doctor` requires `waiting_for` in the category, checks every handle, and warns about keys left after the wait. The interface asks for them when a card enters the waiting column and removes them when it leaves.
 - **A directory, `[people.<handle>]` in `node.toml`,** inherited like fields: a `name`, and one key per tracker with the person's id there (`monday = 58294966`). The header stays readable and tracker-neutral (ADR-0011); a connector resolves a handle to its own id.
 - **monday, by its reason.** `[tracker.waiting]` maps `waiting_on` to a status label: a `review` goes to "⏳ Code review waiting", anything else to "Bloqué"; the people awaited are @mentioned in an update of the ticket. For now the agent does it, by the skill, through the monday connector of its harness; `ariane sync monday` (ADR-0011) takes it over next, so that the interface moves the ticket too.
+- **Validation is its own reason** (added the same day): a ticket in monday's "To validate" waits for the product manager to check it in preprod, which is neither a code review nor an answer; it maps both ways to that label.
 - **Leaving the wait is the owner's choice.** The previous status is not remembered: the agent asks where the item goes; in the interface, the column it is dropped in decides.
 
 ## Consequences

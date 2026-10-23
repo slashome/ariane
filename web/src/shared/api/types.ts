@@ -1,6 +1,6 @@
 export type Category = 'backlog' | 'todo' | 'in_progress' | 'waiting' | 'blocked' | 'done' | 'dropped'
 
-export type WaitingReason = 'review' | 'answer' | 'other'
+export type WaitingReason = 'review' | 'validation' | 'answer' | 'other'
 
 export type Kind = 'task' | 'story' | 'reflexion' | 'ressource' | 'unknown'
 

@@ -7,9 +7,11 @@
 //! (as `[<id>]` titles do), and any item matches one that writes its full
 //! reference, `<node>#<id>`. A bare id such as `T009` is never matched: every
 //! node has one. The pull requests of the content repository itself are left
-//! out: they talk about items, they are not their work. Without `--apply` it prints what it would record and writes
-//! nothing.
+//! out: they talk about items, they are not their work. The branch each
+//! matched pull request comes from is recorded too, as `<owner>/<repo>:<branch>`.
+//! Without `--apply` it prints what it would record and writes nothing.
 
+use std::collections::BTreeMap;
 use std::process::{Command, ExitCode};
 
 use anyhow::{Context, Result, bail};
@@ -32,12 +34,13 @@ pub struct PullRequest {
     pub body: String,
 }
 
-/// Pull requests to record in one item.
+/// Pull requests and branches to record in one item.
 #[derive(Debug, Serialize)]
 pub struct Proposal {
     pub item: String,
     pub path: String,
     pub pull_requests: Vec<String>,
+    pub branches: Vec<String>,
 }
 
 /// Runs `ariane links`: reads the owner's pull requests and records, with
@@ -57,12 +60,27 @@ pub fn run(tree: &Tree, args: &LinksArgs, scope: Option<&NodePath>) -> Result<Ex
                 .is_some_and(|name| of_repository(&pull.url, name))
         })
         .collect();
-    let proposals = propose(tree, scope, &pulls);
+    let only = args
+        .item
+        .as_deref()
+        .map(|reference| crate::show::find(tree, reference, None))
+        .transpose()?;
+    let matched: Vec<&str> = matches(tree, scope, only, &pulls)
+        .into_iter()
+        .flat_map(|(_, urls)| urls)
+        .collect();
+    let mut branches = BTreeMap::new();
+    for url in matched {
+        if let Some(branch) = branch_of(url) {
+            branches.insert(url.to_owned(), branch);
+        }
+    }
+    let proposals = propose(tree, scope, only, &pulls, &branches);
     if args.apply {
         for proposal in &proposals {
             let item = crate::show::find(tree, &proposal.item, None)?;
             let links = Links {
-                branches: Vec::new(),
+                branches: proposal.branches.clone(),
                 pull_requests: proposal.pull_requests.clone(),
             };
             work::record(&item.file, &links)?;
@@ -77,11 +95,13 @@ pub fn run(tree: &Tree, args: &LinksArgs, scope: Option<&NodePath>) -> Result<Ex
             "would record"
         };
         for proposal in &proposals {
-            println!(
-                "{}  {verb} {}",
-                proposal.item,
-                proposal.pull_requests.join(", ")
-            );
+            let found: Vec<&str> = proposal
+                .pull_requests
+                .iter()
+                .chain(&proposal.branches)
+                .map(String::as_str)
+                .collect();
+            println!("{}  {verb} {}", proposal.item, found.join(", "));
         }
         if proposals.is_empty() {
             println!("every pull request that names an item is already recorded in it");
@@ -117,24 +137,84 @@ fn fetch() -> Result<Vec<PullRequest>> {
     serde_json::from_slice(&output.stdout).context("reading gh's answer")
 }
 
-/// What each item of `scope` lacks among the pull requests that name it.
-pub fn propose(tree: &Tree, scope: Option<&NodePath>, pulls: &[PullRequest]) -> Vec<Proposal> {
-    tree.items_within(scope)
+/// The `<owner>/<repo>:<branch>` a pull request comes from, from `gh pr view`;
+/// `None` when gh cannot tell.
+fn branch_of(url: &str) -> Option<String> {
+    let output = Command::new("gh")
+        .args([
+            "pr",
+            "view",
+            url,
+            "--json",
+            "headRefName,headRepository,headRepositoryOwner",
+        ])
+        .output()
+        .ok()
+        .filter(|output| output.status.success())?;
+    let view: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
+    let branch = view["headRefName"].as_str()?;
+    let owner = view["headRepositoryOwner"]["login"].as_str()?;
+    let repository = view["headRepository"]["name"].as_str()?;
+    Some(format!("{owner}/{repository}:{branch}"))
+}
+
+/// The items of `scope` (or the one item `only`) with the URLs of every pull request that names them.
+fn matches<'a>(
+    tree: &'a Tree,
+    scope: Option<&'a NodePath>,
+    only: Option<&'a Item>,
+    pulls: &'a [PullRequest],
+) -> Vec<(&'a Item, Vec<&'a str>)> {
+    let items: Vec<&Item> = match only {
+        Some(item) => vec![item],
+        None => tree.items_within(scope).collect(),
+    };
+    items
+        .into_iter()
         .filter_map(|item| {
             let reference = item.reference()?;
-            let recorded = item.document.texts("pull_requests");
-            let mut found: Vec<String> = pulls
+            let mut urls: Vec<&str> = pulls
                 .iter()
-                .filter(|pull| {
-                    names(item, &reference, pull) && !recorded.contains(&pull.url.as_str())
-                })
-                .map(|pull| pull.url.clone())
+                .filter(|pull| names(item, &reference, pull))
+                .map(|pull| pull.url.as_str())
                 .collect();
-            found.dedup();
-            (!found.is_empty()).then(|| Proposal {
-                item: reference,
+            urls.dedup();
+            (!urls.is_empty()).then_some((item, urls))
+        })
+        .collect()
+}
+
+/// What each item lacks among the pull requests that name it and the
+/// branches they come from (`branches`, by pull request URL).
+pub fn propose(
+    tree: &Tree,
+    scope: Option<&NodePath>,
+    only: Option<&Item>,
+    pulls: &[PullRequest],
+    branches: &BTreeMap<String, String>,
+) -> Vec<Proposal> {
+    matches(tree, scope, only, pulls)
+        .into_iter()
+        .filter_map(|(item, urls)| {
+            let recorded = item.document.texts("pull_requests");
+            let recorded_branches = item.document.texts("branches");
+            let pull_requests: Vec<String> = urls
+                .iter()
+                .filter(|url| !recorded.contains(url))
+                .map(|url| (*url).to_owned())
+                .collect();
+            let mut found_branches: Vec<String> = urls
+                .iter()
+                .filter_map(|url| branches.get(*url))
+                .filter(|branch| !recorded_branches.contains(&branch.as_str()))
+                .cloned()
+                .collect();
+            found_branches.dedup();
+            (!pull_requests.is_empty() || !found_branches.is_empty()).then(|| Proposal {
+                item: item.reference().unwrap_or_default(),
                 path: item.relative.to_string_lossy().into_owned(),
-                pull_requests: found,
+                pull_requests,
+                branches: found_branches,
             })
         })
         .collect()
@@ -208,7 +288,12 @@ mod tests {
             pull("https://x/pull/3", "chore", "Part of p#T9."),
             pull("https://x/pull/4", "T9 everywhere [29558846430]", ""),
         ];
-        let proposals = propose(&tree, None, &pulls);
+        let branches = BTreeMap::from([(
+            "https://x/pull/2".to_owned(),
+            "acme/lib:fix/keys".to_owned(),
+        )]);
+        let proposals = propose(&tree, None, None, &pulls, &branches);
+        assert_eq!(proposals[0].branches, ["acme/lib:fix/keys"]);
         let found: Vec<_> = proposals
             .iter()
             .map(|p| (p.item.as_str(), p.pull_requests.clone()))

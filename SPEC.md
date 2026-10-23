@@ -47,7 +47,7 @@ Keys MUST be written in English, in lower case, with `_` as the word separator. 
 | `branches` | list of strings | MAY | The git branches the item's work lives in, each of the form `<owner>/<repo>:<branch>`, e.g. `slashome/ariane:feat/web-node-select`; a task may span several repositories. |
 | `pull_requests` | list of strings | MAY | The pull requests of the item's work, as `https://` URLs. |
 | `waiting_for` | list of strings | MUST when the status is in the `waiting` category; MUST NOT otherwise | The people the item waits for, each a handle declared under `[people]` (§1.5). |
-| `waiting_on` | string | MAY when waiting; MUST NOT otherwise | Why it waits: `review` (a review of its work), `answer` (a reply, a decision, an information) or `other`. |
+| `waiting_on` | string | MAY when waiting; MUST NOT otherwise | Why it waits: `review` (a review of its work), `validation` (of its result, by a product manager or a client), `answer` (a reply, a decision, an information) or `other`. |
 | `waiting_since` | date | SHOULD when waiting; MUST NOT otherwise | When the wait began, `YYYY-MM-DD`. |
 
 Any other key is a **custom key**. A custom key SHOULD be declared in the node's `node.toml` (§1.5). A tool that reads an item MUST preserve every key it does not know, unchanged, when it writes the item back.

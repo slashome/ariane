@@ -12,6 +12,10 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use toml_edit::{DocumentMut, Item, Table, value};
 
+/// The first line of the file, kept on top.
+const HEADER: &str =
+    "# Tokens of the trackers, one per account (ADR-0011). Never commit this file.\n";
+
 /// `secrets.toml`, next to `config.toml`.
 pub fn file() -> PathBuf {
     crate::config::file().with_file_name("secrets.toml")
@@ -52,10 +56,7 @@ pub fn store(file: &Path, tracker: &str, account: &str, token: &str) -> Result<(
         Ok(text) => text
             .parse()
             .with_context(|| format!("parsing {}", file.display()))?,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            "# Tokens of the trackers, one per account (ADR-0011). Never commit this file.\n"
-                .parse()?
-        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => DocumentMut::new(),
         Err(error) => return Err(error).with_context(|| format!("reading {}", file.display())),
     };
     if !document.contains_table(tracker) {
@@ -78,7 +79,11 @@ pub fn store(file: &Path, tracker: &str, account: &str, token: &str) -> Result<(
     let mut out = options
         .open(file)
         .with_context(|| format!("writing {}", file.display()))?;
-    out.write_all(document.to_string().as_bytes())
+    let mut text = document.to_string();
+    if !text.starts_with(HEADER) {
+        text.insert_str(0, HEADER);
+    }
+    out.write_all(text.as_bytes())
         .with_context(|| format!("writing {}", file.display()))?;
     restrict(file)
 }
@@ -132,6 +137,7 @@ mod tests {
             token(&file, "monday", "other").unwrap().as_deref(),
             Some("t2")
         );
+        assert!(std::fs::read_to_string(&file).unwrap().starts_with(HEADER));
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;

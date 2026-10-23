@@ -23,9 +23,10 @@ use crate::node::Category;
 pub const SIZES: &[&str] = &["XS", "S", "M", "L", "XL"];
 /// Allowed values of `impact` and `priority`.
 pub const LEVELS: &[&str] = &["low", "medium", "high"];
-/// Why an item waits: for a `review` of its work, for an `answer` (a reply, a
+/// Why an item waits: for a `review` of its work, for the `validation` of its
+/// result (by a product manager, a client), for an `answer` (a reply, a
 /// decision, an information), or for some `other` reason.
-pub const WAITING_REASONS: &[&str] = &["review", "answer", "other"];
+pub const WAITING_REASONS: &[&str] = &["review", "validation", "answer", "other"];
 /// Statuses of a reflexion: open, being tried (`trial`), or settled.
 pub const REFLEXION_STATUSES: &[&str] = &["open", "trial", "settled"];
 /// The only reflexion status that counts as closed, for archived reflexions.
