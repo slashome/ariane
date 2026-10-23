@@ -14,6 +14,7 @@ import { statusLabel, useNodes } from '@/entities/node'
 import { enumValues, kindLabel, useSchema } from '@/entities/schema'
 import type { Item, NodeSummary, Schema } from '@/shared/api'
 import { cn, displayNode } from '@/shared/lib'
+import { Highlight } from '@/shared/ui'
 import { ItemDetails } from '@/widgets/item-details'
 
 const features = tableFeatures({
@@ -52,7 +53,11 @@ function buildColumns(schema: Schema | undefined, nodes: NodeSummary[]) {
       header: 'Id',
       sortFn: 'alphanumeric',
       sortUndefined: 'last',
-      cell: ({ row }) => <span className="font-mono text-xs">{row.original.id ?? '—'}</span>,
+      cell: ({ row }) => (
+        <span className="font-mono text-xs">
+          <Highlight text={row.original.id ?? '—'} />
+        </span>
+      ),
     }),
     helper.accessor((item) => text(item.title), {
       id: 'title',
@@ -61,7 +66,7 @@ function buildColumns(schema: Schema | undefined, nodes: NodeSummary[]) {
       sortUndefined: 'last',
       cell: ({ row }) => (
         <span className={cn('line-clamp-2', row.original.archived && 'text-muted-foreground')}>
-          {row.original.title ?? row.original.path}
+          <Highlight text={row.original.title ?? row.original.path} />
         </span>
       ),
     }),

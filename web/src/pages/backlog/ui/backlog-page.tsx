@@ -4,11 +4,11 @@ import { useNavigate, useLocation } from 'react-router'
 import { changesFor, itemHref, ItemLink, useItems, useUpdateItem } from '@/entities/item'
 import { firstStatusOf, workflowOf, useNodes } from '@/entities/node'
 import { enumValues, useSchema } from '@/entities/schema'
-import { emptyFilters, filterItems, useItemFilters } from '@/features/filter-items'
+import { QueryField, useFilteredItems, useItemFilters } from '@/features/filter-items'
 import type { Item } from '@/shared/api'
 import { scopeSearch } from '@/shared/config'
 import { cn, displayNode } from '@/shared/lib'
-import { Button, EmptyState, ErrorState, Kbd, LoadingState, NativeSelect, PageHeader, Segmented, toast } from '@/shared/ui'
+import { Button, EmptyState, ErrorState, Highlight, Kbd, LoadingState, NativeSelect, PageHeader, Segmented, toast } from '@/shared/ui'
 import { cycle, missingFields, sortBacklog, sorts, type BacklogSort, type TriageField } from '../model/triage'
 
 const fieldKeys: Record<string, TriageField> = { p: 'priority', i: 'impact', s: 'size' }
@@ -30,18 +30,8 @@ export function BacklogPage() {
     [schema],
   )
 
-  const backlog = useMemo(() => {
-    const tasks = filterItems(items, {
-      ...emptyFilters,
-      node: filters.node,
-      includeArchived: filters.includeArchived,
-      includeDescendants: filters.includeDescendants,
-      kinds: ['task'],
-      categories: ['backlog'],
-      query: filters.query,
-    })
-    return sortBacklog(tasks, sort, vocabulary.priority, vocabulary.size)
-  }, [items, filters, sort, vocabulary])
+  const { items: tasks, total } = useFilteredItems(items, { kinds: ['task'], categories: ['backlog'] })
+  const backlog = useMemo(() => sortBacklog(tasks, sort, vocabulary.priority, vocabulary.size), [tasks, sort, vocabulary])
   const untriaged = backlog.filter((item) => missingFields(item).length > 0).length
 
   const set = (item: Item, field: TriageField, value: string | null) =>
@@ -98,6 +88,8 @@ export function BacklogPage() {
             : `${backlog.length} ${backlog.length === 1 ? 'task' : 'tasks'} waiting in a backlog status · ${untriaged} still to estimate`
         }
         actions={
+          <>
+          <QueryField count={backlog.length} total={total} />
           <label className="flex items-center gap-2 text-sm text-muted-foreground">
             Sort
             <NativeSelect aria-label="Sort the backlog" value={sort} onChange={(event) => setSort(event.target.value as BacklogSort)}>
@@ -108,6 +100,7 @@ export function BacklogPage() {
               ))}
             </NativeSelect>
           </label>
+          </>
         }
       />
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
@@ -129,8 +122,10 @@ export function BacklogPage() {
       ) : isPending ? (
         <LoadingState />
       ) : backlog.length === 0 ? (
-        <EmptyState icon={Inbox} title="The backlog is empty">
-          A task joins it when its status belongs to the backlog category of its node's workflow.
+        <EmptyState icon={Inbox} title={total === 0 ? 'The backlog is empty' : 'No backlog task matches the search'}>
+          {total === 0
+            ? "A task joins it when its status belongs to the backlog category of its node's workflow."
+            : `${total} backlog tasks in scope; the search field keeps none of them.`}
         </EmptyState>
       ) : (
         <ul aria-label="Backlog tasks" className="divide-y divide-border rounded-lg border border-border">
@@ -150,9 +145,11 @@ export function BacklogPage() {
               >
                 <div className="min-w-0">
                   <div className="flex items-baseline gap-2">
-                    <span className="shrink-0 font-mono text-xs text-muted-foreground">{item.id}</span>
+                    <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                      <Highlight text={item.id ?? ''} />
+                    </span>
                     <ItemLink item={item} className="truncate">
-                      {item.title ?? item.path}
+                      <Highlight text={item.title ?? item.path} />
                     </ItemLink>
                   </div>
                   <p className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-muted-foreground">

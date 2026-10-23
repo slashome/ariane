@@ -4,10 +4,10 @@ import { useSearchParams } from 'react-router'
 import { isClosed, ItemLink, ProgressMeter, StatusBadge, useItems } from '@/entities/item'
 import { statusLabel, useNodes } from '@/entities/node'
 import { useSchema } from '@/entities/schema'
-import { emptyFilters, filterItems, scopeItems, useItemFilters } from '@/features/filter-items'
+import { QueryField, scopeItems, useFilteredItems, useItemFilters } from '@/features/filter-items'
 import type { Category } from '@/shared/api'
 import { cn, displayNode } from '@/shared/lib'
-import { EmptyState, ErrorState, LoadingState, NativeSelect, PageHeader } from '@/shared/ui'
+import { EmptyState, ErrorState, Highlight, LoadingState, NativeSelect, PageHeader } from '@/shared/ui'
 import { groupings, groupStories, type StoryGrouping } from '../model/story-groups'
 
 const groupParam = 'group'
@@ -21,19 +21,12 @@ export function StoriesPage() {
   const grouping = (groupings.find((entry) => entry.value === params.get(groupParam))?.value ?? 'milestone') as StoryGrouping
   const labels = (category: Category) => schema?.categories.find((entry) => entry.id === category)?.label ?? category
 
+  const { items: stories, total } = useFilteredItems(items, { kinds: ['story'] })
   const groups = useMemo(() => {
-    const stories = filterItems(items, {
-      ...emptyFilters,
-      node: filters.node,
-      includeArchived: filters.includeArchived,
-      includeDescendants: filters.includeDescendants,
-      kinds: ['story'],
-      query: filters.query,
-    })
     const tasks = scopeItems(items, { node: null, includeArchived: filters.includeArchived, includeDescendants: false })
     const statusLabel = (key: string) => schema?.categories.find((entry) => entry.id === key)?.label ?? key
     return groupStories(stories, tasks, grouping, grouping === 'status' ? statusLabel : undefined)
-  }, [items, filters, grouping, schema])
+  }, [items, stories, filters.includeArchived, grouping, schema])
   const count = groups.reduce((sum, group) => sum + group.items.length, 0)
 
   const setGrouping = (value: string) =>
@@ -52,6 +45,8 @@ export function StoriesPage() {
         title="Stories"
         description={isPending ? 'Loading…' : `${count} ${count === 1 ? 'story' : 'stories'} — progress counts the tasks whose parent is the story, dropped ones aside`}
         actions={
+          <>
+          <QueryField count={count} total={total} />
           <label className="flex items-center gap-2 text-sm text-muted-foreground">
             Group by
             <NativeSelect aria-label="Group stories by" value={grouping} onChange={(event) => setGrouping(event.target.value)}>
@@ -62,6 +57,7 @@ export function StoriesPage() {
               ))}
             </NativeSelect>
           </label>
+          </>
         }
       />
       {error ? (
@@ -69,8 +65,14 @@ export function StoriesPage() {
       ) : isPending ? (
         <LoadingState />
       ) : count === 0 ? (
-        <EmptyState icon={BookOpen} title="No story here">
-          A story is a Markdown file under <code>stories/</code>; its tasks point to it with <code>parent</code>.
+        <EmptyState icon={BookOpen} title={total === 0 ? 'No story here' : 'No story matches the search'}>
+          {total === 0 ? (
+            <>
+              A story is a Markdown file under <code>stories/</code>; its tasks point to it with <code>parent</code>.
+            </>
+          ) : (
+            `${total} stories in scope; the search field keeps none of them.`
+          )}
         </EmptyState>
       ) : (
         groups.map((group) => (
@@ -86,9 +88,11 @@ export function StoriesPage() {
                 <li key={story.path} className={cn('grid items-center gap-x-4 gap-y-1 py-2.5 md:grid-cols-[minmax(0,1fr)_9rem_18rem]', isClosed(story.category) && 'opacity-70')}>
                   <div className="min-w-0">
                     <div className="flex items-baseline gap-2">
-                      <span className="shrink-0 font-mono text-xs text-muted-foreground">{story.id}</span>
+                      <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                        <Highlight text={story.id ?? ''} />
+                      </span>
                       <ItemLink item={story} className="truncate font-medium">
-                        {story.title ?? story.path}
+                        <Highlight text={story.title ?? story.path} />
                       </ItemLink>
                     </div>
                     <p className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-muted-foreground">

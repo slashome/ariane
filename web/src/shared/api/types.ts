@@ -34,6 +34,14 @@ export interface Item {
   body?: string
 }
 
+// One item found by `ariane search`: its row, where it matched, an excerpt and the ranges of the excerpt
+// to highlight, in code points.
+export interface SearchHit extends Item {
+  field: 'reference' | 'title' | 'body'
+  excerpt: string
+  highlights: [number, number][]
+}
+
 export interface Relations {
   parent: Item | null
   children: Item[]

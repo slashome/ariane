@@ -3,7 +3,9 @@
 //! Every endpoint reuses what the commands already compute, so the interface and
 //! the command line can never disagree: `/api/items` is `ariane tasks --all
 //! --archived --dates --json` (`?kind=` and `?body=1` are `--kind` and
-//! `--body`), `/api/show?ref=` is `ariane show --json`, `/api/schema` is
+//! `--body`), `/api/search?q=` is `ariane search --json` (`?kind=`, `?node=` and
+//! `?archived=1` are `--kind`, `--node` and `--archived`),
+//! `/api/show?ref=` is `ariane show --json`, `/api/schema` is
 //! `ariane schema --json`, `/api/doctor` is `ariane doctor --all --json`. Responses are built under a short read lock on
 //! the tree, released before anything is sent.
 //!
@@ -97,6 +99,54 @@ fn parse_kinds(raw: &str) -> Result<Vec<Kind>, String> {
         .filter(|word| !word.is_empty())
         .map(|word| Kind::from_str(word, true).map_err(|_| format!("unknown kind `{word}`")))
         .collect()
+}
+
+/// The query of `GET /api/search`.
+#[derive(Debug, Default, Deserialize)]
+pub struct SearchQuery {
+    /// The words to find; no word finds nothing.
+    #[serde(default)]
+    pub q: String,
+    /// Comma-separated kinds, as `ariane search --kind`; every kind when absent.
+    pub kind: Option<String>,
+    /// Only this node and its descendants, as `--node`; the whole tree when absent.
+    pub node: Option<String>,
+    /// `1` or `true` includes archived items, as `--archived`.
+    pub archived: Option<String>,
+}
+
+/// `GET /api/search?q=`: the items `q` finds, best first, as
+/// `ariane search --all --json` with the dates of `/api/items`; `400` for an
+/// unknown kind.
+pub async fn search(
+    Shared(state): Shared<Arc<State>>,
+    Query(query): Query<SearchQuery>,
+) -> Response {
+    let kinds = match parse_kinds(query.kind.as_deref().unwrap_or_default()) {
+        Ok(kinds) => kinds,
+        Err(message) => return error(StatusCode::BAD_REQUEST, &message),
+    };
+    let scope = query.node.as_deref().map(crate::tree::NodePath::new);
+    let Ok(dates) = state.dates.read() else {
+        return error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "the date lock is poisoned",
+        );
+    };
+    with_tree(&state, |tree| {
+        let options = crate::search::Options {
+            archived: matches!(query.archived.as_deref(), Some("1" | "true")),
+            kinds: &kinds,
+            dates: Some(&dates),
+        };
+        serde_json::to_value(crate::search::search(
+            tree,
+            scope.as_ref(),
+            &query.q,
+            &options,
+        ))
+        .unwrap_or(Value::Null)
+    })
 }
 
 /// The query of `GET /api/show`.

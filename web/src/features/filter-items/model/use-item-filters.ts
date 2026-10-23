@@ -16,6 +16,7 @@ export function useItemFilters() {
   const filters = useMemo<ItemFilters>(
     () => ({
       query: params.get(searchParamKeys.query) ?? '',
+      orders: {},
       node: params.get(searchParamKeys.node),
       kinds: list<Kind>(params, searchParamKeys.kinds),
       categories: list<Category>(params, searchParamKeys.categories),
@@ -45,6 +46,20 @@ export function useItemFilters() {
   return {
     filters,
     setQuery: (query: string) => update(searchParamKeys.query, query),
+    // `null` for the whole tree; the home node is the empty path, kept in the URL as `?node=`.
+    setNode: (node: string | null) =>
+      setParams(
+        (current) => {
+          const next = new URLSearchParams(current)
+          if (node === null) {
+            next.delete(searchParamKeys.node)
+          } else {
+            next.set(searchParamKeys.node, node)
+          }
+          return next
+        },
+        { replace: true },
+      ),
     setKinds: (kinds: Kind[]) => update(searchParamKeys.kinds, kinds.join(',')),
     setCategories: (categories: Category[]) => update(searchParamKeys.categories, categories.join(',')),
     setIncludeArchived: (include: boolean) => update(searchParamKeys.archived, include ? '1' : null),

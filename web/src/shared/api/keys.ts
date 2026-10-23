@@ -3,6 +3,7 @@ export const queryKeys = {
   itemsWithBody: (kind: string) => ['items', 'body', kind] as const,
   item: (reference: string) => ['item', reference] as const,
   itemDetails: ['item'],
+  search: (q: string, archived: boolean) => ['search', q, archived] as const,
   doctor: ['doctor'],
   nodes: ['nodes'],
   schema: ['schema'],

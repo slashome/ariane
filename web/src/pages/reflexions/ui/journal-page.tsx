@@ -2,14 +2,15 @@ import { NotebookPen } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link, useLocation } from 'react-router'
 import { excerpt, ItemLink } from '@/entities/item'
+import { QueryField } from '@/features/filter-items'
 import { routes, scopeSearch } from '@/shared/config'
 import { displayNode } from '@/shared/lib'
-import { EmptyState, ErrorState, LoadingState, PageHeader } from '@/shared/ui'
+import { EmptyState, ErrorState, Highlight, LoadingState, PageHeader } from '@/shared/ui'
 import { journal } from '../model/reflexions'
 import { useReflexions } from './use-reflexions'
 
 export function JournalPage() {
-  const { reflexions, isPending, error, scope } = useReflexions()
+  const { reflexions, total, isPending, error, scope } = useReflexions()
   const { search } = useLocation()
   const months = useMemo(() => journal(reflexions), [reflexions])
   const trial = reflexions.filter((item) => item.status === 'trial')
@@ -21,9 +22,12 @@ export function JournalPage() {
         title="Journal"
         description={isPending ? 'Loading…' : `${settled} settled reflexions, dated by their latest commit · ${trial.length} on trial`}
         actions={
-          <Link to={{ pathname: routes.reflexions, search: scopeSearch(search) }} className="text-sm text-primary hover:underline">
-            Back to the board
-          </Link>
+          <>
+            <QueryField count={reflexions.length} total={total} />
+            <Link to={{ pathname: routes.reflexions, search: scopeSearch(search) }} className="text-sm text-primary hover:underline">
+              Back to the board
+            </Link>
+          </>
         }
       />
       {error ? (
@@ -43,7 +47,9 @@ export function JournalPage() {
                 {trial.map((item) => (
                   <li key={item.path}>
                     <span className="mr-2 font-mono text-xs text-muted-foreground">{item.id}</span>
-                    <ItemLink item={item}>{item.title ?? item.path}</ItemLink>
+                    <ItemLink item={item}>
+                      <Highlight text={item.title ?? item.path} />
+                    </ItemLink>
                   </li>
                 ))}
               </ul>
@@ -64,9 +70,15 @@ export function JournalPage() {
                       {item.archived && <span className="ml-2">archived</span>}
                     </p>
                     <h3 className="font-medium">
-                      <ItemLink item={item}>{item.title ?? item.path}</ItemLink>
+                      <ItemLink item={item}>
+                        <Highlight text={item.title ?? item.path} />
+                      </ItemLink>
                     </h3>
-                    {excerpt(item.body, 400) && <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{excerpt(item.body, 400)}</p>}
+                    {excerpt(item.body, 400) && (
+                      <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
+                        <Highlight text={excerpt(item.body, 400)} />
+                      </p>
+                    )}
                   </li>
                 ))}
               </ol>

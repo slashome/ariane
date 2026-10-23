@@ -47,7 +47,7 @@ external:
 
 ## Operating rules
 
-- **Attach the discussion to its item, first.** As soon as a discussion is about work — a task, a story, a reflexion, a ressource — find the item it belongs to (`ariane tasks --json`, `ariane show`) or create it, before anything else, then run `ariane focus <node>#<id>`. The Claude Code hook (`ariane hook claude-code`) notes the focus for this session and records every branch (`git switch -c`, `git checkout -b`) and pull request (`gh pr create`) created afterwards in the item's `branches` and `pull_requests`; one created before the focus waits and is recorded when it is set. A message starting with `Ariane:` comes from that hook. The hook is installed by merging [`adapters/claude/hooks.json`](https://github.com/slashome/ariane/blob/develop/adapters/claude/hooks.json) into `~/.claude/settings.json`.
+- **Attach the discussion to its item, first.** As soon as a discussion is about work — a task, a story, a reflexion, a ressource — find the item it belongs to (`ariane search <words> --all`, `ariane tasks --json`, `ariane show`) or create it, before anything else, then run `ariane focus <node>#<id>`. The Claude Code hook (`ariane hook claude-code`) notes the focus for this session and records every branch (`git switch -c`, `git checkout -b`) and pull request (`gh pr create`) created afterwards in the item's `branches` and `pull_requests`; one created before the focus waits and is recorded when it is set. A message starting with `Ariane:` comes from that hook. The hook is installed by merging [`adapters/claude/hooks.json`](https://github.com/slashome/ariane/blob/develop/adapters/claude/hooks.json) into `~/.claude/settings.json`.
 
 - **The header is the source of truth for an item's state; `INDEX.md` for the node's judgment.** Change a status in the header only. Never add item listings or statuses to an `INDEX.md`.
 - **After every write, run `ariane doctor`** and leave it clean. A finding names its remedy: run the command it gives (`ariane migrate`), or lay out its resolutions for the user to choose.
@@ -73,6 +73,7 @@ external:
 | `ariane doctor` | Check after every write. Exit `0` clean, `1` a command repairs it, `2` a human decision. Writes nothing. |
 | `ariane migrate` | Legacy items to the current header: dry run by default, `--apply` to write. |
 | `ariane fix` | The repairs `doctor` names as `ariane fix`: file names after the id, links rewritten. Dry run by default, `--apply` to write. |
+| `ariane search <words> --all --json` | Finding an item by id, reference, title or body words, case and accents ignored, best first (exact id, then title, then body) with an excerpt. Before creating an item, to avoid a duplicate; `--kind`, `--node`, `--archived` narrow it. |
 | `ariane show <node>#<id> --json` | One item: header, body, parent, children, dependencies, dependents. |
 | `ariane focus <node>#<id>` | First thing in a discussion about work: attaches the session to its item, where branches and pull requests are then recorded. |
 | `ariane sync monday` | Sends items' statuses to their monday tickets (`[tracker.push]`, `[tracker.waiting]`), mentioning the people awaited; a conflict or a missing label is reported, never forced. Dry run by default, `--apply` to send, `--item <ref>` for one. Needs `ariane connect monday --account <account>` once. |

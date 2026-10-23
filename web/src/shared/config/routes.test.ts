@@ -16,9 +16,10 @@ describe('item URLs', () => {
 })
 
 describe('scopeSearch', () => {
-  it('keeps only the node scope and the archive toggle', async () => {
+  it('keeps only the node scope, the archive toggle and the search field', async () => {
     const { scopeSearch } = await import('./search-params')
-    expect(scopeSearch('?node=p&q=fence&archived=1&category=done')).toBe('?node=p&archived=1')
-    expect(scopeSearch('?q=fence')).toBe('')
+    expect(scopeSearch('?node=p&q=fence&archived=1&category=done')).toBe('?node=p&archived=1&q=fence')
+    expect(scopeSearch('?q=fence')).toBe('?q=fence')
+    expect(scopeSearch('?category=done')).toBe('')
   })
 })

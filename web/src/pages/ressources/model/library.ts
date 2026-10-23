@@ -1,4 +1,4 @@
-import { hostOf, linksIn } from '@/shared/lib'
+import { hostOf, linksIn, highlightRanges } from '@/shared/lib'
 import type { Item } from '@/shared/api'
 
 export interface Link {
@@ -15,19 +15,19 @@ export function linksOf(item: Item): Link[] {
   })
 }
 
-// The text around the first match of `query` in the body, to show why a ressource matched; `null` when
-// the query is empty or matches elsewhere.
-export function snippet(body: string | undefined, query: string, radius = 70): string | null {
-  const needle = query.trim().toLowerCase()
-  if (!body || needle === '') {
+// The text around the first match of the search words in the body, to show why a ressource matched;
+// `null` without words or when they match elsewhere.
+export function snippet(body: string | undefined, terms: readonly string[], radius = 70): string | null {
+  if (!body) {
     return null
   }
   const flat = body.replace(/\s+/g, ' ')
-  const index = flat.toLowerCase().indexOf(needle)
-  if (index < 0) {
+  const [first] = highlightRanges(flat, terms)
+  if (first === undefined) {
     return null
   }
-  const start = Math.max(0, index - radius)
-  const end = Math.min(flat.length, index + needle.length + radius)
-  return `${start > 0 ? '…' : ''}${flat.slice(start, end).trim()}${end < flat.length ? '…' : ''}`
+  const characters = Array.from(flat)
+  const start = Math.max(0, first[0] - radius)
+  const end = Math.min(characters.length, first[1] + radius)
+  return `${start > 0 ? '…' : ''}${characters.slice(start, end).join('').trim()}${end < characters.length ? '…' : ''}`
 }

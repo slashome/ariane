@@ -1,8 +1,14 @@
 import type { Category, Item, Kind } from '@/shared/api'
 import { isWithinNode } from '@/shared/lib'
+import { matchesQuery } from './match'
+import { parseQuery } from './query'
+import type { RankOrders } from './vocabulary'
 
 export interface ItemFilters {
+  // The search field as typed: filters such as `status:` or `size:<=M`, and free words.
   query: string
+  // The schema's order of sizes, impacts and priorities, which `size:<=M` compares along.
+  orders: RankOrders
   node: string | null
   kinds: Kind[]
   categories: Category[]
@@ -13,19 +19,12 @@ export interface ItemFilters {
 
 export const emptyFilters: ItemFilters = {
   query: '',
+  orders: {},
   node: null,
   kinds: [],
   categories: [],
   includeArchived: false,
   includeDescendants: false,
-}
-
-function matchesQuery(item: Item, query: string): boolean {
-  if (query === '') {
-    return true
-  }
-  const needle = query.toLowerCase()
-  return [item.title, item.id, item.node, item.path, item.body].some((field) => field?.toLowerCase().includes(needle))
 }
 
 export type Scope = Pick<ItemFilters, 'node' | 'includeArchived' | 'includeDescendants'>
@@ -47,13 +46,13 @@ export function scopeItems(items: Item[], scope: Scope, kinds: Kind[] = []): Ite
 }
 
 export function filterItems(items: Item[], filters: ItemFilters): Item[] {
-  const query = filters.query.trim()
+  const query = parseQuery(filters.query)
   return items.filter(
     (item) =>
       (filters.includeArchived || !item.archived) &&
       inScope(item.node, filters.node, filters.includeDescendants) &&
       (filters.kinds.length === 0 || filters.kinds.includes(item.kind)) &&
       (filters.categories.length === 0 || (item.category !== null && filters.categories.includes(item.category))) &&
-      matchesQuery(item, query),
+      matchesQuery(item, query, filters.orders),
   )
 }

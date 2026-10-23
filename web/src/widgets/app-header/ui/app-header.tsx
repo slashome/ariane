@@ -1,7 +1,7 @@
 import { FolderGit2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useRepo } from '@/entities/repo'
-import { ItemSearchInput } from '@/features/filter-items'
+import { QueryField } from '@/features/filter-items'
 import { Tooltip } from '@/shared/ui'
 import { NodeSwitcher } from './node-switcher'
 
@@ -20,7 +20,7 @@ export function AppHeader({ actions }: { actions?: ReactNode }) {
       </Tooltip>
       <NodeSwitcher />
       <div className="ml-auto flex items-center gap-3">
-        <ItemSearchInput />
+        <QueryField />
         {actions}
       </div>
     </header>

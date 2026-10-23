@@ -38,6 +38,10 @@ pub struct Cli {
 pub enum Command {
     #[command(about = "List the items of the tree")]
     Tasks(TasksArgs),
+    #[command(
+        about = "Find items by id, reference, title or body, ignoring case and accents, best first"
+    )]
+    Search(SearchArgs),
     #[command(about = "Show one item: its header, its body, its parent, children and dependencies")]
     Show(ShowArgs),
     #[command(
@@ -118,6 +122,45 @@ pub struct TasksArgs {
 
     #[arg(long, help = "Add the date of each item's latest commit (`updated`)")]
     pub dates: bool,
+
+    #[arg(long)]
+    pub json: bool,
+}
+
+/// Arguments of `ariane search`: the words to find, an optional node scope,
+/// the kinds to keep, whether to include archived items, and `json` to print
+/// the results as JSON.
+#[derive(Args)]
+pub struct SearchArgs {
+    #[arg(
+        required = true,
+        help = "The words to find; an item must hold every one of them"
+    )]
+    pub text: Vec<String>,
+
+    #[arg(
+        long,
+        help = "Only the items of this node and its descendants (default: the node of the current directory)"
+    )]
+    pub node: Option<String>,
+
+    #[arg(
+        long,
+        conflicts_with = "node",
+        help = "Cover the whole tree, wherever the command runs"
+    )]
+    pub all: bool,
+
+    #[arg(long, help = "Include archived items")]
+    pub archived: bool,
+
+    #[arg(
+        long,
+        value_enum,
+        value_delimiter = ',',
+        help = "Only items of these kinds, such as `task,story` (default: every kind)"
+    )]
+    pub kind: Vec<Kind>,
 
     #[arg(long)]
     pub json: bool,

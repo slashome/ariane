@@ -1,5 +1,9 @@
 @import 'tailwindcss';
 
+/* Dark mode is the `data-appearance` the app puts on the root: the system's choice, or the one made in
+   the command palette. Tailwind's `dark:` follows it too. */
+@custom-variant dark (&:where([data-appearance='dark'], [data-appearance='dark'] *));
+
 @theme {
   --color-background: oklch(0.99 0 0);
   --color-foreground: oklch(0.2 0.01 260);
@@ -23,20 +27,18 @@
   --ease-hover: cubic-bezier(0.2, 0, 0, 1);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --color-background: oklch(0.17 0.01 260);
-    --color-foreground: oklch(0.94 0.005 260);
-    --color-muted: oklch(0.24 0.012 260);
-    --color-muted-foreground: oklch(0.68 0.015 260);
-    --color-border: oklch(0.3 0.012 260);
-    --color-primary: oklch(from var(--theme-primary) max(l, 0.66) min(c, 0.17) h);
-    --color-ring: oklch(from var(--theme-primary) max(l, 0.68) min(c, 0.15) h);
-    --color-accent: oklch(from var(--theme-secondary) max(l, 0.7) min(c, 0.16) h);
-    --color-popover: oklch(0.21 0.012 260);
-    --color-sidebar: oklch(0.15 0.01 260);
-    --color-halo: color-mix(in oklab, var(--color-accent) 24%, transparent);
-  }
+:root[data-appearance='dark'] {
+  --color-background: oklch(0.17 0.01 260);
+  --color-foreground: oklch(0.94 0.005 260);
+  --color-muted: oklch(0.24 0.012 260);
+  --color-muted-foreground: oklch(0.68 0.015 260);
+  --color-border: oklch(0.3 0.012 260);
+  --color-primary: oklch(from var(--theme-primary) max(l, 0.66) min(c, 0.17) h);
+  --color-ring: oklch(from var(--theme-primary) max(l, 0.68) min(c, 0.15) h);
+  --color-accent: oklch(from var(--theme-secondary) max(l, 0.7) min(c, 0.16) h);
+  --color-popover: oklch(0.21 0.012 260);
+  --color-sidebar: oklch(0.15 0.01 260);
+  --color-halo: color-mix(in oklab, var(--color-accent) 24%, transparent);
 }
 
 /* Tailwind v4 leaves buttons on the default cursor; every clickable button here gets the pointer back. */

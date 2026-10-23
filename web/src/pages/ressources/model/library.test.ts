@@ -12,8 +12,8 @@ describe('ressource library', () => {
 
   it('shows the text around a body match', () => {
     const body = `${'a '.repeat(60)}the needle is here ${'b '.repeat(60)}`
-    expect(snippet(body, 'NEEDLE', 10)).toBe('…a a a the needle is here b…')
-    expect(snippet(body, 'absent')).toBeNull()
-    expect(snippet(body, ' ')).toBeNull()
+    expect(snippet(body, ['absent', 'NÉEDLE'], 10)).toBe('…a a a the needle is here b…')
+    expect(snippet(body, ['absent'])).toBeNull()
+    expect(snippet(body, [' '])).toBeNull()
   })
 })
