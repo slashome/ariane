@@ -1,7 +1,8 @@
 import { ChevronLeft, ChevronRight, ExternalLink, Maximize2 } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { ItemLink, StatusBadge, waitingSummary } from '@/entities/item'
-import { externalUrl, peopleOf, statusLabel, trackerOf, useNodes } from '@/entities/node'
+import { ItemLink, waitingSummary } from '@/entities/item'
+import { ItemEditors } from '@/features/edit-item'
+import { externalUrl, peopleOf, trackerOf, useNodes } from '@/entities/node'
 import { kindLabel } from '@/entities/schema'
 import type { Item, Tracker } from '@/shared/api'
 import { displayNode } from '@/shared/lib'
@@ -61,9 +62,9 @@ export function ItemDetails({ item, onClose, stepper }: { item: Item | null; onC
           Open the page: body, parent, children, dependencies
         </ItemLink>
       )}
+      {item && <ItemEditors item={item} />}
       {item && (
-        <dl className="space-y-2">
-          <Field label="Status" value={<StatusBadge status={item.status} category={item.category} label={statusLabel(nodes, item.node, item.status)} />} />
+        <dl className="space-y-2 border-t border-border pt-3">
           <Field label="Kind" value={kindLabel(item.kind)} />
           <Field label="Archived" value={item.archived ? 'yes' : 'no'} />
           {item.waiting_for.length > 0 && (
@@ -72,9 +73,6 @@ export function ItemDetails({ item, onClose, stepper }: { item: Item | null; onC
               value={`${waitingSummary(item, peopleOf(nodes, item.node))}${item.waiting_on ? ` — ${item.waiting_on}` : ''}`}
             />
           )}
-          <Field label="Priority" value={item.priority} />
-          <Field label="Size" value={item.size} />
-          <Field label="Impact" value={item.impact} />
           <Field label="Created" value={item.created} />
           <Field label="External" value={
               item.external.length > 0 ? (

@@ -16,6 +16,11 @@ export {
   pushChanges,
   saveDashboard,
   saveTheme,
+  addPerson,
+  changePerson,
+  removePerson,
+  fetchPeople,
+  findMondayUsers,
   syncMonday,
 } from './client'
 export { subscribeToChanges } from './events'
@@ -45,6 +50,10 @@ export type {
   Schema,
   SchemaKey,
   Settings,
+  Directory,
+  MondayUser,
+  PersonChange,
+  PersonEntry,
   SyncReport,
   SyncStep,
   Tracker,

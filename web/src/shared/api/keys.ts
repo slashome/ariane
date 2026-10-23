@@ -11,4 +11,5 @@ export const queryKeys = {
   diffs: ['diff'],
   dashboard: ['dashboard'],
   settings: ['settings'],
+  people: ['people'],
 } as const

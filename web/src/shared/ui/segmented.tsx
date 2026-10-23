@@ -6,11 +6,14 @@ export function Segmented({
   values,
   value,
   onChange,
+  focusable = true,
 }: {
   label: string
   values: string[]
   value: string | null
   onChange: (value: string | null) => void
+  // False where the keyboard is handled around it, as in the backlog's rows.
+  focusable?: boolean
 }) {
   return (
     <div role="group" aria-label={label} className="inline-flex overflow-hidden rounded-md border border-border">
@@ -18,7 +21,7 @@ export function Segmented({
         <button
           key={entry}
           type="button"
-          tabIndex={-1}
+          tabIndex={focusable ? undefined : -1}
           aria-pressed={value === entry}
           onClick={(event) => {
             event.stopPropagation()

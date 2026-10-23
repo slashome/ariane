@@ -10,7 +10,8 @@ import { displayNode } from '@/shared/lib'
 import { Badge, EmptyState, ErrorState, LoadingState } from '@/shared/ui'
 import { branchLink, pullRequestLink, type CodeLink } from '../model/code-links'
 import { customEntries, refsOf } from '../model/header-keys'
-import { ItemBody } from './item-body'
+import { BodyEditor } from './body-editor'
+import { ItemEditors } from '@/features/edit-item'
 import { RelatedList, Unresolved } from './related-list'
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
@@ -126,19 +127,17 @@ export function ItemView({
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="min-w-0 space-y-6">
           {children?.(detail)}
-          <ItemBody item={detail} body={detail.body} items={items} />
+          <BodyEditor key={detail.body} item={detail} body={detail.body} items={items} />
         </div>
         <aside className="space-y-5 xl:border-l xl:border-border xl:pl-6">
-          <dl className="space-y-1.5">
+          <ItemEditors item={detail} />
+          <dl className="space-y-1.5 border-t border-border pt-3">
             {detail.waiting_for.length > 0 && (
               <Field label="Waiting for">
                 <span className="text-violet-700 dark:text-violet-300">{waitingSummary(detail, peopleOf(nodes, detail.node))}</span>
                 {detail.waiting_on && <span className="text-muted-foreground"> — {detail.waiting_on}</span>}
               </Field>
             )}
-            <Field label="Priority">{detail.priority}</Field>
-            <Field label="Size">{detail.size}</Field>
-            <Field label="Impact">{detail.impact}</Field>
             {detail.type && <Field label="Type">{detail.type}</Field>}
             {detail.release && <Field label="Release">{detail.release}</Field>}
             {detail.milestone && <Field label="Milestone">{detail.milestone}</Field>}

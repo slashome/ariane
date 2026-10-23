@@ -16,6 +16,7 @@ import {
   Pin,
   Settings,
   Spool,
+  Users,
   type LucideIcon,
 } from 'lucide-react'
 import { useMemo, useState, type ReactNode } from 'react'
@@ -227,6 +228,7 @@ export function Sidebar() {
           tone={(repo?.uncommitted.length ?? 0) > 0 ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : undefined}
           search={scope}
         />
+        <Entry to={routes.people} label="People" icon={Users} search={scope} />
         <Entry to={routes.settings} label="Settings" icon={Settings} search={scope} />
       </nav>
     </aside>

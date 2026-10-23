@@ -11,6 +11,9 @@ import type {
   NodeSummary,
   Repo,
   Schema,
+  Directory,
+  MondayUser,
+  PersonChange,
   Settings,
   SyncReport,
   Theme,
@@ -76,6 +79,12 @@ export const fetchDiff = (path: string) =>
 
 export const patchItem = (patch: ItemPatch) => request<Item>('PATCH', '/api/items', patch)
 export const saveDashboard = (dashboard: Dashboard) => request<Dashboard>('PUT', '/api/dashboard', dashboard)
+export const fetchPeople = () => request<Directory[]>('GET', '/api/people')
+export const addPerson = (person: PersonChange) => request<Directory[]>('POST', '/api/people', person)
+export const changePerson = (person: PersonChange) => request<Directory[]>('PATCH', '/api/people', person)
+export const removePerson = (person: Pick<PersonChange, 'node' | 'handle'>) => request<Directory[]>('DELETE', '/api/people', person)
+export const findMondayUsers = (account: string, q: string) =>
+  request<MondayUser[]>('GET', `/api/monday/users?${new URLSearchParams({ account, q }).toString()}`)
 export const syncMonday = (path: string) => request<SyncReport>('POST', '/api/sync/monday', { path })
 export const fetchSettings = () => request<Settings>('GET', '/api/settings')
 export const saveTheme = (theme: Theme) => request<Settings>('PUT', '/api/settings/theme', theme)

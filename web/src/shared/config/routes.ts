@@ -14,6 +14,7 @@ export const routes = {
   health: '/health',
   repo: '/repo',
   settings: '/settings',
+  people: '/people',
 } as const
 
 const sections: Record<Kind, string> = {

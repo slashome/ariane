@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
-import { useSearchParams } from 'react-router'
+import { useLocation, useSearchParams } from 'react-router'
 import { useItems } from '@/entities/item'
 import { findNode, hasDescendants, nodeTree, useNodes } from '@/entities/node'
 import { useItemFilters } from '@/features/filter-items'
-import { searchParamKeys } from '@/shared/config'
+import { routes, searchParamKeys } from '@/shared/config'
 import { displayNode } from '@/shared/lib'
 import { Select, SelectItem, Switch } from '@/shared/ui'
 import { nodeCounts } from '../model/node-counts'
@@ -15,7 +15,14 @@ const homeValue = '~'
 // A select whose options draw the node tree in monospace, so the tree lines align; its closed face
 // shows the full path of the node in scope, which a tree line alone (`└─ cmc-lib`) would not tell.
 export function NodeSwitcher() {
-  const { data: nodes = [] } = useNodes()
+  const { data: everyNode = [] } = useNodes()
+  const { pathname } = useLocation()
+  // On the People page, only the nodes that bind a tracker, where people are declared.
+  const trackersOnly = pathname === routes.people
+  const nodes = useMemo(
+    () => (trackersOnly ? everyNode.filter((node) => node.tracker_from === node.path) : everyNode),
+    [everyNode, trackersOnly],
+  )
   const [params, setParams] = useSearchParams()
   const { data: items = [] } = useItems()
   const { filters, setIncludeDescendants } = useItemFilters()
@@ -64,6 +71,9 @@ export function NodeSwitcher() {
             </span>
           </SelectItem>
         )}
+        {trackersOnly && nodes.length === 0 && (
+          <div className="px-2 py-1.5 text-xs text-muted-foreground">No node binds a tracker</div>
+        )}
         {nodeTree(nodes).map((row) => (
           <SelectItem key={row.node.path} value={row.node.path} textValue={row.name}>
             <span className="font-mono text-xs whitespace-pre">
@@ -75,7 +85,7 @@ export function NodeSwitcher() {
           </SelectItem>
         ))}
       </Select>
-      {hasDescendants(nodes, current) && (
+      {hasDescendants(everyNode, current) && (
         <label className="flex items-center gap-2 text-sm whitespace-nowrap text-muted-foreground" title="Bring the items of the sub-nodes into every view">
           <Switch checked={filters.includeDescendants} onCheckedChange={setIncludeDescendants} aria-label="Include the sub-nodes" />
           Sub-nodes

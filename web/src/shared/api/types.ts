@@ -86,6 +86,7 @@ export interface NodeSummary {
   items: number
   workflow: WorkflowStatus[]
   people?: Record<string, Person>
+  tracker_from?: string | null
   tracker?: Tracker | null
   last_change?: string | null
 }
@@ -116,7 +117,7 @@ export interface Repo {
   uncommitted: UncommittedFile[]
 }
 
-export type EditableField = 'status' | 'size' | 'impact' | 'priority' | 'waiting_for' | 'waiting_on' | 'waiting_since'
+export type EditableField = 'body' | 'status' | 'size' | 'impact' | 'priority' | 'waiting_for' | 'waiting_on' | 'waiting_since'
 
 export type FieldValue = string | string[] | null
 
@@ -130,6 +131,35 @@ export type ItemChanges = Partial<Record<EditableField, FieldChange>>
 export interface ItemPatch {
   path: string
   changes: ItemChanges
+}
+
+export interface PersonEntry {
+  handle: string
+  name: string
+  monday: number | null
+  awaited_by: string[]
+}
+
+// A node that declares a tracker or people, with its people.
+export interface Directory {
+  node: string
+  tracker: string | null
+  account: string | null
+  people: PersonEntry[]
+}
+
+export interface PersonChange {
+  node: string
+  handle: string
+  name?: string
+  monday?: number | null
+  rename_to?: string
+}
+
+export interface MondayUser {
+  id: number
+  name: string
+  email: string | null
 }
 
 export type SyncAction =

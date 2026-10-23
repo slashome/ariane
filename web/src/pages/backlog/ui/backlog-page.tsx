@@ -8,9 +8,8 @@ import { emptyFilters, filterItems, useItemFilters } from '@/features/filter-ite
 import type { Item } from '@/shared/api'
 import { scopeSearch } from '@/shared/config'
 import { cn, displayNode } from '@/shared/lib'
-import { Button, EmptyState, ErrorState, Kbd, LoadingState, NativeSelect, PageHeader, toast } from '@/shared/ui'
+import { Button, EmptyState, ErrorState, Kbd, LoadingState, NativeSelect, PageHeader, Segmented, toast } from '@/shared/ui'
 import { cycle, missingFields, sortBacklog, sorts, type BacklogSort, type TriageField } from '../model/triage'
-import { Segmented } from './segmented'
 
 const fieldKeys: Record<string, TriageField> = { p: 'priority', i: 'impact', s: 'size' }
 
@@ -168,7 +167,7 @@ export function BacklogPage() {
                       <span className={cn('w-12 text-right text-[11px] text-muted-foreground', item[field] === null && 'text-amber-700 dark:text-amber-300')}>
                         {field}
                       </span>
-                      <Segmented label={`${field} of ${item.id ?? item.path}`} values={vocabulary[field]} value={item[field]} onChange={(value) => set(item, field, value)} />
+                      <Segmented label={`${field} of ${item.id ?? item.path}`} values={vocabulary[field]} value={item[field]} onChange={(value) => set(item, field, value)} focusable={false} />
                     </div>
                   ))}
                   <Button size="sm" variant="outline" tabIndex={-1} onClick={() => plan(item)} title="Move it to the first todo status of its workflow">

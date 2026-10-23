@@ -6,6 +6,7 @@ import { ItemPage } from '@/pages/item'
 import { KanbanPage } from '@/pages/kanban'
 import { MatrixPage } from '@/pages/matrix'
 import { JournalPage, ReflexionsPage } from '@/pages/reflexions'
+import { PeoplePage } from '@/pages/people'
 import { RepoPage } from '@/pages/repo'
 import { RessourcesPage } from '@/pages/ressources'
 import { SettingsPage } from '@/pages/settings'
@@ -45,6 +46,7 @@ export const routeTree: RouteObject[] = [
       { path: 'health', element: <HealthPage /> },
       { path: 'repo', element: <RepoPage /> },
       { path: 'settings', element: <SettingsPage /> },
+      { path: 'people', element: <PeoplePage /> },
       { path: '*', element: <Navigate to="/" replace /> },
     ],
   },

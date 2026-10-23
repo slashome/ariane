@@ -3,7 +3,7 @@ import { changesFor, ItemCard, today, useItems, useUpdateItem, waitingSummary } 
 import { peopleOf, useNodes } from '@/entities/node'
 import { useSchema } from '@/entities/schema'
 import { emptyFilters, filterItems, useItemFilters } from '@/features/filter-items'
-import { WaitingDialog, type Waiting } from './waiting-dialog'
+import { WaitingDialog, type Waiting } from '@/features/edit-item'
 import type { Item } from '@/shared/api'
 import { displayNode, neighbours, useSearchParam, useStoredSet } from '@/shared/lib'
 import { DragArea, toast, type DragEndEvent } from '@/shared/ui'

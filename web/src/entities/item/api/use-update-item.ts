@@ -40,6 +40,7 @@ export function useUpdateItem() {
         items?.map((entry) => (entry.path === updated.path ? { ...entry, ...updated } : entry)),
       )
       void queryClient.invalidateQueries({ queryKey: queryKeys.repo })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.itemDetails })
       const followed = updated.external.some((entry) => entry.startsWith('monday:'))
       if (followed && Object.keys(changes).some((key) => synced.includes(key))) {
         syncMonday(updated.path)
