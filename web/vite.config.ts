@@ -10,7 +10,7 @@ export default defineConfig({
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
   },
   server: {
-    proxy: { '/api': 'http://127.0.0.1:4317' },
+    proxy: { '/api': 'http://127.0.0.1:27317' },
   },
   build: {
     outDir: 'dist',

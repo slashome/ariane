@@ -129,6 +129,9 @@ pub enum Check {
     UnknownPerson,
     /// `waiting_*` keys left on an item that no longer waits.
     StaleWaiting,
+    /// A `[proxy]` table whose host is not a host name, whose port is 0, or
+    /// whose host another node already declares.
+    InvalidProxy,
 }
 
 /// One problem found by doctor, serialized as is by `--json`.

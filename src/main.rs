@@ -15,7 +15,8 @@
 //! - `ariane doctor` → [`doctor`], checks items without writing (ADR-0004);
 //! - `ariane migrate` → [`migrate`], upgrades items to the current schema (ADR-0009);
 //! - `ariane schema` → [`schema`], prints the header schema; it needs no repository;
-//! - `ariane serve` → [`serve`], serves the web interface (ADR-0012).
+//! - `ariane serve` → [`serve`], serves the web interface (ADR-0012);
+//! - `ariane proxy` → [`proxy`], local names for the interface and the projects (ADR-0016).
 //!
 //! Exit code `3` means the command could not run at all (ADR-0004); the other
 //! codes are chosen by each command.
@@ -48,6 +49,8 @@ mod monday;
 mod node;
 /// `ariane people`: whom items may wait for.
 mod people;
+/// `ariane proxy`: local names for the interface and the projects' servers.
+mod proxy;
 /// Parents, children, dependencies and dependents of items.
 mod relations;
 /// Discovery of the content repository on disk.
@@ -108,6 +111,10 @@ fn run() -> Result<ExitCode> {
         cli::Command::Schema(args) => return schema_command(args),
         cli::Command::Config(args) => return config::command::run(args),
         cli::Command::Service(args) => return service::run(args),
+        cli::Command::Proxy(cli::ProxyArgs {
+            command: Some(cli::ProxyCommand::Teardown),
+            ..
+        }) => return proxy::teardown(),
         cli::Command::Hook(args) => {
             return Ok(match args.harness {
                 cli::HookHarness::ClaudeCode => hook::run(),
@@ -177,6 +184,7 @@ fn run() -> Result<ExitCode> {
         }
         cli::Command::Schema(args) => schema_command(&args),
         cli::Command::Serve(args) => serve::run(location.root, tree, &args),
+        cli::Command::Proxy(args) => proxy::run(&tree, &args),
         cli::Command::Config(args) => config::command::run(&args),
         cli::Command::Service(args) => service::run(&args),
     }

@@ -50,6 +50,7 @@ A closing *Revisit if* section names the conditions under which the decision wou
 | [0013](0013-define-the-configuration-schema-in-code.md) | Define the configuration schema in code | Accepted | 2026-10-20 |
 | [0014](0014-record-branches-and-pull-requests-through-the-agent-harness.md) | Record branches and pull requests through the agent's harness | Accepted | 2026-10-23 |
 | [0015](0015-name-whom-an-item-waits-for.md) | Name whom an item waits for | Accepted | 2026-10-23 |
+| [0016](0016-name-local-servers-through-a-front-door.md) | Name local servers through a front door in `ariane` | Accepted | 2026-10-23 |
 
 ## Adding one
 

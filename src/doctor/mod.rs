@@ -285,6 +285,29 @@ category = "done"
     }
 
     #[test]
+    fn a_proxy_table_needs_a_host_name_of_its_own() {
+        let repo = base();
+        repo.write("a/INDEX.md", "# a\n")
+            .write(
+                "a/node.toml",
+                "[proxy]\nhost = \"app.local\"\nport = 3000\n",
+            )
+            .write("b/INDEX.md", "# b\n")
+            .write(
+                "b/node.toml",
+                "[proxy]\nhost = \"app.local\"\nport = 3001\n",
+            );
+        only(&repo, Check::InvalidProxy);
+        repo.write(
+            "b/node.toml",
+            "[proxy]\nhost = \"App Local\"\nport = 3001\n",
+        );
+        only(&repo, Check::InvalidProxy);
+        repo.write("b/node.toml", "[proxy]\nhost = \"b.local\"\nport = 3001\n");
+        assert_eq!(checks(&repo), vec![]);
+    }
+
+    #[test]
     fn waiting_keys_left_after_the_wait_are_a_warning() {
         let repo = waiting_base();
         repo.write(

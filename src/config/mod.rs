@@ -23,7 +23,13 @@ use toml_edit::{DocumentMut, Item};
 pub const VERSION: i64 = 1;
 
 /// The port `ariane serve` listens on when nothing else is configured.
-pub const DEFAULT_PORT: u16 = 4317;
+pub const DEFAULT_PORT: u16 = 27317;
+
+/// The name under which the front door serves the interface by default.
+pub const DEFAULT_HOST: &str = "ariane.local";
+
+/// The port of the front door, the local reverse proxy (ADR-0016), by default.
+pub const DEFAULT_PROXY_PORT: u16 = 27380;
 
 /// The shape a configuration value must have.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +40,8 @@ pub enum Kind {
     Path,
     /// A TCP port, from 1 to 65535.
     Port,
+    /// A host name, such as `ariane.local`: lowercase labels separated by dots.
+    Host,
 }
 
 /// One key of the configuration file.
@@ -56,7 +64,7 @@ pub struct Key {
 }
 
 /// Every key the configuration knows, in the order of the example file.
-pub const KEYS: [Key; 3] = [
+pub const KEYS: [Key; 5] = [
     Key {
         name: "version",
         kind: Kind::Version,
@@ -76,9 +84,25 @@ pub const KEYS: [Key; 3] = [
     Key {
         name: "server.port",
         kind: Kind::Port,
-        default: Some("4317"),
+        default: Some("27317"),
         example: None,
         doc: "Port `ariane serve` listens on, on 127.0.0.1 only. `--port` overrides it.",
+        settable: true,
+    },
+    Key {
+        name: "server.host",
+        kind: Kind::Host,
+        default: Some("\"ariane.local\""),
+        example: None,
+        doc: "Name under which the front door serves the interface (`ariane proxy setup` declares it).",
+        settable: true,
+    },
+    Key {
+        name: "proxy.port",
+        kind: Kind::Port,
+        default: Some("27380"),
+        example: None,
+        doc: "Port of the front door, on 127.0.0.1, where port 80 of 127.0.0.2 is redirected.",
         settable: true,
     },
 ];
@@ -94,6 +118,8 @@ pub struct Config {
     pub repo: Option<String>,
     /// The `[server]` table.
     pub server: Server,
+    /// The `[proxy]` table.
+    pub proxy: Proxy,
 }
 
 /// The `[server]` table of the configuration.
@@ -101,6 +127,16 @@ pub struct Config {
 #[serde(default)]
 pub struct Server {
     /// See [`KEYS`]: `server.port`.
+    pub port: u16,
+    /// See [`KEYS`]: `server.host`.
+    pub host: String,
+}
+
+/// The `[proxy]` table of the configuration.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default)]
+pub struct Proxy {
+    /// See [`KEYS`]: `proxy.port`.
     pub port: u16,
 }
 
@@ -110,13 +146,25 @@ impl Default for Config {
             version: VERSION,
             repo: None,
             server: Server::default(),
+            proxy: Proxy::default(),
         }
     }
 }
 
 impl Default for Server {
     fn default() -> Server {
-        Server { port: DEFAULT_PORT }
+        Server {
+            port: DEFAULT_PORT,
+            host: DEFAULT_HOST.to_owned(),
+        }
+    }
+}
+
+impl Default for Proxy {
+    fn default() -> Proxy {
+        Proxy {
+            port: DEFAULT_PROXY_PORT,
+        }
     }
 }
 
@@ -175,6 +223,15 @@ pub fn parse(text: &str) -> Result<Loaded> {
     if config.server.port == 0 {
         bail!("`server.port` must be between 1 and 65535");
     }
+    if config.proxy.port == 0 {
+        bail!("`proxy.port` must be between 1 and 65535");
+    }
+    if !is_host(&config.server.host) {
+        bail!(
+            "`server.host` must be a host name such as `ariane.local`, not `{}`",
+            config.server.host
+        );
+    }
     Ok(Loaded {
         config,
         unknown: unknown_keys(&document),
@@ -215,6 +272,22 @@ pub fn example(repo: Option<&str>) -> String {
         }
     }
     text
+}
+
+/// Tells whether `name` is a host name the front door can route: labels of
+/// lowercase ASCII letters, digits and inner hyphens, separated by dots, at
+/// most 253 characters in all.
+pub fn is_host(name: &str) -> bool {
+    name.len() <= 253
+        && name.split('.').all(|label| {
+            !label.is_empty()
+                && label.len() <= 63
+                && !label.starts_with('-')
+                && !label.ends_with('-')
+                && label
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+        })
 }
 
 /// Expands a leading `~/` into the home directory.
@@ -313,8 +386,8 @@ mod tests {
     #[test]
     fn unknown_keys_are_reported_at_any_depth() {
         let loaded =
-            parse("colour = 1\n[server]\nport = 9000\nhost = \"x\"\n[extra]\na = 1\n").unwrap();
-        assert_eq!(loaded.unknown, ["colour", "server.host", "extra"]);
+            parse("colour = 1\n[server]\nport = 9000\naddress = \"x\"\n[extra]\na = 1\n").unwrap();
+        assert_eq!(loaded.unknown, ["colour", "server.address", "extra"]);
         assert_eq!(loaded.config.server.port, 9000);
     }
 
@@ -322,6 +395,20 @@ mod tests {
     fn a_value_of_the_wrong_type_is_an_error() {
         assert!(parse("[server]\nport = \"x\"\n").is_err());
         assert!(parse("[server]\nport = 0\n").is_err());
+        assert!(parse("[server]\nhost = \"Ariane Local\"\n").is_err());
+        assert!(parse("[proxy]\nport = 0\n").is_err());
+    }
+
+    #[test]
+    fn host_names_are_lowercase_dotted_labels() {
+        assert!(is_host("ariane.local"));
+        assert!(is_host("dream-catchr.local"));
+        assert!(is_host("localhost"));
+        assert!(!is_host(""));
+        assert!(!is_host("Ariane.local"));
+        assert!(!is_host("ariane..local"));
+        assert!(!is_host("-ariane.local"));
+        assert!(!is_host("ariane.local:80"));
     }
 
     #[test]

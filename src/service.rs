@@ -542,7 +542,7 @@ mod tests {
             manager,
             home: home.to_path_buf(),
             exe: PathBuf::from("/opt/ari & ne/bin/ariane"),
-            port: 4317,
+            port: 27317,
             runner,
         }
     }
@@ -648,7 +648,7 @@ mod tests {
         install(&machine).unwrap();
         let report = status(&machine).unwrap();
         assert!(report.contains("loaded: yes"));
-        assert!(report.contains("running, pid 4242, on http://127.0.0.1:4317"));
+        assert!(report.contains("running, pid 4242, on http://127.0.0.1:27317"));
     }
 
     #[test]

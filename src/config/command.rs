@@ -12,7 +12,7 @@ use std::process::ExitCode;
 use anyhow::{Context, Result, bail};
 use toml_edit::{DocumentMut, Item, Table, Value, value};
 
-use super::{KEYS, Kind, example, key, load, parse};
+use super::{KEYS, Kind, example, is_host, key, load, parse};
 use crate::cli::{ConfigArgs, ConfigCommand};
 
 /// Runs `ariane config <subcommand>` against the owner's configuration file.
@@ -73,6 +73,8 @@ pub fn get(file: &Path, name: &str) -> Result<String> {
         "version" => config.version.to_string(),
         "repo" => config.repo.unwrap_or_default(),
         "server.port" => config.server.port.to_string(),
+        "server.host" => config.server.host,
+        "proxy.port" => config.proxy.port.to_string(),
         other => unreachable!("key {other} is in KEYS but not read here"),
     })
 }
@@ -81,7 +83,7 @@ pub fn get(file: &Path, name: &str) -> Result<String> {
 /// when needed.
 ///
 /// `raw` is validated against the key's [`Kind`]: a port must be a number from
-/// 1 to 65535, a path is taken as written. The whole file is parsed again before
+/// 1 to 65535, a host a name such as `ariane.local`, a path is taken as written. The whole file is parsed again before
 /// it is written, so an invalid result never reaches the disk.
 ///
 /// # Errors
@@ -186,6 +188,13 @@ fn parse_value(kind: Kind, raw: &str) -> Result<Value> {
             }
             Ok(Value::from(i64::from(port)))
         }
+        Kind::Host => {
+            let host = raw.trim();
+            if !is_host(host) {
+                bail!("`{raw}` is not a host name such as `ariane.local`");
+            }
+            Ok(Value::from(host))
+        }
     }
 }
 
@@ -251,7 +260,7 @@ mod tests {
         let (_dir, file) = temp();
         init(&file, false, Some("~/content")).unwrap();
         assert_eq!(get(&file, "repo").unwrap(), "~/content");
-        assert_eq!(get(&file, "server.port").unwrap(), "4317");
+        assert_eq!(get(&file, "server.port").unwrap(), "27317");
         assert!(init(&file, false, None).is_err());
         init(&file, true, None).unwrap();
         assert_eq!(get(&file, "repo").unwrap(), "");
@@ -260,8 +269,9 @@ mod tests {
     #[test]
     fn get_falls_back_to_the_default_and_rejects_unknown_keys() {
         let (_dir, file) = temp();
-        assert_eq!(get(&file, "server.port").unwrap(), "4317");
-        assert!(get(&file, "server.host").is_err());
+        assert_eq!(get(&file, "server.port").unwrap(), "27317");
+        assert_eq!(get(&file, "server.host").unwrap(), "ariane.local");
+        assert!(get(&file, "server.address").is_err());
     }
 
     #[test]
@@ -297,6 +307,9 @@ mod tests {
         assert!(set(&file, "version", "2").is_err());
         assert!(set(&file, "repo", " ").is_err());
         assert!(set(&file, "nope", "1").is_err());
+        assert!(set(&file, "server.host", "Ariane Local").is_err());
         assert!(!file.exists());
+        set(&file, "server.host", "board.local").unwrap();
+        assert_eq!(get(&file, "server.host").unwrap(), "board.local");
     }
 }

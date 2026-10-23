@@ -1,13 +1,14 @@
 //! `node.toml`: what a node declares about its items (SPEC.md §1.5, ADR-0008).
 //!
-//! A node may carry a `node.toml` next to its `INDEX.md` with four tables:
+//! A node may carry a `node.toml` next to its `INDEX.md` with five tables:
 //!
 //! - `[fields.<key>]` declares a custom header key and its type;
 //! - `[[workflow]]` lists the statuses its items may take, each with a stable
 //!   `id`, a free `label` and one of the seven fixed categories;
 //! - `[people.<handle>]` names the people an item may wait for, with their ids
 //!   in the node's trackers;
-//! - `[tracker]` binds the node to an external tracker (ADR-0011, not used yet).
+//! - `[tracker]` binds the node to an external tracker (ADR-0011, not used yet);
+//! - `[proxy]` gives the node's development server a local name (ADR-0016).
 //!
 //! A node inherits from its ancestors: fields and people accumulate (the nearest
 //! declaration wins), a workflow replaces the inherited one as a whole, and a node with no
@@ -173,6 +174,19 @@ pub struct NodeFile {
     pub people: BTreeMap<String, Person>,
     /// The tracker binding, kept as raw TOML until connectors exist (ADR-0011).
     pub tracker: Option<toml::Table>,
+    /// The local name of the node's development server; never inherited.
+    pub proxy: Option<Proxy>,
+}
+
+/// A `[proxy]` table: the name under which `ariane serve` and `ariane proxy`
+/// forward requests to a port of the loopback interface (ADR-0016).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Proxy {
+    /// The host name typed in the browser, such as `dreamcatchr.local`.
+    pub host: String,
+    /// The port the development server listens on, on `127.0.0.1`.
+    pub port: u16,
 }
 
 /// What applies to one node once its ancestors' files are combined.

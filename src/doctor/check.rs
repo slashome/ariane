@@ -3,7 +3,7 @@
 //! Three passes, each appending to one list of findings:
 //!
 //! 1. **structural**: unreadable files, invalid `node.toml`, nodes without
-//!    `INDEX.md`;
+//!    `INDEX.md`, `[proxy]` tables that cannot become a route;
 //! 2. **per item**: the directory first (an item still in the former
 //!    `backlog/` is reported, and checked on), then the schema version (a file that needs `migrate` gets
 //!    that single finding and nothing else), then every core key by iterating
@@ -44,8 +44,9 @@ pub fn findings(tree: &Tree, scope: Option<&NodePath>) -> Vec<Finding> {
     found
 }
 
-/// Reports what prevents reading the tree properly: unreadable paths, invalid `node.toml` files, nodes without `INDEX.md`.
+/// Reports what prevents reading the tree properly: unreadable paths, invalid `node.toml` files, nodes without `INDEX.md`, invalid `[proxy]` tables.
 fn structural(tree: &Tree, scope: Option<&NodePath>, found: &mut Vec<Finding>) {
+    proxies(tree, scope, found);
     let scope_dir = scope.map(|scope| tree.node_dir(scope));
     let in_scope = |path: &Path| scope_dir.as_ref().is_none_or(|dir| path.starts_with(dir));
     for (path, reason) in &tree.unreadable {
@@ -649,6 +650,55 @@ impl Reporter<'_> {
                 format!("remove `{key}`"),
             ]),
         );
+    }
+}
+
+/// Reports the `[proxy]` tables of `scope` that `ariane proxy` leaves out: a
+/// host that is not a host name, port 0, or a host another node declares
+/// first (ADR-0016). The interface's own name lives in the machine's
+/// configuration, which doctor does not read.
+fn proxies(tree: &Tree, scope: Option<&NodePath>, found: &mut Vec<Finding>) {
+    let mut first: BTreeMap<&str, &NodePath> = BTreeMap::new();
+    for (node, file) in &tree.configs.files {
+        let Some(proxy) = &file.proxy else {
+            continue;
+        };
+        let problem = if !crate::config::is_host(&proxy.host) {
+            Some(format!(
+                "`[proxy] host = \"{}\"` is not a host name: lowercase letters, digits, hyphens and dots",
+                proxy.host
+            ))
+        } else if proxy.port == 0 {
+            Some("`[proxy] port = 0` cannot be forwarded to".to_owned())
+        } else if let Some(owner) = first.get(proxy.host.as_str()) {
+            Some(format!(
+                "`[proxy] host = \"{}\"` is already declared by {owner}",
+                proxy.host
+            ))
+        } else {
+            first.insert(&proxy.host, node);
+            None
+        };
+        let Some(message) = problem else {
+            continue;
+        };
+        if scope.is_some_and(|scope| !node.is_within(scope)) {
+            continue;
+        }
+        let path = tree.node_dir(node).join(NODE_FILE);
+        found.push(Finding {
+            check: Check::InvalidProxy,
+            severity: Severity::Error,
+            node: Some(node.clone()),
+            path: Some(relative(tree, &path)),
+            message,
+            remedy: Remedy::human([
+                format!(
+                    "give the [proxy] table of {NODE_FILE} a host of its own, such as `name.local`"
+                ),
+                format!("remove the [proxy] table from {NODE_FILE}"),
+            ]),
+        });
     }
 }
 

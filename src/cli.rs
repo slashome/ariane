@@ -77,8 +77,14 @@ pub enum Command {
     Fix(FixArgs),
     #[command(about = "Print the item header schema")]
     Schema(SchemaArgs),
-    #[command(about = "Serve the web interface on 127.0.0.1")]
+    #[command(
+        about = "Serve the web interface on 127.0.0.1, and open the front door of `ariane proxy`"
+    )]
     Serve(ServeArgs),
+    #[command(
+        about = "Reach the interface and the projects' dev servers by name, such as http://ariane.local"
+    )]
+    Proxy(ProxyArgs),
     #[command(about = "Create, read and change the configuration file")]
     Config(ConfigArgs),
     #[command(
@@ -435,12 +441,41 @@ pub struct SchemaArgs {
 pub struct ServeArgs {
     #[arg(
         long,
-        help = "Port to listen on, on 127.0.0.1 (default: `server.port` of the configuration, 4317)"
+        help = "Port to listen on, on 127.0.0.1 (default: `server.port` of the configuration, 27317)"
     )]
     pub port: Option<u16>,
 
     #[arg(long, help = "Open the interface in the browser once listening")]
     pub open: bool,
+}
+
+/// Arguments of `ariane proxy`: a subcommand, or the nodes whose routes the
+/// front door serves alone, all of them when none is named.
+#[derive(Args)]
+#[command(args_conflicts_with_subcommands = true)]
+pub struct ProxyArgs {
+    #[command(subcommand)]
+    pub command: Option<ProxyCommand>,
+
+    #[arg(
+        help = "Only the routes of these nodes, by path or last segment (default: every route); the interface's needs `ariane serve`"
+    )]
+    pub nodes: Vec<String>,
+}
+
+/// The subcommands of `ariane proxy`.
+#[derive(Subcommand)]
+pub enum ProxyCommand {
+    #[command(
+        about = "With sudo, until the next reboot: alias 127.0.0.2, redirect its port 80 to the front door, name the routes in /etc/hosts"
+    )]
+    Setup,
+    #[command(
+        about = "Check each link: the alias, the redirect, the front door, the names, each route's server"
+    )]
+    Status,
+    #[command(about = "With sudo: undo what setup did")]
+    Teardown,
 }
 
 /// Arguments of `ariane config`: the subcommand to run.

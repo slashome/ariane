@@ -6,6 +6,9 @@
 //! ([`watch`]) reloads the tree when anything under `tree/` or `.git/` changes and
 //! tells the browsers through Server-Sent Events, so there is no Rescan button.
 //!
+//! Next to the interface, the server opens the front door of `ariane proxy`
+//! ([`crate::proxy`], ADR-0016), whose routes follow the tree as it reloads.
+//!
 //! The interface writes too, within limits: it edits four header keys of an
 //! item ([`mod@write`]), the theme and the dashboard pins in the content's
 //! `settings.toml` ([`crate::settings`]), and commits or pushes only when the
@@ -30,6 +33,7 @@ use axum::routing::{get, post, put};
 use tokio::sync::{broadcast, watch as signal};
 
 use crate::cli::ServeArgs;
+use crate::config::Config;
 use crate::tree::{NodePath, Tree};
 
 /// What every request handler shares: the repository root, the tree loaded from
@@ -168,40 +172,38 @@ pub fn router(state: Arc<State>) -> Router {
 ///
 /// # Errors
 ///
-/// Fails when the runtime cannot start, the port is taken, or the watcher
-/// cannot be installed.
+/// Fails when the runtime cannot start, the configuration is invalid, the port
+/// is taken, or the watcher cannot be installed.
 pub fn run(root: PathBuf, tree: Tree, args: &ServeArgs) -> Result<ExitCode> {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .context("starting the async runtime")?;
-    let port = match args.port {
-        Some(port) => port,
-        None => {
-            crate::config::load(&crate::config::file())?
-                .config
-                .server
-                .port
-        }
-    };
-    runtime.block_on(serve(root, tree, port, args.open))?;
+    let mut config = crate::config::load(&crate::config::file())?.config;
+    if let Some(port) = args.port {
+        config.server.port = port;
+    }
+    runtime.block_on(serve(root, tree, &config, args.open))?;
     Ok(ExitCode::SUCCESS)
 }
 
-/// Binds the port, starts the watcher and serves until Ctrl-C.
+/// Binds the port, starts the watcher, opens the front door and serves until Ctrl-C.
 ///
 /// # Errors
 ///
-/// Fails when the port cannot be bound or the watcher cannot be installed.
-async fn serve(root: PathBuf, tree: Tree, port: u16, open: bool) -> Result<()> {
+/// Fails when the port cannot be bound or the watcher cannot be installed. A
+/// front door that cannot open is reported, not an error: the interface stays
+/// reachable on its port.
+async fn serve(root: PathBuf, tree: Tree, config: &Config, open: bool) -> Result<()> {
     let state = State::new(root.clone(), tree);
     let _watcher = watch::start(state.clone()).context("watching the content repository")?;
-    let address = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
+    let address = SocketAddr::from((Ipv4Addr::LOCALHOST, config.server.port));
     let listener = tokio::net::TcpListener::bind(address)
         .await
         .with_context(|| format!("listening on {address}"))?;
     let url = format!("http://{address}");
     eprintln!("ariane serve: {} on {url} (Ctrl-C to stop)", root.display());
+    open_front_door(&state, config).await;
     if open {
         open_browser(&url);
     }
@@ -210,6 +212,37 @@ async fn serve(root: PathBuf, tree: Tree, port: u16, open: bool) -> Result<()> {
         .with_graceful_shutdown(stop_on_ctrl_c(stopping))
         .await
         .context("serving")
+}
+
+/// Opens the front door of `ariane proxy` on `proxy.port`, routing by the
+/// tree as it is when each request arrives, so that a `[proxy]` table added to
+/// a `node.toml` is served without a restart.
+///
+/// When the port is taken — usually by `ariane proxy` run alone — the reason
+/// is printed and the interface keeps serving without it.
+async fn open_front_door(state: &Arc<State>, config: &Config) {
+    let listener = match crate::proxy::door::bind(config.proxy.port).await {
+        Ok(listener) => listener,
+        Err(error) => {
+            eprintln!("ariane serve: no front door: {error:#}");
+            return;
+        }
+    };
+    let state = state.clone();
+    let server = config.server.clone();
+    let lookup: crate::proxy::door::Lookup = Arc::new(move |host| {
+        let tree = state.tree.read().ok()?;
+        crate::proxy::Table::of(&tree, &server).find(host).cloned()
+    });
+    eprintln!(
+        "ariane serve: front door on 127.0.0.1:{}, http://{} once `ariane proxy setup` ran",
+        config.proxy.port, config.server.host
+    );
+    tokio::spawn(async move {
+        if let Err(error) = crate::proxy::door::serve(listener, lookup).await {
+            eprintln!("ariane serve: the front door stopped: {error:#}");
+        }
+    });
 }
 
 /// Waits for Ctrl-C, then asks every event stream to end so the graceful

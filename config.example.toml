@@ -9,4 +9,11 @@ version = 1
 
 [server]
 # Port `ariane serve` listens on, on 127.0.0.1 only. `--port` overrides it.
-port = 4317
+port = 27317
+
+# Name under which the front door serves the interface (`ariane proxy setup` declares it).
+host = "ariane.local"
+
+[proxy]
+# Port of the front door, on 127.0.0.1, where port 80 of 127.0.0.2 is redirected.
+port = 27380

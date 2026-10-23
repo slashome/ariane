@@ -81,6 +81,7 @@ external:
 | `ariane links` | Pull requests on GitHub that name an item (monday id or `<node>#<id>`) and are not recorded in it. Dry run by default, `--apply` to write. |
 | `ariane schema --json` | Core keys and vocabularies. |
 | `ariane serve --open` | The interface: dashboard, task list, kanban, size × impact. |
+| `ariane proxy status` | Whether `http://ariane.local` and each project's `[proxy]` name reach their server, link by link; `setup` (sudo, until reboot) to fix. |
 | `ariane settings` | Theme and dashboard pins, in the content's `settings.toml`. |
 | `ariane config get\|set <key>` | The configuration; set the content repository with `ariane config set repo <path>`. |
 | `ariane service status` | Whether the interface runs in the background; `install` to keep it running. |

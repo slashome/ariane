@@ -30,6 +30,8 @@ Two constraints are already settled elsewhere. ADR-0005 puts the CLI in Rust, as
 - **The front is React + Vite + TypeScript, organised in Feature-Sliced Design and checked by Steiger.** It is built at release time and embedded in the binary with **`rust-embed`**. Node is required to *build* Ariane, never to *run* it — the no-runtime-dependency rule of ADR-0005 holds for the user.
 - **Bound to `127.0.0.1:4317` by default**, configurable through `config.toml` (ADR-0013) and `--port`. Never bound to another interface, so there is **no authentication**, deliberately: anyone who can reach the port is already on the machine as the user.
 
+> **Amended 2026-10-23.** The default port is **27317**: 4317 is OpenTelemetry's OTLP/gRPC port. The server also opens the front door of `ariane proxy` on `127.0.0.1:27380`, which serves the interface as `http://ariane.local` ([ADR-0016](0016-name-local-servers-through-a-front-door.md)); both stay on loopback.
+
 **Writing.**
 
 - **The interface writes files.** Moving a kanban card rewrites the item's `status`; editing a field rewrites the front-matter; reordering dashboard cards rewrites `config.toml`. Writes go through the same front-matter writer the CLI uses, never a second one.
