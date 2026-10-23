@@ -35,6 +35,8 @@ Two forces pull against each other. The core item schema of ADR-0008 must stay t
 
 `ariane sync` writes item files and `node.toml`, never commits (ADR-0012), and judges nothing beyond refusing to write: the findings it produces are re-observed by `doctor`, not passed to it.
 
+> **Implemented on 2026-10-23, Ariane → monday first.** `ariane sync monday [--item <ref>] [--apply]` compares each item bound by `external: monday:<id>` with its ticket and sends what Ariane changed: the label `[tracker.push]` names for the item's category (or the single label `[tracker.status]` reads as it), and for a waiting item the label `[tracker.waiting]` gives its reason, with an update that @mentions the people awaited (ADR-0015). What each ticket read at the last sync is machine state (`$XDG_STATE_HOME/ariane/monday.json`); when the ticket also moved since, or no sync ever recorded it, the connector reports a conflict and sends nothing, and a category without a label is refused — never guessed. The interface sends one item after each change of its status. Tokens live in `secrets.toml` next to `config.toml`, one per account (`[monday."<account>"]`), created readable by the owner only and refused otherwise; the owner preferred a file to the keychain. `ariane connect monday --account <account>` stores one after checking it with monday. The direction monday → Ariane is the next step.
+
 ## Consequences
 
 - Binding a second tracker means writing a connector and declaring it in a node. No item outside that node changes, no schema version moves.

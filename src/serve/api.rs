@@ -401,6 +401,51 @@ pub async fn theme(
     .await
 }
 
+/// The body of `POST /api/sync/monday`.
+#[derive(Debug, Deserialize)]
+pub struct SyncRequest {
+    /// Repository-relative path of the item, as `/api/items` gives it.
+    pub path: String,
+}
+
+/// `POST /api/sync/monday`: sends one item's status to its monday ticket, as
+/// `ariane sync monday --item <ref> --apply`, and answers the plan carried
+/// out — a conflict or a refusal is reported, never forced. `502` when monday
+/// cannot be reached or a token is missing.
+pub async fn sync_monday(
+    Shared(state): Shared<Arc<State>>,
+    Json(request): Json<SyncRequest>,
+) -> Response {
+    exclusive(state, move |state| {
+        let Ok(tree) = state.tree.read() else {
+            return error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "the tree lock is poisoned",
+            );
+        };
+        let Some(item) = tree
+            .items
+            .iter()
+            .find(|item| item.relative == std::path::Path::new(&request.path))
+        else {
+            return error(StatusCode::BAD_REQUEST, "not an item of the tree");
+        };
+        match crate::monday::sync(
+            &tree,
+            None,
+            Some(item),
+            true,
+            &crate::secrets::file(),
+            &crate::monday::state_file(),
+            &|token| Box::new(crate::monday::Http::new(token)),
+        ) {
+            Ok(report) => Json(report).into_response(),
+            Err(failure) => error(StatusCode::BAD_GATEWAY, &format!("{failure:#}")),
+        }
+    })
+    .await
+}
+
 /// The body of `POST /api/commit`.
 #[derive(Debug, Deserialize)]
 pub struct CommitRequest {

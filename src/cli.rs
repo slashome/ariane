@@ -50,6 +50,12 @@ pub enum Command {
     Links(LinksArgs),
     #[command(about = "Run as an agent hook, reading the event on standard input")]
     Hook(HookArgs),
+    #[command(about = "Store a tracker's API token, one per account, in secrets.toml")]
+    Connect(ConnectArgs),
+    #[command(
+        about = "Send the items' statuses to their tracker (monday), refusing to guess on conflicts"
+    )]
+    Sync(SyncArgs),
     #[command(
         about = "Check every item and node against the specification, without writing anything"
     )]
@@ -158,6 +164,58 @@ pub struct LinksArgs {
     #[arg(
         long,
         help = "Record the pull requests found. Without it, print them and write nothing"
+    )]
+    pub apply: bool,
+
+    #[arg(long)]
+    pub json: bool,
+}
+
+/// The trackers Ariane has a connector for (ADR-0011).
+#[derive(Clone, Copy, clap::ValueEnum)]
+pub enum Connector {
+    Monday,
+}
+
+/// Arguments of `ariane connect`: the tracker and the account whose token to store.
+#[derive(Args)]
+pub struct ConnectArgs {
+    #[arg(value_enum)]
+    pub connector: Connector,
+
+    #[arg(
+        long,
+        help = "The account, as the node's [tracker] names it (`account = …`)"
+    )]
+    pub account: String,
+}
+
+/// Arguments of `ariane sync`: the tracker, a node scope or one item, `apply`
+/// to send (a dry run otherwise), and `json` to print the plan as JSON.
+#[derive(Args)]
+pub struct SyncArgs {
+    #[arg(value_enum)]
+    pub connector: Connector,
+
+    #[arg(
+        long,
+        help = "Only the items of this node and its descendants (default: the node of the current directory)"
+    )]
+    pub node: Option<String>,
+
+    #[arg(
+        long,
+        conflicts_with = "node",
+        help = "Cover the whole tree, wherever the command runs"
+    )]
+    pub all: bool,
+
+    #[arg(long, help = "Only this item, `<node>#<id>`")]
+    pub item: Option<String>,
+
+    #[arg(
+        long,
+        help = "Update the tracker. Without it, print what would change and send nothing"
     )]
     pub apply: bool,
 

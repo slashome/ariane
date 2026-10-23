@@ -136,6 +136,7 @@ pub fn router(state: Arc<State>) -> Router {
         .route("/api/settings", get(api::settings))
         .route("/api/settings/theme", put(api::theme))
         .route("/api/commit", post(api::commit))
+        .route("/api/sync/monday", post(api::sync_monday))
         .route("/api/push", post(api::push))
         .route("/api/discard", post(api::discard))
         .route("/api/diff", get(api::diff))
@@ -512,6 +513,27 @@ mod tests {
         let (status, body) = send(&repo, "PUT", "/api/settings/theme", bad).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
         assert!(body["error"].as_str().unwrap().contains("red"));
+    }
+
+    #[tokio::test]
+    async fn syncing_an_item_without_a_monday_binding_sends_nothing() {
+        let repo = sample();
+        repo.write(
+            "q/tasks/T1-a.md",
+            "---\nariane: 1\nnode: q\nid: T1\ntitle: A\nstatus: todo\n---\n",
+        );
+        let body = serde_json::json!({ "path": "tree/q/tasks/T1-a.md" });
+        let (status, answer) = send(&repo, "POST", "/api/sync/monday", body).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(answer["steps"], serde_json::json!([]));
+        let (status, _) = send(
+            &repo,
+            "POST",
+            "/api/sync/monday",
+            serde_json::json!({ "path": "Cargo.toml" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
     }
 
     /// Replaces the fixture's repository by a fresh one with its own identity,

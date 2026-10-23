@@ -56,8 +56,8 @@ external:
 - **Waiting on someone** — as soon as the user says an item waits for someone ("j'attends la review de Keyvan", "en attente de la réponse de X", "j'ai demandé à Y"), without being asked:
   1. Set its status to the node's status of the `waiting` category (the default workflow's is `waiting`), `waiting_for` to the handles of the people awaited, `waiting_on` to `review`, `answer` or `other`, and `waiting_since` to today.
   2. A person not in the node's `[people]` (inherited from ancestors; see `ariane show` or the node's `node.toml`) is added to the `node.toml` that holds the node's `[tracker]`, or the node's own: `[people.<handle>]` with `name` and, for a node bound to monday, `monday = <user id>` found through the monday connector by name. Ask when the name is ambiguous; never invent an id.
-  3. If the item has `external: monday:<id>` and its node's `[tracker]` is monday, set the ticket's status column (`status_column`) to the label id `[tracker.waiting]` gives for `waiting_on`, and post an update on the ticket that @mentions each person by their monday id and says what is awaited. Say what you changed in monday.
-  4. When the wait ends ("Keyvan a répondu", "la review est faite"), ask where the item goes — one status of the workflow — set it and remove the three `waiting_*` keys; for a monday-bound item, set the label `[tracker.status]` maps to that status's category, asking when several labels map to it.
+  3. If the item has `external: monday:<id>` and its node's `[tracker]` is monday, run `ariane sync monday --item <node>#<id> --apply`: it moves the ticket to the label `[tracker.waiting]` gives for `waiting_on` and posts an update that @mentions each person. If it answers that no token is stored, do the same through the monday connector of your harness (status column `status_column`, the same label, an update mentioning each person by monday id) and suggest `ariane connect monday --account <account>`. A conflict or a refusal is reported to the user, never forced. Say what changed in monday.
+  4. When the wait ends ("Keyvan a répondu", "la review est faite"), ask where the item goes — one status of the workflow — set it and remove the three `waiting_*` keys; for a monday-bound item, run `ariane sync monday --item <node>#<id> --apply` (it sets the label `[tracker.push]` names), or the connector of your harness without a token.
   5. `ariane doctor`.
 - **Placement**: most specific node that the knowledge concerns (repo > project > home). Ask one focused question when ambiguous.
 - **Respect the node**: keep its language, formatting, and conventions; write only in the content repository, never in the host repository's files.
@@ -75,6 +75,7 @@ external:
 | `ariane fix` | The repairs `doctor` names as `ariane fix`: file names after the id, links rewritten. Dry run by default, `--apply` to write. |
 | `ariane show <node>#<id> --json` | One item: header, body, parent, children, dependencies, dependents. |
 | `ariane focus <node>#<id>` | First thing in a discussion about work: attaches the session to its item, where branches and pull requests are then recorded. |
+| `ariane sync monday` | Sends items' statuses to their monday tickets (`[tracker.push]`, `[tracker.waiting]`), mentioning the people awaited; a conflict or a missing label is reported, never forced. Dry run by default, `--apply` to send, `--item <ref>` for one. Needs `ariane connect monday --account <account>` once. |
 | `ariane links` | Pull requests on GitHub that name an item (monday id or `<node>#<id>`) and are not recorded in it. Dry run by default, `--apply` to write. |
 | `ariane schema --json` | Core keys and vocabularies. |
 | `ariane serve --open` | The interface: dashboard, task list, kanban, size × impact. |

@@ -39,6 +39,8 @@ mod item;
 mod links;
 /// `ariane migrate`: schema migrations of item files.
 mod migrate;
+/// `ariane sync monday`: the monday connector.
+mod monday;
 /// `node.toml`: custom fields and status workflows of a node.
 mod node;
 /// Parents, children, dependencies and dependents of items.
@@ -47,6 +49,8 @@ mod relations;
 mod repo;
 /// The core header schema, declared once as data.
 mod schema;
+/// `secrets.toml`: the trackers' tokens.
+mod secrets;
 mod serve;
 /// `ariane service`: the server as a background service.
 mod service;
@@ -102,6 +106,11 @@ fn run() -> Result<ExitCode> {
                 cli::HookHarness::ClaudeCode => hook::run(),
             });
         }
+        cli::Command::Connect(args) => {
+            return match args.connector {
+                cli::Connector::Monday => monday::connect(&args.account),
+            };
+        }
         _ => {}
     }
     let location = repo::discover(cli.repo.as_deref())?;
@@ -119,7 +128,15 @@ fn run() -> Result<ExitCode> {
             let scope = scope(args.node.as_deref(), args.all, here);
             links::run(&tree, &args, scope.as_ref())
         }
-        cli::Command::Hook(_) => unreachable!("answered before loading the tree"),
+        cli::Command::Hook(_) | cli::Command::Connect(_) => {
+            unreachable!("answered before loading the tree")
+        }
+        cli::Command::Sync(args) => {
+            let scope = scope(args.node.as_deref(), args.all, here);
+            match args.connector {
+                cli::Connector::Monday => monday::run(&tree, &args, scope.as_ref()),
+            }
+        }
         cli::Command::Doctor(args) => {
             let scope = scope(args.node.as_deref(), args.all, here);
             doctor::run(&tree, &args, scope.as_ref())
