@@ -43,6 +43,7 @@ external:
 - `external`: the item's own ticket, `monday:<pulse id>` — never a board id, never another item's ticket.
 - `branches` (`<owner>/<repo>:<branch>`) and `pull_requests` (URLs): where the item's work lives. Recorded by the hook after `ariane focus`, not by hand.
 - `waiting_for` (handles of the node's `[people]`), `waiting_on` (`review`, `validation`, `answer`, `other`) and `waiting_since` (`YYYY-MM-DD`): only while the status is in the `waiting` category, which requires `waiting_for`.
+- `personas` (stories only): the ids of the personas the story is written for, e.g. `["cmc:dev", "user:rh"]`, each declared in an applicable `node.toml` as `[personas."cmc:dev"]` with `name = "Développeur CMC"`; inherited from the ancestors, the nearest declaration wins. A new persona goes into the `node.toml` of the highest node whose stories share it, its label asked of the user; `doctor` errors on an undeclared id and warns when a non-story carries the key ([ADR-0018](https://github.com/slashome/ariane/blob/develop/docs/adr/0018-name-the-personas-a-story-is-written-for.md)).
 - Unknown keys are preserved where they are.
 
 ## Operating rules
@@ -69,7 +70,7 @@ external:
 
 | Command | Use |
 |---|---|
-| `ariane tasks --json` | State of the items: id, title, status and category, size, impact, priority, created, path. |
+| `ariane tasks --json` | State of the items: id, title, status and category, size, impact, priority, created, personas, path. |
 | `ariane doctor` | Check after every write. Exit `0` clean, `1` a command repairs it, `2` a human decision. Writes nothing. |
 | `ariane migrate` | Legacy items to the current header: dry run by default, `--apply` to write. |
 | `ariane fix` | The repairs `doctor` names as `ariane fix`: file names after the id, links rewritten. Dry run by default, `--apply` to write. |
@@ -94,4 +95,4 @@ external:
 - **Promote an item** — move it to `tasks/` or `stories/`, change the id prefix if the kind changes, set a status of the workflow; `ariane doctor`.
 - **Finish an item** — a `done` status of the workflow, move it under `archives/`, fix the links to it; `ariane doctor`.
 - **Hand the work over** — *when the user asks*, and only then ("I'm switching machines", "write a handoff"): write the node's `HANDOFF.md` — situation, background *with pointers rather than copies*, what is blocked and on whose decision, the next action. Distinguish what you verified (carry the command that proves it) from what you were told. Commit it with the work it describes.
-- **Bootstrap a node** — create the node's directory under `tree/` in the content repository, with a `node.toml` if it needs its own workflow, fields, people or tracker, then materialize it (symlink `<host>/_ariane` → `tree/<node>`).
+- **Bootstrap a node** — create the node's directory under `tree/` in the content repository, with a `node.toml` if it needs its own workflow, fields, people, personas or tracker, then materialize it (symlink `<host>/_ariane` → `tree/<node>`).

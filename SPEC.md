@@ -36,6 +36,7 @@ Keys MUST be written in English, in lower case, with `_` as the word separator. 
 | `title` | string | **MUST** | Non-empty. |
 | `status` | string | MUST for tasks and stories; MUST for reflexions; MUST NOT for ressources | A status id from the node's workflow (§1.5). Reflexions use `open`, `trial` (a decision applied on trial, not yet confirmed) or `settled`. |
 | `type` | string | MAY | A classification declared by the node (`[fields.type]` in `node.toml`); free when undeclared. |
+| `personas` | list of strings | MAY for stories; SHOULD NOT otherwise | The personas the story is written for, each an id declared under `[personas]` (§1.5), e.g. `cmc:dev`. |
 | `parent` | reference | MAY | One item reference (§1.4). |
 | `depends_on` | list of references | MAY | Item references (§1.4). |
 | `size` | string | MAY | `XS`, `S`, `M`, `L`, `XL`. |
@@ -66,7 +67,7 @@ The body of the item MUST NOT restate in prose a fact the header carries.
 
 ### 1.5 `node.toml`
 
-A node MAY carry a `node.toml` file at the root of its directory. It declares custom fields and the status workflow, and may name the node's development server.
+A node MAY carry a `node.toml` file at the root of its directory. It declares custom fields, the status workflow, the people items wait for and the personas stories are written for, and may name the node's development server.
 
 **Fields.** Each `[fields.<key>]` table declares one custom key:
 
@@ -84,9 +85,19 @@ The order of entries is the display order.
 
 **People.** Each `[people.<handle>]` table declares one person an item may wait for: `name` MUST be given, free text; every other key is the person's id in a tracker, such as `monday = 58294966`. A handle matches `^[a-z][a-z0-9-]*$`.
 
+**Personas.** Each `[personas."<id>"]` table declares one persona a story may be written for ([ADR-0018](docs/adr/0018-name-the-personas-a-story-is-written-for.md)): `name` MUST be given, free text, the readable label; no other key is allowed. An id SHOULD read `<group>:<role>`, such as `cmc:dev` or `user:rh`; it is a quoted TOML key because of its colon:
+
+```toml
+[personas."cmc:dev"]
+name = "Développeur CMC"
+
+[personas."user:rh"]
+name = "Responsable RH"
+```
+
 **Inheritance.** A node inherits the `node.toml` of each of its ancestors, from the root down:
 
-- `[fields]` and `[people]` accumulate. A descendant MAY redeclare a key or a person inherited from an ancestor, and the descendant's declaration wins.
+- `[fields]`, `[people]` and `[personas]` accumulate. A descendant MAY redeclare a key, a person or a persona inherited from an ancestor, and the descendant's declaration wins.
 - A `[[workflow]]` declared in a node replaces the inherited workflow **as a whole**; entries are never merged.
 - A node with no workflow anywhere above it uses the **default workflow**: one status per category, whose `id` equals the category.
 
@@ -117,6 +128,8 @@ The order of entries is the display order.
 | A custom key declared in `node.toml` has a value of the wrong type | error |
 | A status in the `waiting` category without `waiting_for` | error |
 | A `waiting_for` handle declared under no applicable `[people]` | error |
+| A `personas` id declared under no applicable `[personas]` | error |
+| `personas` on an item that is not a story | warning |
 | `waiting_for`, `waiting_on` or `waiting_since` on an item whose status is not in the `waiting` category | warning |
 | A required custom key is missing | error |
 | A file name that does not begin with the item's `id`, `-` and a slug | error — remedy: `ariane fix` (renames to `<id>-<current name>` and rewrites the links); a human when the name is the bare id |

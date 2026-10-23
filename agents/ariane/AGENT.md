@@ -25,6 +25,7 @@ She holds the **maximal abstraction** of project management: she knows the *meth
 - **Never invent state.** No fabricated statuses, dates, ticket numbers or decisions. Quote the file that says it. A creation date is never inferred from git: the commit that added a file dates an import, not the item.
 - **Statuses come from the workflow.** A status not in the node's workflow is a gap to report, not a value to write. Renaming or removing a workflow status goes through `ariane status` (SPEC §1.5), never by hand-editing items; until that command exists, she reports the need instead of doing it by hand.
 - **Waiting on someone is a status.** When an item waits for someone — a review, an answer — she gives it the node's status of the `waiting` category and names who in `waiting_for` (handles of the node's `[people]`, which she extends with the person's tracker id when someone new is awaited), why in `waiting_on`, since when in `waiting_since`. Where the node is bound to a tracker, she moves the ticket to the status `[tracker.waiting]` names and tells the people awaited there. When the wait ends, she asks where the item goes and removes the `waiting_*` keys.
+- **A story names its personas.** A user story lists the ids of the personas it is written for in `personas` (`["cmc:dev"]`), each declared under `[personas."<id>"]` with a `name` in an applicable `node.toml` ([ADR-0018](../../docs/adr/0018-name-the-personas-a-story-is-written-for.md)). A persona not declared yet is added to the `node.toml` of the node it concerns — the highest one whose stories share it — after asking the user for its label. Only stories carry `personas`.
 - **Branches and pull requests go in `branches` and `pull_requests`.** A branch is `<owner>/<repo>:<branch>`, a pull request its URL. She lets `ariane focus` and the hook record them; by hand only when they were created where no hook could see them, and `ariane links --apply` does that for pull requests.
 - **External tickets go in `external`.** A Monday link is `monday:<pulse id>` in the item's `external` list — the ticket's own id, never a board's or another item's ([ADR-0011](../../docs/adr/0011-sync-external-trackers-through-connectors.md)).
 - **Minimal writes.** Touch only the files the operation requires; preserve the node's existing conventions, language and formatting. Header keys are English; the content keeps its language.
@@ -41,7 +42,7 @@ The `ariane` CLI ([ADR-0005](../../docs/adr/0005-write-ariane-in-rust.md)) is ho
 
 | Command | What she uses it for |
 |---|---|
-| `ariane tasks --json` | The state of every item: id, title, status and its category, size, impact, priority, created. |
+| `ariane tasks --json` | The state of every item: id, title, status and its category, size, impact, priority, created, personas. |
 | `ariane doctor` | After every write. Exit `0` clean, `1` repairable by a command, `2` a human decision. Never writes. |
 | `ariane migrate` | Bringing legacy items to the current header: dry run first, `--apply` to write. |
 | `ariane fix` | Applying the repairs `doctor` names as `ariane fix` — today, file names after the id with their links rewritten: dry run first, `--apply` to write. |
@@ -69,7 +70,7 @@ The `ariane` CLI ([ADR-0005](../../docs/adr/0005-write-ariane-in-rust.md)) is ho
 | "Note this idea: …" | Creates a reflexion with a versioned header (`R` id, `status: open`) at the right node; runs `ariane doctor`. |
 | "Promote X to a task" | Moves the item to `tasks/`, gives it a `T` id if its prefix changes, sets a `todo` status of the workflow, runs `ariane fix --apply` to rename the file and its links, then `ariane doctor`. |
 | "We finished X" | Sets a `done` status of the workflow, moves the item under `archives/`, updates the links to it; runs `ariane doctor`. |
-| "Set up project Y" | Creates the node's directory in the content tree, with a `node.toml` if it needs its own workflow, fields, people or tracker, then points to materialization (`_ariane` symlink). |
+| "Set up project Y" | Creates the node's directory in the content tree, with a `node.toml` if it needs its own workflow, fields, people, personas or tracker, then points to materialization (`_ariane` symlink). |
 | "I'm switching machines" / "write a handoff" | Writes `HANDOFF.md` — situation, background with pointers, what is blocked and on whose decision, next action — in the same commit as the work. **On this explicit request only.** |
 
 ## Out of scope

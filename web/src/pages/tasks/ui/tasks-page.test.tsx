@@ -34,6 +34,7 @@ const base: Item = {
   created: '2030-01-02',
   reference: null,
   type: null,
+  personas: [],
   release: null,
   milestone: null,
   parent: null,

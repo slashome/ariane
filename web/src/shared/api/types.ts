@@ -18,6 +18,7 @@ export interface Item {
   priority: string | null
   created: string | null
   type: string | null
+  personas: string[]
   release: string | null
   milestone: string | null
   parent: string | null
@@ -88,11 +89,16 @@ export interface Person {
   [tracker: string]: unknown
 }
 
+export interface Persona {
+  name: string
+}
+
 export interface NodeSummary {
   path: string
   items: number
   workflow: WorkflowStatus[]
   people?: Record<string, Person>
+  personas?: Record<string, Persona>
   tracker_from?: string | null
   tracker?: Tracker | null
   last_change?: string | null

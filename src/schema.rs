@@ -1,6 +1,6 @@
 //! The core header schema, declared once as data (SPEC.md §1.3, ADR-0008).
 //!
-//! [`CORE_KEYS`](crate::schema::CORE_KEYS) describes each of the twenty-one core keys a single time: its value
+//! [`CORE_KEYS`](crate::schema::CORE_KEYS) describes each of the twenty-two core keys a single time: its value
 //! type, whether it is required depending on the item kind, and its place in the
 //! canonical key order. Everything else reads this table instead of keeping its
 //! own list:
@@ -42,6 +42,8 @@ pub enum Requirement {
     Should,
     /// The key is optional.
     May,
+    /// The key is discouraged, such as `personas` on a task: doctor warns.
+    ShouldNot,
     /// The key is forbidden, such as `status` on a ressource.
     MustNot,
 }
@@ -77,6 +79,8 @@ pub enum ValueType {
     PullRequests,
     /// A list of handles of the node's people (`[people.<handle>]`).
     People,
+    /// A list of ids of the node's personas (`[personas."<id>"]`).
+    Personas,
     /// One string out of a fixed vocabulary. `&'static` means the vocabulary is
     /// compiled into the binary and lives for the whole run.
     Enum(&'static [&'static str]),
@@ -100,6 +104,7 @@ impl ValueType {
             ValueType::Branches => "list<branch>",
             ValueType::PullRequests => "list<url>",
             ValueType::People => "list<person>",
+            ValueType::Personas => "list<persona>",
             ValueType::Enum(_) => "enum",
         }
     }
@@ -119,6 +124,7 @@ impl ValueType {
             ValueType::Branches => "a list of `<owner>/<repo>:<branch>` strings",
             ValueType::PullRequests => "a list of `https://` URLs",
             ValueType::People => "a list of handles declared under `[people]`",
+            ValueType::Personas => "a list of persona ids declared under `[personas]`",
             ValueType::Enum(_) => "one of its vocabulary",
         }
     }
@@ -176,6 +182,12 @@ pub const CORE_KEYS: &[CoreKey] = &[
         ],
     },
     key("type", ValueType::Text, Requirement::May),
+    CoreKey {
+        name: "personas",
+        value: ValueType::Personas,
+        requirement: Requirement::ShouldNot,
+        by_kind: &[(Kind::Story, Requirement::May)],
+    },
     key("parent", ValueType::Reference, Requirement::May),
     key("depends_on", ValueType::References, Requirement::May),
     key("size", ValueType::Enum(SIZES), Requirement::May),
@@ -352,6 +364,7 @@ mod tests {
                 "title",
                 "status",
                 "type",
+                "personas",
                 "parent",
                 "depends_on",
                 "size",
@@ -381,6 +394,14 @@ mod tests {
             Requirement::MustNot
         );
         assert_eq!(status.requirement_for(Kind::Unknown), Requirement::May);
+    }
+
+    #[test]
+    fn personas_are_meant_for_stories_only() {
+        let personas = core_key("personas").unwrap();
+        assert_eq!(personas.requirement_for(Kind::Story), Requirement::May);
+        assert_eq!(personas.requirement_for(Kind::Task), Requirement::ShouldNot);
+        assert_eq!(personas.value.id(), "list<persona>");
     }
 
     #[test]
@@ -421,6 +442,15 @@ mod tests {
             .find(|key| key["name"] == "status")
             .unwrap();
         assert_eq!(status["requirement"]["ressource"], json!("must_not"));
+        let personas = exported["keys"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|key| key["name"] == "personas")
+            .unwrap();
+        assert_eq!(personas["type"], json!("list<persona>"));
+        assert_eq!(personas["requirement"]["story"], json!("may"));
+        assert_eq!(personas["requirement"]["task"], json!("should_not"));
         assert_eq!(exported["categories"].as_array().unwrap().len(), 7);
         assert_eq!(
             exported["reflexion_statuses"],

@@ -1,16 +1,18 @@
 //! `node.toml`: what a node declares about its items (SPEC.md §1.5, ADR-0008).
 //!
-//! A node may carry a `node.toml` at the root of its directory with five tables:
+//! A node may carry a `node.toml` at the root of its directory with six tables:
 //!
 //! - `[fields.<key>]` declares a custom header key and its type;
 //! - `[[workflow]]` lists the statuses its items may take, each with a stable
 //!   `id`, a free `label` and one of the seven fixed categories;
 //! - `[people.<handle>]` names the people an item may wait for, with their ids
 //!   in the node's trackers;
+//! - `[personas."<id>"]` names the personas a user story is written for
+//!   (ADR-0018);
 //! - `[tracker]` binds the node to an external tracker (ADR-0011, not used yet);
 //! - `[proxy]` gives the node's development server a local name (ADR-0016).
 //!
-//! A node inherits from its ancestors: fields and people accumulate (the nearest
+//! A node inherits from its ancestors: fields, people and personas accumulate (the nearest
 //! declaration wins), a workflow replaces the inherited one as a whole, and a node with no
 //! workflow above it uses the default one, one status per category.
 
@@ -158,6 +160,16 @@ pub struct Person {
     pub ids: BTreeMap<String, toml::Value>,
 }
 
+/// One persona of a node, `[personas."<id>"]`: a user story names the ids of
+/// the personas it is written for in `personas`. The id, such as `cmc:dev`, is
+/// a quoted TOML key because of its colon.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Persona {
+    /// The readable label, such as `Développeur CMC`.
+    pub name: String,
+}
+
 /// The content of one `node.toml` file, exactly as written.
 /// `deny_unknown_fields` turns a misspelled table into a parse error instead of
 /// silently ignoring it.
@@ -172,6 +184,9 @@ pub struct NodeFile {
     /// The people declared by this file, by handle.
     #[serde(default)]
     pub people: BTreeMap<String, Person>,
+    /// The personas declared by this file, by id.
+    #[serde(default)]
+    pub personas: BTreeMap<String, Persona>,
     /// The tracker binding, kept as raw TOML until connectors exist (ADR-0011).
     pub tracker: Option<toml::Table>,
     /// The local name of the node's development server; never inherited.
@@ -200,6 +215,8 @@ pub struct Effective {
     pub workflow_from: Option<NodePath>,
     /// People of the node and its ancestors, by handle; the nearest wins.
     pub people: BTreeMap<String, Person>,
+    /// Personas of the node and its ancestors, by id; the nearest wins.
+    pub personas: BTreeMap<String, Persona>,
     /// The nearest tracker binding, if any.
     pub tracker: Option<toml::Table>,
     /// Node that declared the tracker binding.
@@ -251,14 +268,16 @@ impl Configs {
         configs
     }
 
-    /// Combines the files from the home node down to `node` (SPEC.md §1.5): fields
-    /// accumulate, the nearest workflow and tracker replace inherited ones.
+    /// Combines the files from the home node down to `node` (SPEC.md §1.5): fields,
+    /// people and personas accumulate, the nearest workflow and tracker replace
+    /// inherited ones.
     pub fn effective(&self, node: &NodePath) -> Effective {
         let mut effective = Effective {
             fields: BTreeMap::new(),
             workflow: default_workflow(),
             workflow_from: None,
             people: BTreeMap::new(),
+            personas: BTreeMap::new(),
             tracker: None,
             tracker_from: None,
         };
@@ -275,6 +294,11 @@ impl Configs {
                 file.people
                     .iter()
                     .map(|(handle, person)| (handle.clone(), person.clone())),
+            );
+            effective.personas.extend(
+                file.personas
+                    .iter()
+                    .map(|(id, persona)| (id.clone(), persona.clone())),
             );
             if let Some(workflow) = &file.workflow {
                 effective.workflow = workflow.clone();
@@ -414,6 +438,43 @@ category = "done"
                 .people
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn personas_accumulate_from_the_ancestors_and_the_nearest_wins() {
+        let repo = Repo::new();
+        repo.write(
+            "cmc/node.toml",
+            "[personas.\"cmc:dev\"]\nname = \"Développeur CMC\"\n\n[personas.\"user:rh\"]\nname = \"RH\"\n",
+        )
+        .write(
+            "cmc/lib/node.toml",
+            "[personas.\"user:rh\"]\nname = \"Responsable RH\"\n",
+        )
+        .write("cmc/lib/stories/s.md", "# s\n");
+        let tree = Tree::load(repo.root()).unwrap();
+        assert!(tree.configs.errors.is_empty(), "{:?}", tree.configs.errors);
+        let effective = tree.configs.effective(&NodePath::new("cmc/lib"));
+        assert_eq!(effective.personas["cmc:dev"].name, "Développeur CMC");
+        assert_eq!(effective.personas["user:rh"].name, "Responsable RH");
+        assert!(
+            tree.configs
+                .effective(&NodePath::new("p"))
+                .personas
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn a_persona_takes_a_name_and_nothing_else() {
+        let repo = Repo::new();
+        repo.write(
+            "cmc/node.toml",
+            "[personas.\"cmc:dev\"]\nname = \"Dev\"\nmonday = 1\n",
+        )
+        .write("cmc/stories/s.md", "# s\n");
+        let tree = Tree::load(repo.root()).unwrap();
+        assert_eq!(tree.configs.errors.len(), 1);
     }
 
     #[test]

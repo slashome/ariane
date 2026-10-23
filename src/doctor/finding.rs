@@ -127,6 +127,10 @@ pub enum Check {
     LegacyDirectory,
     /// A `waiting_for` handle declared under no `[people]` of the node.
     UnknownPerson,
+    /// A `personas` id declared under no `[personas]` of the node.
+    UnknownPersona,
+    /// A core key meant for other kinds, such as `personas` on a task.
+    DiscouragedKey,
     /// `waiting_*` keys left on an item that no longer waits.
     StaleWaiting,
     /// A `[proxy]` table whose host is not a host name, whose port is 0, or

@@ -44,6 +44,8 @@ pub struct Row<'a> {
     pub created: Option<&'a str>,
     /// The node's classification of the item (`type` in the header).
     pub r#type: Option<&'a str>,
+    /// Ids of the personas a story is written for, from the node's `[personas]`.
+    pub personas: Vec<&'a str>,
     pub release: Option<&'a str>,
     pub milestone: Option<&'a str>,
     /// `parent` as `<node>#<id>`.
@@ -160,6 +162,7 @@ pub fn row<'a>(tree: &Tree, item: &'a Item) -> Row<'a> {
         priority: document.text("priority"),
         created: document.text("created"),
         r#type: document.text("type"),
+        personas: document.texts("personas"),
         release: document.text("release"),
         milestone: document.text("milestone"),
         parent: relations::parent(item),

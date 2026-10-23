@@ -16,6 +16,7 @@ function item(overrides: Partial<Item>): Item {
     created: null,
     reference: null,
     type: null,
+    personas: [],
     release: null,
     milestone: null,
     parent: null,

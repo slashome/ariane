@@ -23,3 +23,13 @@ export function firstStatusOf(workflow: WorkflowStatus[], category: Category): W
 export function peopleOf(nodes: NodeSummary[], path: string): Record<string, Person> {
   return findNode(nodes, path)?.people ?? {}
 }
+
+export interface PersonaLabel {
+  id: string
+  name: string
+}
+
+export function personasOf(nodes: NodeSummary[], path: string, ids: string[]): PersonaLabel[] {
+  const declared = findNode(nodes, path)?.personas ?? {}
+  return ids.map((id) => ({ id, name: declared[id]?.name ?? id }))
+}

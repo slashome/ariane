@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useParams } from 'react-router'
 import { progressOf, ProgressMeter, useItems } from '@/entities/item'
+import { personasOf, useNodes } from '@/entities/node'
 import { useSchema } from '@/entities/schema'
 import { QueryField, scopeItems, useFilteredItems, useItemFilters } from '@/features/filter-items'
 import type { Category, ItemDetail } from '@/shared/api'
@@ -8,6 +9,24 @@ import { referenceFromSplat } from '@/shared/config'
 import { ItemView } from '@/widgets/item-view'
 import { storyTasks } from '../model/story-tasks'
 import { StoryTasksTable } from './story-tasks-table'
+
+function StoryPersonas({ detail }: { detail: ItemDetail }) {
+  const { data: nodes = [] } = useNodes()
+  const personas = personasOf(nodes, detail.node, detail.personas)
+  if (personas.length === 0) {
+    return null
+  }
+  return (
+    <section className="flex flex-wrap items-center gap-2" aria-label="Personas">
+      <h2 className="text-sm font-semibold">Written for</h2>
+      {personas.map((persona) => (
+        <span key={persona.id} title={persona.id} className="rounded-full border border-border px-2 py-0.5 text-xs">
+          {persona.name}
+        </span>
+      ))}
+    </section>
+  )
+}
 
 function StoryProgress({ detail }: { detail: ItemDetail }) {
   const { data: items = [] } = useItems()
@@ -24,6 +43,7 @@ function StoryProgress({ detail }: { detail: ItemDetail }) {
   const ready = rows.filter((row) => row.ready).length
   return (
     <section className="space-y-4">
+      <StoryPersonas detail={detail} />
       <div className="space-y-2 rounded-lg border border-border p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 className="text-sm font-semibold">Progress</h2>

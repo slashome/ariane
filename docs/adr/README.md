@@ -51,6 +51,7 @@ A closing *Revisit if* section names the conditions under which the decision wou
 | [0015](0015-name-whom-an-item-waits-for.md) | Name whom an item waits for | Accepted | 2026-10-23 |
 | [0016](0016-name-local-servers-through-a-front-door.md) | Name local servers through a front door in `ariane` | Accepted | 2026-10-23 |
 | [0017](0017-keep-a-nodes-judgment-in-its-items.md) | Keep a node's judgment in its items, drop `INDEX.md` | Accepted | 2026-10-23 |
+| [0018](0018-name-the-personas-a-story-is-written-for.md) | Name the personas a story is written for | Accepted | 2026-10-23 |
 
 ## Archived
 

@@ -19,6 +19,7 @@ const item: Item = {
   created: null,
   reference: null,
   type: null,
+  personas: [],
   release: null,
   milestone: null,
   parent: null,

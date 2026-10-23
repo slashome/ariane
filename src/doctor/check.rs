@@ -190,6 +190,7 @@ fn check_item(
     report.node(mapping);
     report.status(mapping, &effective);
     report.waiting(mapping, &effective);
+    report.personas(mapping, &effective);
     report.custom(mapping, &effective);
     report.file_name(mapping);
 }
@@ -248,7 +249,42 @@ impl Reporter<'_> {
             self.forbidden(key.name);
             return;
         }
+        if requirement == Requirement::ShouldNot {
+            self.discouraged(key);
+        }
         self.value(key, value, known);
+    }
+
+    /// Warns about a key meant for other kinds than this item's, such as
+    /// `personas` on a task.
+    fn discouraged(&mut self, key: &CoreKey) {
+        let kind = kind_label(self.item);
+        let meant: Vec<String> = schema::KINDS
+            .iter()
+            .filter(|candidate| {
+                matches!(
+                    key.requirement_for(**candidate),
+                    Requirement::Must | Requirement::Should | Requirement::May
+                )
+            })
+            .map(|candidate| kind_word(*candidate))
+            .collect();
+        let name = key.name;
+        self.push(
+            Check::DiscouragedKey,
+            Severity::Warning,
+            format!(
+                "a {kind} carries `{name}`, which is meant for: {}",
+                meant.join(", ")
+            ),
+            Remedy::human([
+                format!("remove `{name}` from the front-matter"),
+                format!(
+                    "move the item to the directory of a kind meant for `{name}`: {}",
+                    meant.join(", ")
+                ),
+            ]),
+        );
     }
 
     /// Reports a key that this item's kind must not carry.
@@ -330,7 +366,7 @@ impl Reporter<'_> {
                 }
                 None => self.wrong_type(name, key.value.expected()),
             },
-            ValueType::People => {
+            ValueType::People | ValueType::Personas => {
                 if string_list(value).is_none() {
                     self.wrong_type(name, key.value.expected());
                 }
@@ -556,6 +592,33 @@ impl Reporter<'_> {
                     format!("remove {}", left.join(", ")),
                     "give it back a status of the waiting category".to_owned(),
                 ]),
+            );
+        }
+    }
+
+    /// Checks that every id of `personas` is declared under `[personas]` of an
+    /// applicable `node.toml` (SPEC.md §1.5).
+    fn personas(&mut self, mapping: &Mapping, effective: &Effective) {
+        let ids = mapping
+            .get("personas")
+            .and_then(string_list)
+            .unwrap_or_default();
+        for id in ids
+            .into_iter()
+            .filter(|id| !effective.personas.contains_key(*id))
+        {
+            let known: Vec<&str> = effective.personas.keys().map(String::as_str).collect();
+            let mut resolutions = vec![format!(
+                "declare `[personas.\"{id}\"]` with its `name` in the node's {NODE_FILE}"
+            )];
+            if !known.is_empty() {
+                resolutions.push(format!("use one of: {}", known.join(", ")));
+            }
+            resolutions.push(format!("remove `{id}` from `personas`"));
+            self.error(
+                Check::UnknownPersona,
+                format!("`personas: {id}` is no persona declared under `[personas]`"),
+                Remedy::human(resolutions),
             );
         }
     }
@@ -792,7 +855,12 @@ fn non_empty(value: &Value) -> Option<&str> {
 
 /// The item's kind as a word, for messages.
 fn kind_label(item: &Item) -> String {
-    serde_json::to_value(item.kind)
+    kind_word(item.kind)
+}
+
+/// A kind as its JSON word, such as `ressource`.
+fn kind_word(kind: crate::item::Kind) -> String {
+    serde_json::to_value(kind)
         .ok()
         .and_then(|value| value.as_str().map(str::to_owned))
         .unwrap_or_else(|| "item".to_owned())

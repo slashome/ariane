@@ -1,5 +1,5 @@
 import type { NodeSummary } from '@/shared/api'
-import { firstStatusOf, statusLabel, workflowOf } from './workflow'
+import { firstStatusOf, personasOf, statusLabel, workflowOf } from './workflow'
 
 const nodes: NodeSummary[] = [
   {
@@ -10,6 +10,7 @@ const nodes: NodeSummary[] = [
       { id: 'a-tester', label: 'À tester', category: 'in_progress' },
       { id: 'en-cours', label: 'En cours', category: 'in_progress' },
     ],
+    personas: { 'cmc:dev': { name: 'Développeur CMC' } },
   },
 ]
 
@@ -24,5 +25,13 @@ describe('workflow lookup', () => {
   it('finds the first status of a category, in workflow order', () => {
     expect(firstStatusOf(workflowOf(nodes, 'game'), 'in_progress')?.id).toBe('a-tester')
     expect(firstStatusOf(workflowOf(nodes, 'game'), 'done')).toBeNull()
+  })
+
+  it('labels the personas of a story with their declared name and falls back to the id', () => {
+    expect(personasOf(nodes, 'game', ['cmc:dev', 'user:rh'])).toEqual([
+      { id: 'cmc:dev', name: 'Développeur CMC' },
+      { id: 'user:rh', name: 'user:rh' },
+    ])
+    expect(personasOf(nodes, 'elsewhere', [])).toEqual([])
   })
 })

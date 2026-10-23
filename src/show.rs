@@ -123,6 +123,9 @@ fn print_text(shown: &Shown) {
             .collect::<Vec<_>>()
             .join(", ")
     };
+    if !row.personas.is_empty() {
+        println!("personas:   {}", row.personas.join(", "));
+    }
     if let Some(parent) = &relations.parent {
         println!("parent:     {}", list(std::slice::from_ref(parent)));
     }
@@ -159,7 +162,7 @@ mod tests {
         let repo = Repo::new();
         repo.write(
             "p/stories/S1-s.md",
-            "---\nariane: 1\nnode: p\nid: S1\ntitle: S\nstatus: todo\nmod: Kept\n---\n# S\n\nBody.\n",
+            "---\nariane: 1\nnode: p\nid: S1\ntitle: S\nstatus: todo\npersonas: [\"cmc:dev\"]\nmod: Kept\n---\n# S\n\nBody.\n",
         )
         .write(
             "p/tasks/T1-a.md",
@@ -196,6 +199,7 @@ mod tests {
         assert_eq!(json["reference"], "p#S1");
         assert_eq!(json["kind"], "story");
         assert_eq!(json["header"]["mod"], "Kept");
+        assert_eq!(json["personas"], serde_json::json!(["cmc:dev"]));
         assert_eq!(json["body"], "# S\n\nBody.\n");
         assert_eq!(json["relations"]["children"][0]["reference"], "p#T1");
         assert_eq!(json["relations"]["dependents"], serde_json::json!([]));

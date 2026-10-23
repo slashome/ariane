@@ -304,6 +304,56 @@ category = "done"
         assert_eq!(checks(&repo), vec![]);
     }
 
+    /// A node declaring two personas, with a story and a task of its own.
+    fn personas_base() -> Repo {
+        let repo = Repo::new();
+        repo.write(
+            "c/node.toml",
+            "[personas.\"cmc:dev\"]\nname = \"Développeur CMC\"\n\n[personas.\"user:rh\"]\nname = \"RH\"\n",
+        );
+        repo
+    }
+
+    fn story(extra: &str) -> String {
+        format!("---\nariane: 1\nnode: c/web\nid: S1\ntitle: A\nstatus: todo\n{extra}---\n")
+    }
+
+    #[test]
+    fn a_story_names_personas_declared_above_it() {
+        let repo = personas_base();
+        repo.write(
+            "c/web/stories/S1-a.md",
+            &story("personas: [\"cmc:dev\", \"user:rh\"]\n"),
+        );
+        assert_eq!(checks(&repo), vec![]);
+        repo.write(
+            "c/web/stories/S1-a.md",
+            &story("personas: [\"cmc:dev\", \"user:ceo\"]\n"),
+        );
+        only(&repo, Check::UnknownPersona);
+        repo.write("c/web/stories/S1-a.md", &story("personas: cmc:dev\n"));
+        only(&repo, Check::WrongType);
+    }
+
+    #[test]
+    fn personas_on_an_item_that_is_not_a_story_are_a_warning() {
+        let repo = personas_base();
+        repo.write(
+            "c/web/tasks/T1-a.md",
+            &story("personas: [\"cmc:dev\"]\n").replace("S1", "T1"),
+        );
+        let tree = Tree::load(repo.root()).unwrap();
+        let findings = diagnose(&tree, None, false);
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert_eq!(findings[0].check, Check::DiscouragedKey);
+        assert_eq!(findings[0].severity, Severity::Warning);
+        assert!(
+            findings[0].message.contains("story"),
+            "{}",
+            findings[0].message
+        );
+    }
+
     #[test]
     fn waiting_keys_left_after_the_wait_are_a_warning() {
         let repo = waiting_base();
