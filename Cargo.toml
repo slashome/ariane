@@ -2,6 +2,9 @@
 name = "ariane"
 version = "0.1.0"
 edition = "2024"
+description = "Ariadne's thread through your projects: a file-based, hierarchical project management method."
+homepage = "https://github.com/slashome/ariane"
+repository = "https://github.com/slashome/ariane"
 
 [dependencies]
 anyhow = "1.0.104"
@@ -25,3 +28,8 @@ yaml_serde = "0.10.7"
 http-body-util = "0.1.5"
 tempfile = "3.27.0"
 tower = { version = "0.5.3", features = ["util"] }
+
+# The profile that cargo-dist builds release artifacts with.
+[profile.dist]
+inherits = "release"
+lto = "thin"
