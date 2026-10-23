@@ -1,5 +1,5 @@
 @import 'tailwindcss';
-@import '@fontsource/merienda/latin-400.css';
+@import '@fontsource/merienda/latin-700.css';
 
 /* Dark mode is the `data-appearance` the app puts on the root: the system's choice, or the one made in
    the command palette. Tailwind's `dark:` follows it too. */
