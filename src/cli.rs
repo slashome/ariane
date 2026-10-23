@@ -23,7 +23,8 @@ use crate::item::Kind;
 #[command(
     name = "ariane",
     version,
-    about = "Ariadne's thread through your projects"
+    about = "Ariadne's thread through your projects",
+    arg_required_else_help = true
 )]
 pub struct Cli {
     #[arg(long, global = true, env = "ARIANE_REPO")]

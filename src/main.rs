@@ -38,6 +38,8 @@ mod hook;
 mod item;
 /// `ariane links`: pull requests found on GitHub, recorded in their items.
 mod links;
+/// The logo printed above the help.
+mod logo;
 /// `ariane migrate`: schema migrations of item files.
 mod migrate;
 /// `ariane sync monday`: the monday connector.
@@ -73,7 +75,7 @@ mod work;
 use std::process::ExitCode;
 
 use anyhow::Result;
-use clap::Parser;
+use clap::{CommandFactory, FromArgMatches};
 
 /// Runs the command and turns its outcome into the process exit code.
 ///
@@ -101,7 +103,7 @@ fn main() -> ExitCode {
 /// Fails when no content repository can be found or read, or when the command
 /// itself fails.
 fn run() -> Result<ExitCode> {
-    let cli = cli::Cli::parse();
+    let cli = parse();
     match &cli.command {
         cli::Command::Schema(args) => return schema_command(args),
         cli::Command::Config(args) => return config::command::run(args),
@@ -178,6 +180,26 @@ fn run() -> Result<ExitCode> {
         cli::Command::Config(args) => config::command::run(&args),
         cli::Command::Service(args) => service::run(&args),
     }
+}
+
+/// Parses the command line. When it asks for the help, or names no command,
+/// the help opens on the logo in the content's theme color; the repository
+/// is looked for only then.
+fn parse() -> cli::Cli {
+    let arguments: Vec<String> = std::env::args().skip(1).collect();
+    let helps = arguments.is_empty()
+        || arguments.first().is_some_and(|first| first == "help")
+        || arguments
+            .iter()
+            .any(|argument| argument == "-h" || argument == "--help");
+    let mut command = cli::Cli::command();
+    if helps {
+        // The banner carries the tagline: `about` would repeat it.
+        command = command
+            .before_help(logo::banner(&logo::theme_color()))
+            .help_template("{before-help}{usage-heading} {usage}\n\n{all-args}");
+    }
+    cli::Cli::from_arg_matches(&command.get_matches()).unwrap_or_else(|error| error.exit())
 }
 
 /// Prints the core header schema, as a table or as JSON with `--json`.
