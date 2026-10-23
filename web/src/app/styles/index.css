@@ -1,5 +1,5 @@
 @import 'tailwindcss';
-@import '@fontsource/montecarlo/latin-400.css';
+@import '@fontsource/merienda/latin-400.css';
 
 /* Dark mode is the `data-appearance` the app puts on the root: the system's choice, or the one made in
    the command palette. Tailwind's `dark:` follows it too. */
@@ -23,7 +23,7 @@
   /* The halo behind an icon button on hover: a tint of the accent, lighter in dark mode. */
   --color-halo: color-mix(in oklab, var(--color-accent) 14%, transparent);
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --font-brand: 'MonteCarlo', cursive;
+  --font-brand: 'Merienda', cursive;
   /* Motion: one short duration and one easing for every hover feedback. */
   --duration-hover: 160ms;
   --ease-hover: cubic-bezier(0.2, 0, 0, 1);

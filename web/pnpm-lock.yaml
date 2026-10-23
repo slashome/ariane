@@ -17,7 +17,7 @@ importers:
       '@dnd-kit/utilities':
         specifier: 3.2.2
         version: 3.2.2(react@19.3.1)
-      '@fontsource/montecarlo':
+      '@fontsource/merienda':
         specifier: 5.3.0
         version: 5.3.0
       '@tanstack/react-query':
@@ -348,8 +348,8 @@ packages:
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
 
-  '@fontsource/montecarlo@5.3.0':
-    resolution: {integrity: sha512-Y51mD29pvgM9+7pGKW7HO0DzthEmSeM5GPCZ7rT/F9nZtkz4brNjBi2EIWV4ICmOfJs6NtwffryNlBaLRwP8Mw==}
+  '@fontsource/merienda@5.3.0':
+    resolution: {integrity: sha512-0CpBXbcYSFw2zUiGEzAluqlFnKBDsTG6DxPAxyDbRtx4pTJcIDeBzLd7nWst0MGRpwsRs3TURlzVYsxJ/rA7ZQ==}
 
   '@humanfs/core@0.19.2':
     resolution: {integrity: sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==}
@@ -3215,7 +3215,7 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
-  '@fontsource/montecarlo@5.3.0': {}
+  '@fontsource/merienda@5.3.0': {}
 
   '@humanfs/core@0.19.2':
     dependencies:
