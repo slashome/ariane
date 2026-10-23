@@ -2,7 +2,7 @@ import { CircleCheck, CircleDashed, Hourglass } from 'lucide-react'
 import { isClosed, ItemLink, StatusBadge } from '@/entities/item'
 import { statusLabel, useNodes } from '@/entities/node'
 import { cn } from '@/shared/lib'
-import { EmptyState } from '@/shared/ui'
+import { EmptyState, Highlight } from '@/shared/ui'
 import type { StoryTask } from '../model/story-tasks'
 
 function Readiness({ row }: { row: StoryTask }) {
@@ -27,10 +27,15 @@ function Readiness({ row }: { row: StoryTask }) {
   )
 }
 
-export function StoryTasksTable({ rows, scope }: { rows: StoryTask[]; scope: string }) {
+// `hidden` counts the tasks the search field leaves out.
+export function StoryTasksTable({ rows, scope, hidden = 0 }: { rows: StoryTask[]; scope: string; hidden?: number }) {
   const { data: nodes = [] } = useNodes()
   if (rows.length === 0) {
-    return <EmptyState title="No task in this story yet">A task joins it with `parent:` set to this story.</EmptyState>
+    return hidden > 0 ? (
+      <EmptyState title="No task of this story matches the search">{hidden} tasks in the story; the search field keeps none of them.</EmptyState>
+    ) : (
+      <EmptyState title="No task in this story yet">A task joins it with `parent:` set to this story.</EmptyState>
+    )
   }
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
@@ -47,8 +52,12 @@ export function StoryTasksTable({ rows, scope }: { rows: StoryTask[]; scope: str
           {rows.map((row) => (
             <tr key={row.task.path} className="border-t border-border align-top">
               <td className={cn('px-3 py-2', isClosed(row.task.category) && 'text-muted-foreground')}>
-                <span className="mr-2 font-mono text-xs text-muted-foreground">{row.task.id}</span>
-                <ItemLink item={row.task}>{row.task.title ?? row.task.path}</ItemLink>
+                <span className="mr-2 font-mono text-xs text-muted-foreground">
+                  <Highlight text={row.task.id ?? ''} />
+                </span>
+                <ItemLink item={row.task}>
+                  <Highlight text={row.task.title ?? row.task.path} />
+                </ItemLink>
                 {row.task.node !== scope && <span className="ml-1 font-mono text-[10px] text-muted-foreground">{row.task.node}</span>}
               </td>
               <td className="px-3 py-2">

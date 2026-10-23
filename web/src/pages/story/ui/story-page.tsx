@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { useParams } from 'react-router'
 import { progressOf, ProgressMeter, useItems } from '@/entities/item'
 import { useSchema } from '@/entities/schema'
-import { scopeItems, useItemFilters } from '@/features/filter-items'
+import { QueryField, scopeItems, useFilteredItems, useItemFilters } from '@/features/filter-items'
 import type { Category, ItemDetail } from '@/shared/api'
 import { referenceFromSplat } from '@/shared/config'
 import { ItemView } from '@/widgets/item-view'
@@ -18,7 +18,8 @@ function StoryProgress({ detail }: { detail: ItemDetail }) {
     () => scopeItems(detail.relations.children, { node: null, includeArchived: filters.includeArchived, includeDescendants: false }),
     [detail.relations.children, filters.includeArchived],
   )
-  const rows = useMemo(() => storyTasks(children, items), [children, items])
+  const { items: matching, total } = useFilteredItems(children, { anyNode: true })
+  const rows = useMemo(() => storyTasks(matching, items), [matching, items])
   const progress = progressOf(children)
   const ready = rows.filter((row) => row.ready).length
   return (
@@ -33,7 +34,10 @@ function StoryProgress({ detail }: { detail: ItemDetail }) {
         </div>
         <ProgressMeter progress={progress} labels={labels} legend />
       </div>
-      <StoryTasksTable rows={rows} scope={detail.node} />
+      <div className="flex justify-end">
+        <QueryField count={rows.length} total={total} />
+      </div>
+      <StoryTasksTable rows={rows} scope={detail.node} hidden={total - rows.length} />
     </section>
   )
 }

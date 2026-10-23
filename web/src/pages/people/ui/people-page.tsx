@@ -1,10 +1,11 @@
 import { Pencil, Plus, Trash2, Users } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { usePeople, useRemovePerson } from '../api/use-people'
-import { useItemFilters } from '@/features/filter-items'
+import { useItems } from '@/entities/item'
+import { QueryField, useFilteredItems, useItemFilters } from '@/features/filter-items'
 import { ApiError, type Directory, type PersonEntry } from '@/shared/api'
 import { displayNode, isWithinNode } from '@/shared/lib'
-import { Button, ConfirmDialog, EmptyState, ErrorState, LoadingState, PageHeader } from '@/shared/ui'
+import { Button, ConfirmDialog, EmptyState, ErrorState, Highlight, LoadingState, PageHeader } from '@/shared/ui'
 import { ItemReference } from './item-reference'
 import { PersonDialog } from './person-dialog'
 
@@ -18,9 +19,25 @@ export function PeoplePage() {
   const [removing, setRemoving] = useState<{ directory: Directory; person: PersonEntry } | null>(null)
   const [blocked, setBlocked] = useState<string[] | null>(null)
   const scope = filters.node
-  const shown = directories.filter(
-    (directory) => scope === null || isWithinNode(directory.node, scope) || isWithinNode(scope, directory.node),
-  )
+  const { data: items = [] } = useItems()
+  const { items: matching } = useFilteredItems(items, { anyNode: true })
+  const searching = filters.query.trim() !== ''
+  // With a search, each person keeps only the awaiting items it finds, and people left with none are hidden.
+  const shown = useMemo(() => {
+    const found = new Set(matching.map((item) => item.reference))
+    return directories
+      .filter((directory) => scope === null || isWithinNode(directory.node, scope) || isWithinNode(scope, directory.node))
+      .map((directory) => ({
+        ...directory,
+        people: searching
+          ? directory.people
+              .map((person) => ({ ...person, awaited_by: person.awaited_by.filter((reference) => found.has(reference)) }))
+              .filter((person) => person.awaited_by.length > 0)
+          : directory.people,
+      }))
+  }, [directories, matching, scope, searching])
+  const awaited = (list: Directory[]) => list.reduce((sum, directory) => sum + directory.people.reduce((count, person) => count + person.awaited_by.length, 0), 0)
+  const total = awaited(directories.filter((directory) => shown.some((entry) => entry.node === directory.node)))
 
   const confirmRemove = () => {
     if (removing === null) {
@@ -45,6 +62,7 @@ export function PeoplePage() {
       <PageHeader
         title="People"
         description="Whom items may wait for, declared where a node binds its tracker and shared by everything below it. The header lists only those nodes here."
+        actions={<QueryField count={awaited(shown)} total={total} />}
       />
       {error ? (
         <ErrorState message={`Could not read the people: ${error.message}`} />
@@ -72,7 +90,9 @@ export function PeoplePage() {
               </Button>
             </div>
             {directory.people.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">No one yet.</p>
+              <p className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+                {searching ? 'No one here waited on by an item the search finds.' : 'No one yet.'}
+              </p>
             ) : (
               <table className="w-full overflow-hidden rounded-lg border border-border text-sm">
                 <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
@@ -87,8 +107,12 @@ export function PeoplePage() {
                 <tbody>
                   {directory.people.map((person) => (
                     <tr key={person.handle} className="border-t border-border align-top">
-                      <td className="px-3 py-2 font-medium">{person.name}</td>
-                      <td className="px-3 py-2 font-mono text-xs">{person.handle}</td>
+                      <td className="px-3 py-2 font-medium">
+                        <Highlight text={person.name} />
+                      </td>
+                      <td className="px-3 py-2 font-mono text-xs">
+                        <Highlight text={person.handle} />
+                      </td>
                       <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{person.monday ?? '—'}</td>
                       <td className="px-3 py-2">
                         {person.awaited_by.length === 0 ? (
