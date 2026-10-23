@@ -8,7 +8,6 @@ import { NodeSwitcher } from './node-switcher'
 
 const nodes: NodeSummary[] = ['', 'cmc', 'cmc/cmc-lib', 'cmc/cmc-frontend', 'slashome', 'slashome/ariane'].map((path, index) => ({
   path,
-  has_index: true,
   items: index,
   workflow: [],
 }))

@@ -22,8 +22,8 @@ describe('externalUrl', () => {
 describe('trackerOf', () => {
   it('reads the effective tracker of a node, null when it has none', () => {
     const nodes: NodeSummary[] = [
-      { path: 'cmc/app', has_index: true, items: 1, workflow: [], tracker: monday },
-      { path: 'perso', has_index: true, items: 1, workflow: [], tracker: null },
+      { path: 'cmc/app', items: 1, workflow: [], tracker: monday },
+      { path: 'perso', items: 1, workflow: [], tracker: null },
     ]
     expect(trackerOf(nodes, 'cmc/app')).toEqual(monday)
     expect(trackerOf(nodes, 'perso')).toBeNull()

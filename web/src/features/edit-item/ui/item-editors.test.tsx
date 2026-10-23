@@ -7,7 +7,6 @@ import { ItemEditors } from './item-editors'
 const nodes: NodeSummary[] = [
   {
     path: 'p',
-    has_index: true,
     items: 1,
     workflow: [
       { id: 'todo', label: 'To do', category: 'todo' },

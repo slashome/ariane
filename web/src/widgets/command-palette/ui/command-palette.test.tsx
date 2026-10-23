@@ -19,7 +19,7 @@ function Where() {
 
 function renderPalette() {
   const fetch = vi.fn(async (input: string) => {
-    const body = input.startsWith('/api/search') ? [hit] : input.startsWith('/api/items') ? items : input.startsWith('/api/nodes') ? [{ path: 'p', has_index: true, items: 2, workflow: [] }] : []
+    const body = input.startsWith('/api/search') ? [hit] : input.startsWith('/api/items') ? items : input.startsWith('/api/nodes') ? [{ path: 'p', items: 2, workflow: [] }] : []
     return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
   })
   vi.stubGlobal('fetch', fetch)

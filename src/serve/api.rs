@@ -179,7 +179,7 @@ pub async fn show(Shared(state): Shared<Arc<State>>, Query(query): Query<ShowQue
     }
 }
 
-/// `GET /api/nodes`: every node with its entry point, item count, effective
+/// `GET /api/nodes`: every node with its item count, effective
 /// workflow, people (`[people]`, inherited) and tracker binding (after `node.toml` inheritance, ADR-0008 and
 /// ADR-0011) and the date of its latest commit, computed when the tree was
 /// loaded. The tracker is the raw `[tracker]` table, or `null`.
@@ -206,7 +206,6 @@ pub async fn nodes(Shared(state): Shared<Arc<State>>) -> Response {
                 let effective = tree.configs.effective(&node.path);
                 json!({
                     "path": node.path,
-                    "has_index": node.has_index,
                     "items": items,
                     "workflow": effective.workflow,
                     "people": effective.people,

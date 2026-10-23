@@ -89,8 +89,8 @@ pub enum Check {
     Unreadable,
     /// A `node.toml` that does not parse.
     InvalidNodeToml,
-    /// A node with items but no `INDEX.md`.
-    MissingIndex,
+    /// An `INDEX.md` left in the tree, whose judgment belongs in the items (ADR-0017).
+    LeftoverIndex,
     /// No front-matter, or no `ariane` key: the file predates the schema.
     NoHeader,
     /// A front-matter that is not valid YAML.

@@ -324,8 +324,7 @@ mod tests {
     /// A repository with one node, a workflow, one task and one invalid item.
     fn sample() -> Repo {
         let repo = Repo::new();
-        repo.write("p/INDEX.md", "# p\n")
-            .write(
+        repo.write(
                 "p/node.toml",
                 "[[workflow]]\nid = \"a-faire\"\nlabel = \"À faire\"\ncategory = \"todo\"\n\n[tracker]\nkind = \"monday\"\nboard = 7\n",
             )
@@ -470,7 +469,7 @@ mod tests {
             .find(|node| node["path"] == "p")
             .unwrap();
         assert_eq!(node["items"], 2);
-        assert_eq!(node["has_index"], true);
+        assert!(node.get("has_index").is_none());
         assert_eq!(node["workflow"][0]["id"], "a-faire");
         assert_eq!(node["workflow"][0]["category"], "todo");
         assert_eq!(node["tracker"]["kind"], "monday");

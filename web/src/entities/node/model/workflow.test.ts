@@ -4,7 +4,6 @@ import { firstStatusOf, statusLabel, workflowOf } from './workflow'
 const nodes: NodeSummary[] = [
   {
     path: 'game',
-    has_index: true,
     items: 2,
     workflow: [
       { id: 'a-faire', label: 'À faire', category: 'todo' },

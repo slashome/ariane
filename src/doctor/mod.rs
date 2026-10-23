@@ -190,11 +190,10 @@ category = "done"
         )
     }
 
-    /// A repository with one node, its `node.toml` and its `INDEX.md`.
+    /// A repository with one node and its `node.toml`.
     fn base() -> Repo {
         let repo = Repo::new();
-        repo.write("p/INDEX.md", "# p\n")
-            .write("p/node.toml", WORKFLOW);
+        repo.write("p/node.toml", WORKFLOW);
         repo
     }
 
@@ -248,7 +247,7 @@ category = "done"
     /// A node with the default workflow and two people.
     fn waiting_base() -> Repo {
         let repo = Repo::new();
-        repo.write("w/INDEX.md", "# w\n").write(
+        repo.write(
             "w/node.toml",
             "[people.keyvan]\nname = \"Keyvan\"\nmonday = 1\n\n[people.doryan]\nname = \"Doryan\"\n",
         );
@@ -287,16 +286,14 @@ category = "done"
     #[test]
     fn a_proxy_table_needs_a_host_name_of_its_own() {
         let repo = base();
-        repo.write("a/INDEX.md", "# a\n")
-            .write(
-                "a/node.toml",
-                "[proxy]\nhost = \"app.local\"\nport = 3000\n",
-            )
-            .write("b/INDEX.md", "# b\n")
-            .write(
-                "b/node.toml",
-                "[proxy]\nhost = \"app.local\"\nport = 3001\n",
-            );
+        repo.write(
+            "a/node.toml",
+            "[proxy]\nhost = \"app.local\"\nport = 3000\n",
+        )
+        .write(
+            "b/node.toml",
+            "[proxy]\nhost = \"app.local\"\nport = 3001\n",
+        );
         only(&repo, Check::InvalidProxy);
         repo.write(
             "b/node.toml",
@@ -583,7 +580,7 @@ category = "done"
     }
 
     #[test]
-    fn an_invalid_node_toml_and_a_node_without_index_are_reported() {
+    fn an_invalid_node_toml_is_reported() {
         let repo = Repo::new();
         repo.write("q/node.toml", "[[workflow]]\nid = 3\n").write(
             "q/tasks/T1-a.md",
@@ -591,7 +588,24 @@ category = "done"
         );
         let found = checks(&repo);
         assert!(found.contains(&Check::InvalidNodeToml));
-        assert!(found.contains(&Check::MissingIndex));
+    }
+
+    #[test]
+    fn a_node_needs_no_index_and_a_leftover_one_is_a_warning() {
+        let repo = base();
+        repo.write("p/tasks/T1-a.md", &task("p", "T1", "tests: [a]\n"));
+        assert_eq!(checks(&repo), vec![]);
+        repo.write("p/INDEX.md", "# p\n\nWhy T1 comes first.\n");
+        let tree = Tree::load(repo.root()).unwrap();
+        let findings = diagnose(&tree, None, false);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].check, Check::LeftoverIndex);
+        assert_eq!(findings[0].severity, Severity::Warning);
+        assert_eq!(findings[0].path.as_deref(), Some("tree/p/INDEX.md"));
+        assert!(
+            matches!(&findings[0].remedy, Remedy::Human { resolutions } if resolutions.iter().all(|resolution| resolution.contains("INDEX.md")))
+        );
+        assert_eq!(exit_code(&findings), 0);
     }
 
     #[test]
@@ -616,9 +630,7 @@ category = "done"
     fn the_scope_limits_the_diagnosis_to_a_node_and_its_descendants() {
         let repo = base();
         repo.write("p/tasks/a.md", "# a\n")
-            .write("p/child/INDEX.md", "# c\n")
             .write("p/child/tasks/b.md", "# b\n")
-            .write("r/INDEX.md", "# r\n")
             .write("r/tasks/c.md", "# c\n");
         let tree = Tree::load(repo.root()).unwrap();
         let scoped = diagnose(&tree, Some(&NodePath::new("p")), false);

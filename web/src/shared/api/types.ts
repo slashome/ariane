@@ -90,7 +90,6 @@ export interface Person {
 
 export interface NodeSummary {
   path: string
-  has_index: boolean
   items: number
   workflow: WorkflowStatus[]
   people?: Record<string, Person>

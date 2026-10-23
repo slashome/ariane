@@ -1,8 +1,8 @@
 //! `ariane tasks`: lists the items of the tree.
 //!
 //! Prints one line per item (node, id, status, title) or, with `--json`, the full
-//! rows for scripts and agents. ADR-0010 makes this the on-demand aggregation
-//! that `INDEX.md` files no longer carry: an agent without the interface asks
+//! rows for scripts and agents. A node has no index file (ADR-0017): an agent
+//! without the interface reads a node's state with
 //! `ariane tasks --node <node> --json`. `--kind` keeps some kinds only,
 //! `--body` adds each item's Markdown body and `--dates` the date of its
 //! latest commit.

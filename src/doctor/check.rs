@@ -2,8 +2,8 @@
 //!
 //! Three passes, each appending to one list of findings:
 //!
-//! 1. **structural**: unreadable files, invalid `node.toml`, nodes without
-//!    `INDEX.md`, `[proxy]` tables that cannot become a route;
+//! 1. **structural**: unreadable files, invalid `node.toml`, leftover
+//!    `INDEX.md` files (ADR-0017), `[proxy]` tables that cannot become a route;
 //! 2. **per item**: the directory first (an item still in the former
 //!    `backlog/` is reported, and checked on), then the schema version (a file that needs `migrate` gets
 //!    that single finding and nothing else), then every core key by iterating
@@ -26,7 +26,7 @@ use crate::schema::{
     self, CORE_KEYS, CoreKey, REFLEXION_CLOSED, REFLEXION_STATUSES, Requirement, ValueType,
     is_branch, is_date, is_external, is_pull_request, is_valid_id,
 };
-use crate::tree::{Item, NodePath, Tree, parse_reference};
+use crate::tree::{Item, LEFTOVER_INDEX, NodePath, Tree, parse_reference};
 
 /// Runs every check on the items of `scope` (the whole tree when `None`) and
 /// returns the findings in report order.
@@ -44,7 +44,7 @@ pub fn findings(tree: &Tree, scope: Option<&NodePath>) -> Vec<Finding> {
     found
 }
 
-/// Reports what prevents reading the tree properly: unreadable paths, invalid `node.toml` files, nodes without `INDEX.md`, invalid `[proxy]` tables.
+/// Reports what prevents reading the tree properly: unreadable paths, invalid `node.toml` files, leftover `INDEX.md` files, invalid `[proxy]` tables.
 fn structural(tree: &Tree, scope: Option<&NodePath>, found: &mut Vec<Finding>) {
     proxies(tree, scope, found);
     let scope_dir = scope.map(|scope| tree.node_dir(scope));
@@ -79,19 +79,26 @@ fn structural(tree: &Tree, scope: Option<&NodePath>, found: &mut Vec<Finding>) {
             });
         }
     }
-    for node in &tree.nodes {
-        if node.has_index || scope.is_some_and(|scope| !node.path.is_within(scope)) {
+    for (node, path) in &tree.leftover_indexes {
+        if scope.is_some_and(|scope| !node.is_within(scope)) {
             continue;
         }
         found.push(Finding {
-            check: Check::MissingIndex,
+            check: Check::LeftoverIndex,
             severity: Severity::Warning,
-            node: Some(node.path.clone()),
-            path: None,
-            message: "the node has items but no INDEX.md".to_owned(),
+            node: Some(node.clone()),
+            path: Some(relative(tree, path)),
+            message: format!(
+                "a node no longer has an {LEFTOVER_INDEX}: its judgment belongs in the items (ADR-0017)"
+            ),
             remedy: Remedy::human([
-                "write an INDEX.md for this node",
-                "move its items to the node they belong to",
+                format!(
+                    "move each piece of judgment (role, reasons for priorities, rules) into the item it concerns, then delete {LEFTOVER_INDEX}"
+                ),
+                format!(
+                    "move what concerns the whole node into a ressource (`D` id) of the node, then delete {LEFTOVER_INDEX}"
+                ),
+                format!("delete {LEFTOVER_INDEX} when the items already say all it says"),
             ]),
         });
     }

@@ -18,8 +18,8 @@ export const schema = {
 } satisfies Schema
 
 export const nodes: NodeSummary[] = [
-  { path: 'a', has_index: true, items: 1, workflow: [{ id: 'a-faire', label: 'À faire', category: 'todo' }], people: { keyvan: { name: 'Keyvan Coen' } } },
-  { path: 'b', has_index: true, items: 1, workflow: [{ id: 'a-faire', label: 'Todo', category: 'todo' }, { id: 'fait', label: 'Fait', category: 'done' }], people: { andrea: { name: 'Andrea Martel' } } },
+  { path: 'a', items: 1, workflow: [{ id: 'a-faire', label: 'À faire', category: 'todo' }], people: { keyvan: { name: 'Keyvan Coen' } } },
+  { path: 'b', items: 1, workflow: [{ id: 'a-faire', label: 'Todo', category: 'todo' }, { id: 'fait', label: 'Fait', category: 'done' }], people: { andrea: { name: 'Andrea Martel' } } },
 ]
 
 export const vocabulary = buildVocabulary(nodes, schema)

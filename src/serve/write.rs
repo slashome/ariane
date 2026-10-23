@@ -132,7 +132,7 @@ pub fn apply(tree: &Tree, patch: &Patch) -> Result<std::path::PathBuf, Refusal> 
 /// Finds the item whose repository-relative path is `path`.
 ///
 /// Only files the tree already lists as items qualify, which rules out any path
-/// outside `tree/`, a `..` escape, or a non-item file such as `INDEX.md`.
+/// outside `tree/`, a `..` escape, or a non-item file such as `README.md`.
 fn find<'a>(tree: &'a Tree, path: &str) -> Result<&'a Item, Refusal> {
     tree.items
         .iter()
@@ -636,7 +636,7 @@ mod tests {
         };
         assert!(bad("tree/../Cargo.toml", "size"));
         assert!(bad("/etc/passwd", "size"));
-        assert!(bad("tree/INDEX.md", "size"));
+        assert!(bad("tree/p/README.md", "size"));
         assert!(bad("tree/p/tasks/T001-a.md", "title"));
     }
 }

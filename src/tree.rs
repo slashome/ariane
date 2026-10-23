@@ -2,11 +2,16 @@
 //!
 //! Under `tree/`, every directory is a potential **node**, whose logical path is
 //! its location (`cmc/cmc-lib`, ADR-0001); the root `tree/` itself is the home
-//! node, whose path is empty. A node holds **item directories** (`tasks/`,
+//! node, whose path is empty. A directory is a node when it has a `node.toml`
+//! or holds items; the home node always is one. A node holds **item directories** (`tasks/`,
 //! `stories/`, `reflexions/`, `ressources/`, and `archives/` with the same
 //! subdirectories); every other subdirectory is walked as a child node. The
 //! former `backlog/` directory is still read, its items as tasks marked
 //! [`Item::legacy`], so that `doctor` reports them and `ariane fix` moves them.
+//!
+//! A node no longer has an `INDEX.md` (ADR-0017): its judgment lives in its
+//! items. An `INDEX.md` still found in the tree is collected in
+//! [`Tree::leftover_indexes`](crate::tree::Tree::leftover_indexes) for `doctor` to report, never read as an item.
 //!
 //! [`Tree::load`](crate::tree::Tree::load) reads every item once and parses its front-matter, so that each
 //! command works on the same snapshot without touching the disk again. Files and
@@ -20,13 +25,13 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 
 use crate::item::{Document, Kind, LEGACY_BACKLOG};
-use crate::node::Configs;
+use crate::node::{Configs, FILE as NODE_FILE};
 use crate::schema::is_valid_id;
 
-/// File that makes a directory a node even when it holds no item (PLAN §2).
-const INDEX: &str = "INDEX.md";
+/// Former entry point of a node, superseded by its items (ADR-0017); a leftover one is reported, never read.
+pub const LEFTOVER_INDEX: &str = "INDEX.md";
 /// Markdown files that sit among items but are not items (SPEC.md §1.1).
-const NOT_ITEMS: [&str; 3] = ["INDEX.md", "HANDOFF.md", "README.md"];
+const NOT_ITEMS: [&str; 3] = [LEFTOVER_INDEX, "HANDOFF.md", "README.md"];
 /// Directory holding the archived items of a node.
 const ARCHIVES: &str = "archives";
 
@@ -126,8 +131,6 @@ pub fn full_reference(node: &NodePath, id: &str) -> String {
 #[derive(Debug)]
 pub struct Node {
     pub path: NodePath,
-    /// Whether the node has its `INDEX.md` entry point; `doctor` warns when it does not.
-    pub has_index: bool,
 }
 
 /// One item file, with where it sits and what it contains.
@@ -173,6 +176,8 @@ pub struct Tree {
     pub configs: Configs,
     /// Files or names that could not be read, with the reason.
     pub unreadable: Vec<(PathBuf, String)>,
+    /// Every `INDEX.md` left in the tree, with the node of the directory holding it.
+    pub leftover_indexes: Vec<(NodePath, PathBuf)>,
 }
 
 impl Tree {
@@ -190,6 +195,7 @@ impl Tree {
             items: Vec::new(),
             configs: Configs::default(),
             unreadable: Vec::new(),
+            leftover_indexes: Vec::new(),
         };
         let top = root.join("tree");
         tree.walk_node(&top, NodePath::default())
@@ -235,14 +241,16 @@ impl Tree {
     /// Records one directory and walks its subdirectories: item directories are
     /// collected for this node, any other directory is walked as a child node.
     ///
-    /// A directory counts as a node when it has an `INDEX.md` or holds items. Hidden
-    /// directories are skipped. The recursion goes as deep as the tree does.
+    /// A directory counts as a node when it is the home node, has a `node.toml` or
+    /// holds items. Hidden directories are skipped. The recursion goes as deep as
+    /// the tree does.
     ///
     /// # Errors
     ///
     /// Fails when a directory cannot be listed.
     fn walk_node(&mut self, dir: &Path, path: NodePath) -> Result<()> {
-        let has_index = dir.join(INDEX).is_file();
+        let has_config = dir.join(NODE_FILE).is_file();
+        self.note_leftover_index(dir, &path);
         let mut has_items = false;
         for entry in sorted_entries(dir)? {
             if !entry.is_dir() {
@@ -269,8 +277,8 @@ impl Tree {
                 self.walk_node(&entry, path.child(&name))?;
             }
         }
-        if has_index || has_items {
-            self.nodes.push(Node { path, has_index });
+        if path.is_home() || has_config || has_items {
+            self.nodes.push(Node { path });
         }
         Ok(())
     }
@@ -282,6 +290,7 @@ impl Tree {
     ///
     /// Fails when a directory cannot be listed.
     fn collect_archives(&mut self, dir: &Path, node: &NodePath) -> Result<()> {
+        self.note_leftover_index(dir, node);
         for entry in sorted_entries(dir)? {
             if entry.is_dir() {
                 let Some(name) = self.utf8_name(&entry) else {
@@ -312,6 +321,7 @@ impl Tree {
     ///
     /// Fails when a directory cannot be listed.
     fn collect_items(&mut self, dir: &Path, node: &NodePath, place: Place) -> Result<()> {
+        self.note_leftover_index(dir, node);
         for entry in sorted_entries(dir)? {
             if entry.is_dir() {
                 self.collect_items(&entry, node, place)?;
@@ -320,6 +330,14 @@ impl Tree {
             }
         }
         Ok(())
+    }
+
+    /// Records the `INDEX.md` of `dir`, if one is left there, as belonging to `node`.
+    fn note_leftover_index(&mut self, dir: &Path, node: &NodePath) {
+        let index = dir.join(LEFTOVER_INDEX);
+        if index.is_file() {
+            self.leftover_indexes.push((node.clone(), index));
+        }
     }
 
     /// Reads and parses one item file, or records it as unreadable.
@@ -368,7 +386,7 @@ struct Place {
     legacy: bool,
 }
 
-/// Tells whether a file is an item: a `.md` file that is not `INDEX.md`, `HANDOFF.md` or `README.md`.
+/// Tells whether a file is an item: a `.md` file that is not a leftover `INDEX.md`, `HANDOFF.md` or `README.md`.
 fn is_item_file(path: &Path) -> bool {
     path.extension().is_some_and(|extension| extension == "md")
         && path
@@ -407,12 +425,11 @@ pub mod fixture {
     }
 
     impl Repo {
-        /// Creates `.git/`, `tree/` and a home `INDEX.md`.
+        /// Creates `.git/` and an empty `tree/`.
         pub fn new() -> Repo {
             let dir = tempfile::tempdir().unwrap();
             std::fs::create_dir_all(dir.path().join(".git")).unwrap();
             std::fs::create_dir_all(dir.path().join("tree")).unwrap();
-            std::fs::write(dir.path().join("tree/INDEX.md"), "# Home\n").unwrap();
             Repo { dir }
         }
 
@@ -440,8 +457,7 @@ mod tests {
     #[test]
     fn items_belong_to_the_node_holding_their_directory() {
         let repo = Repo::new();
-        repo.write("cmc/cmc-lib/INDEX.md", "# lib\n")
-            .write("cmc/cmc-lib/tasks/t1.md", "# T1\n")
+        repo.write("cmc/cmc-lib/tasks/t1.md", "# T1\n")
             .write("cmc/cmc-lib/archives/stories/s1.md", "# S1\n")
             .write("cmc/cmc-lib/archives/loose.md", "# loose\n")
             .write("cmc/cmc-lib/backlog/README.md", "# not an item\n")
@@ -465,11 +481,12 @@ mod tests {
     }
 
     #[test]
-    fn a_directory_is_a_node_when_it_has_an_index_or_items() {
+    fn a_directory_is_a_node_when_it_has_a_node_toml_or_items() {
         let repo = Repo::new();
-        repo.write("cmc/INDEX.md", "# cmc\n")
+        repo.write("cmc/node.toml", "")
             .write("cmc/cmc-ui/tasks/t.md", "# t\n")
-            .write("cmc/empty/notes.md", "# nothing\n");
+            .write("cmc/empty/notes.md", "# nothing\n")
+            .write("cmc/former/INDEX.md", "# former\n");
         let tree = Tree::load(repo.root()).unwrap();
         let mut nodes: Vec<_> = tree
             .nodes
@@ -478,6 +495,36 @@ mod tests {
             .collect();
         nodes.sort();
         assert_eq!(nodes, vec!["(home)", "cmc", "cmc/cmc-ui"]);
+    }
+
+    #[test]
+    fn a_leftover_index_is_collected_and_never_read_as_an_item() {
+        let repo = Repo::new();
+        repo.write("INDEX.md", "# Home\n")
+            .write("p/INDEX.md", "# p\n")
+            .write("p/tasks/INDEX.md", "# tasks\n")
+            .write("p/tasks/t.md", "# t\n");
+        let tree = Tree::load(repo.root()).unwrap();
+        assert_eq!(tree.items.len(), 1);
+        let mut found: Vec<_> = tree
+            .leftover_indexes
+            .iter()
+            .map(|(node, path)| {
+                (
+                    node.to_string(),
+                    path.strip_prefix(repo.root()).unwrap().to_owned(),
+                )
+            })
+            .collect();
+        found.sort();
+        assert_eq!(
+            found,
+            vec![
+                ("(home)".to_owned(), PathBuf::from("tree/INDEX.md")),
+                ("p".to_owned(), PathBuf::from("tree/p/INDEX.md")),
+                ("p".to_owned(), PathBuf::from("tree/p/tasks/INDEX.md")),
+            ]
+        );
     }
 
     #[test]

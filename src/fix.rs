@@ -157,9 +157,9 @@ pub fn run(tree: &Tree, args: &FixArgs, scope: Option<&NodePath>) -> Result<Exit
     })
 }
 
-/// Every Markdown file of the repository with its text — items, `INDEX.md`
-/// and the files outside `tree/` such as the root `README.md` — hidden
-/// directories (`.git`) excepted.
+/// Every Markdown file of the repository with its text — items, the
+/// `README.md` and `HANDOFF.md` files among them, and the files outside
+/// `tree/` such as the root `README.md` — hidden directories (`.git`) excepted.
 fn markdown_files(tree: &Tree) -> Result<BTreeMap<PathBuf, String>> {
     let mut files = BTreeMap::new();
     let mut pending = vec![tree.root.clone()];
@@ -542,7 +542,7 @@ mod tests {
         let old = Path::new("/r/tree/p/backlog/T1-a.md");
         let new = Path::new("/r/tree/p/tasks/T1-a.md");
         let index = Holder {
-            before: Path::new("/r/tree/p/INDEX.md"),
+            before: Path::new("/r/tree/p/README.md"),
             after: Path::new("/r/tree/p"),
         };
         let text = "[A](./backlog/T1-a.md), `backlog/T1-a.md`, [B](backlog/T2-b.md)";
@@ -616,7 +616,7 @@ mod tests {
     #[test]
     fn an_unclosed_link_does_not_stop_the_rewriting() {
         let old = Path::new("/r/tree/p/a.md");
-        let holder = Path::new("/r/tree/p/INDEX.md");
+        let holder = Path::new("/r/tree/p/README.md");
         let (rewritten, count) = to_t1("[x](broken\n[a](a.md)", holder, old);
         assert_eq!((rewritten.as_str(), count), ("[x](broken\n[a](T1-a.md)", 1));
     }
@@ -624,7 +624,7 @@ mod tests {
     #[test]
     fn only_references_to_the_renamed_file_are_rewritten() {
         let old = Path::new("/r/tree/p/tasks/a.md");
-        let holder = Path::new("/r/tree/p/INDEX.md");
+        let holder = Path::new("/r/tree/p/README.md");
         let text = "See [tasks/a.md](tasks/a.md#plan), `tasks/a.md`, [b](tasks/b.md), \
                     `08-other/a.md`, [x](https://x.io/a.md) and a.md in prose.";
         let (rewritten, count) = to_t1(text, holder, old);
@@ -639,7 +639,7 @@ mod tests {
     #[test]
     fn a_code_span_in_the_link_text_does_not_hide_the_target() {
         let old = Path::new("/r/tree/p/tasks/a.md");
-        let holder = Path::new("/r/tree/p/INDEX.md");
+        let holder = Path::new("/r/tree/p/README.md");
         let text = "[norme `constants.ts`/`types.ts` : A](./tasks/a.md) (cas `x.ts`)";
         let (rewritten, count) = to_t1(text, holder, old);
         assert_eq!(count, 1);
@@ -652,7 +652,7 @@ mod tests {
     #[test]
     fn nested_and_prefixed_references_are_found() {
         let old = Path::new("/r/tree/p/tasks/a.md");
-        let holder = Path::new("/r/tree/p/INDEX.md");
+        let holder = Path::new("/r/tree/p/README.md");
         let text = "([A](./tasks/a.md)) - [T1 — tasks/a.md](tasks/a.md) (cf. `a.md`)";
         let (rewritten, count) = to_t1(text, holder, old);
         assert_eq!(
@@ -674,10 +674,10 @@ mod tests {
     }
 
     /// A one-node repository whose task is named without its id, linked from
-    /// the node's index and from another task.
+    /// the node's README and from another task.
     fn sample() -> Repo {
         let repo = Repo::new();
-        repo.write("p/INDEX.md", "# p\n\n- [A](tasks/a.md)\n")
+        repo.write("p/README.md", "# p\n\n- [A](tasks/a.md)\n")
             .write(
                 "p/tasks/a.md",
                 "---\nariane: 1\nnode: p\nid: T1\ntitle: A\nstatus: todo\n---\n# A\n",
@@ -719,7 +719,7 @@ mod tests {
         assert!(!repo.root().join("tree/p/tasks/a.md").exists());
         let read = |path: &str| std::fs::read_to_string(repo.root().join(path)).unwrap();
         assert!(read("tree/p/tasks/T1-a.md").contains("id: T1"));
-        assert_eq!(read("tree/p/INDEX.md"), "# p\n\n- [A](tasks/T1-a.md)\n");
+        assert_eq!(read("tree/p/README.md"), "# p\n\n- [A](tasks/T1-a.md)\n");
         assert!(read("tree/p/tasks/T2-b.md").ends_with("After [A](T1-a.md); see a.md.\n"));
         let tree = Tree::load(repo.root()).unwrap();
         assert!(crate::doctor::diagnose(&tree, None, false).is_empty());
@@ -729,7 +729,7 @@ mod tests {
     fn the_items_of_the_former_backlog_move_to_tasks_with_their_links() {
         let repo = Repo::new();
         repo.write(
-            "p/INDEX.md",
+            "p/README.md",
             "# p\n\n- [A](backlog/T1-a.md)\n- [B](./backlog/b.md)\n",
         )
         .write(
@@ -752,7 +752,7 @@ mod tests {
         assert_eq!(run(&tree, &args(true), None).unwrap(), ExitCode::SUCCESS);
         let read = |path: &str| std::fs::read_to_string(repo.root().join(path)).unwrap();
         assert_eq!(
-            read("tree/p/INDEX.md"),
+            read("tree/p/README.md"),
             "# p\n\n- [A](tasks/T1-a.md)\n- [B](./tasks/T2-b.md)\n"
         );
         assert!(
@@ -776,7 +776,7 @@ mod tests {
     #[test]
     fn a_bare_id_or_a_taken_name_needs_a_human() {
         let repo = Repo::new();
-        repo.write("p/INDEX.md", "# p\n")
+        repo.write("p/README.md", "# p\n")
             .write(
                 "p/tasks/T1.md",
                 "---\nariane: 1\nnode: p\nid: T1\ntitle: A\nstatus: todo\n---\n",

@@ -1,7 +1,7 @@
 import type { NodeSummary } from '@/shared/api'
 import { hasDescendants, nodeTree } from './node-tree'
 
-const node = (path: string): NodeSummary => ({ path, has_index: true, items: 0, workflow: [] })
+const node = (path: string): NodeSummary => ({ path, items: 0, workflow: [] })
 
 describe('nodeTree', () => {
   const nodes = ['', 'slashome', 'cmc/cmc-lib', 'cmc', 'cmc/cmc-frontend', 'cmc/cmc-frontend/workspace', 'slashome/ariane', 'atlas/loop'].map(node)

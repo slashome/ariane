@@ -34,7 +34,7 @@ const items = [
 
 function answer(url: string): unknown {
   if (url.startsWith('/api/schema')) return schema
-  if (url.startsWith('/api/nodes')) return [{ path: 'p', has_index: true, items: 5, workflow: [], tracker: null }]
+  if (url.startsWith('/api/nodes')) return [{ path: 'p', items: 5, workflow: [], tracker: null }]
   if (url.startsWith('/api/items')) return items
   if (url.startsWith('/api/doctor')) return []
   if (url.startsWith('/api/dashboard')) return { pinned: ['p'] }

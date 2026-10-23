@@ -8,7 +8,6 @@ import { KanbanPage } from './kanban-page'
 const nodes: NodeSummary[] = [
   {
     path: 'p',
-    has_index: true,
     items: 3,
     workflow: [
       { id: 'todo', label: 'To do', category: 'todo' },

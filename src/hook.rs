@@ -352,7 +352,7 @@ mod tests {
     /// whose `_ariane` link points into it, with an `origin` remote.
     fn workspace() -> (Repo, tempfile::TempDir) {
         let repo = Repo::new();
-        repo.write("p/INDEX.md", "# p\n").write(
+        repo.write(
             "p/tasks/T1-a.md",
             "---\nariane: 1\nnode: p\nid: T1\ntitle: A\nstatus: todo\n---\n",
         );

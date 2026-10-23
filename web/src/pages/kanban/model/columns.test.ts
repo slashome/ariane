@@ -4,7 +4,6 @@ import { buildColumns, targetStatus } from './columns'
 const nodes: NodeSummary[] = [
   {
     path: 'game',
-    has_index: true,
     items: 3,
     workflow: [
       { id: 'a-faire', label: 'À faire', category: 'todo' },
@@ -14,7 +13,6 @@ const nodes: NodeSummary[] = [
   },
   {
     path: 'site',
-    has_index: true,
     items: 1,
     workflow: [
       { id: 'todo', label: 'To do', category: 'todo' },

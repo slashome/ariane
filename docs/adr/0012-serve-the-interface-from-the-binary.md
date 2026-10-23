@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-20
-- **Concerns:** PLAN §10, roadmap step 7; [ADR-0004](0004-write-or-judge.md), [ADR-0005](0005-write-ariane-in-rust.md), [ADR-0008](0008-give-every-item-a-versioned-front-matter.md), [ADR-0010](0010-keep-only-judgment-in-index-files.md), [ADR-0013](0013-define-the-configuration-schema-in-code.md)
+- **Concerns:** PLAN §10, roadmap step 7; [ADR-0004](0004-write-or-judge.md), [ADR-0005](0005-write-ariane-in-rust.md), [ADR-0008](0008-give-every-item-a-versioned-front-matter.md), [ADR-0010](archives/0010-keep-only-judgment-in-index-files.md), [ADR-0013](0013-define-the-configuration-schema-in-code.md)
 
 ## Context
 

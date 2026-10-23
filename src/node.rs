@@ -1,6 +1,6 @@
 //! `node.toml`: what a node declares about its items (SPEC.md §1.5, ADR-0008).
 //!
-//! A node may carry a `node.toml` next to its `INDEX.md` with five tables:
+//! A node may carry a `node.toml` at the root of its directory with five tables:
 //!
 //! - `[fields.<key>]` declares a custom header key and its type;
 //! - `[[workflow]]` lists the statuses its items may take, each with a stable

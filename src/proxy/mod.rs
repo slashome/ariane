@@ -238,16 +238,14 @@ mod tests {
     /// A tree with two projects declaring routes, and a server on 27317.
     fn sample() -> (Repo, config::Server) {
         let repo = Repo::new();
-        repo.write("slashome/dreamcatchr/INDEX.md", "# d\n")
-            .write(
-                "slashome/dreamcatchr/node.toml",
-                "[proxy]\nhost = \"dreamcatchr.local\"\nport = 3000\n",
-            )
-            .write("cmc/lib/INDEX.md", "# l\n")
-            .write(
-                "cmc/lib/node.toml",
-                "[proxy]\nhost = \"lib.local\"\nport = 6006\n",
-            );
+        repo.write(
+            "slashome/dreamcatchr/node.toml",
+            "[proxy]\nhost = \"dreamcatchr.local\"\nport = 3000\n",
+        )
+        .write(
+            "cmc/lib/node.toml",
+            "[proxy]\nhost = \"lib.local\"\nport = 6006\n",
+        );
         (repo, config::Server::default())
     }
 
@@ -278,13 +276,11 @@ mod tests {
     #[test]
     fn a_taken_or_invalid_name_is_left_out_and_reported() {
         let (repo, server) = sample();
-        repo.write("p/INDEX.md", "# p\n")
-            .write(
-                "p/node.toml",
-                "[proxy]\nhost = \"ariane.local\"\nport = 1\n",
-            )
-            .write("q/INDEX.md", "# q\n")
-            .write("q/node.toml", "[proxy]\nhost = \"Q Local\"\nport = 2\n");
+        repo.write(
+            "p/node.toml",
+            "[proxy]\nhost = \"ariane.local\"\nport = 1\n",
+        )
+        .write("q/node.toml", "[proxy]\nhost = \"Q Local\"\nport = 2\n");
         let table = Table::of(&Tree::load(repo.root()).unwrap(), &server);
         assert_eq!(table.routes.len(), 3);
         assert_eq!(table.problems.len(), 2);

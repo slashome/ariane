@@ -3,7 +3,7 @@ import { hostOf, linksIn, resolveLink } from './repo-path'
 describe('resolveLink', () => {
   it('resolves a relative link from the file that holds it', () => {
     expect(resolveLink('tree/p/tasks/T1-a.md', '../stories/S1-s.md')).toBe('tree/p/stories/S1-s.md')
-    expect(resolveLink('tree/p/INDEX.md', './tasks/T1-a.md#plan')).toBe('tree/p/tasks/T1-a.md')
+    expect(resolveLink('tree/p/README.md', './tasks/T1-a.md#plan')).toBe('tree/p/tasks/T1-a.md')
     expect(resolveLink('tree/p/tasks/T1-a.md', 'T2%20b.md')).toBe('tree/p/tasks/T2 b.md')
   })
 

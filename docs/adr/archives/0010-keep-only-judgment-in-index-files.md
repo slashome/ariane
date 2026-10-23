@@ -1,9 +1,9 @@
 # ADR-0010 — Keep only judgment in `INDEX.md`; compute item lists on demand
 
-- **Status:** Accepted
+- **Status:** Superseded by [ADR-0017](../0017-keep-a-nodes-judgment-in-its-items.md)
 - **Date:** 2026-10-20
 - **Concerns:** PLAN §2, §6, §10 (`ariane tasks`)
-- **Depends on:** [ADR-0008](0008-give-every-item-a-versioned-front-matter.md) (items carry their own status, machine-readable)
+- **Depends on:** [ADR-0008](../0008-give-every-item-a-versioned-front-matter.md) (items carry their own status, machine-readable)
 
 ## Context
 

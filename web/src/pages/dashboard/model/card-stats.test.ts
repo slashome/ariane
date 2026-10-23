@@ -44,9 +44,9 @@ const items = [
 ]
 
 const nodes: NodeSummary[] = [
-  { path: 'acme/web', has_index: true, items: 6, workflow: [], last_change: '2030-01-05' },
-  { path: 'acme/web/api', has_index: true, items: 1, workflow: [], last_change: '2030-02-01' },
-  { path: 'acme/web-legacy', has_index: true, items: 1, workflow: [], last_change: '2031-01-01' },
+  { path: 'acme/web', items: 6, workflow: [], last_change: '2030-01-05' },
+  { path: 'acme/web/api', items: 1, workflow: [], last_change: '2030-02-01' },
+  { path: 'acme/web-legacy', items: 1, workflow: [], last_change: '2031-01-01' },
 ]
 
 describe('cardStats', () => {

@@ -12,7 +12,9 @@ Decided in [ADR-0008](docs/adr/0008-give-every-item-a-versioned-front-matter.md)
 
 ### 1.1 Scope
 
-An **item** is a Markdown file inside one of a node's item directories (`tasks/`, `stories/`, `reflexions/`, `ressources/`, `archives/` and their subdirectories). `INDEX.md`, `HANDOFF.md` and `README.md` are not items.
+A **node** is a directory under `tree/` that has a `node.toml` (§1.5) or holds items; `tree/` itself is the home node. A node has no index file: its judgment — its role, the reasons for its priorities, its rules — lives in its items, in the item it concerns or in a ressource of the node ([ADR-0017](docs/adr/0017-keep-a-nodes-judgment-in-its-items.md)).
+
+An **item** is a Markdown file inside one of a node's item directories (`tasks/`, `stories/`, `reflexions/`, `ressources/`, `archives/` and their subdirectories). `HANDOFF.md` and `README.md` are not items, and neither is a leftover `INDEX.md`, which `doctor` reports (§1.6).
 
 The **kind** of an item is given by its directory. The header MUST NOT carry it.
 
@@ -64,7 +66,7 @@ The body of the item MUST NOT restate in prose a fact the header carries.
 
 ### 1.5 `node.toml`
 
-A node MAY carry a `node.toml` file next to its `INDEX.md`. It declares custom fields and the status workflow, and may name the node's development server.
+A node MAY carry a `node.toml` file at the root of its directory. It declares custom fields and the status workflow, and may name the node's development server.
 
 **Fields.** Each `[fields.<key>]` table declares one custom key:
 
@@ -121,6 +123,7 @@ The order of entries is the display order.
 | An item in `backlog/` or `archives/backlog/` | error — remedy: `ariane fix` (moves it into `tasks/` or `archives/tasks/` and rewrites the links) |
 | A custom key not declared in any applicable `node.toml` | warning |
 | A `[proxy]` table whose `host` is not a host name, whose `port` is 0, or whose `host` another node declares | error |
+| An `INDEX.md` anywhere in the tree | warning — remedy: move its judgment into the item it concerns or into a ressource of the node, then delete the file |
 
 ### 1.7 Examples
 

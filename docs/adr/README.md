@@ -44,13 +44,19 @@ A closing *Revisit if* section names the conditions under which the decision wou
 | [0007](0007-write-the-handoff-on-request.md) | Write `HANDOFF.md` on explicit request, never on session end | Accepted | 2026-08-20 |
 | [0008](0008-give-every-item-a-versioned-front-matter.md) | Give every item a versioned front-matter, extended per node | Accepted | 2026-10-20 |
 | [0009](0009-migrate-content-with-versioned-migrations.md) | Migrate content and configuration with versioned migrations | Accepted | 2026-10-20 |
-| [0010](0010-keep-only-judgment-in-index-files.md) | Keep only judgment in `INDEX.md`, compute aggregates on demand | Accepted | 2026-10-20 |
 | [0011](0011-sync-external-trackers-through-connectors.md) | Sync external trackers through per-node connectors | Accepted | 2026-10-20 |
 | [0012](0012-serve-the-interface-from-the-binary.md) | Serve the interface from the `ariane` binary | Accepted | 2026-10-20 |
 | [0013](0013-define-the-configuration-schema-in-code.md) | Define the configuration schema in code | Accepted | 2026-10-20 |
 | [0014](0014-record-branches-and-pull-requests-through-the-agent-harness.md) | Record branches and pull requests through the agent's harness | Accepted | 2026-10-23 |
 | [0015](0015-name-whom-an-item-waits-for.md) | Name whom an item waits for | Accepted | 2026-10-23 |
 | [0016](0016-name-local-servers-through-a-front-door.md) | Name local servers through a front door in `ariane` | Accepted | 2026-10-23 |
+| [0017](0017-keep-a-nodes-judgment-in-its-items.md) | Keep a node's judgment in its items, drop `INDEX.md` | Accepted | 2026-10-23 |
+
+## Archived
+
+| № | Decision | Status | Date |
+| --- | --- | --- | --- |
+| [0010](archives/0010-keep-only-judgment-in-index-files.md) | Keep only judgment in `INDEX.md`, compute aggregates on demand | Superseded by [0017](0017-keep-a-nodes-judgment-in-its-items.md) | 2026-10-20 |
 
 ## Adding one
 
