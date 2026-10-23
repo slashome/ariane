@@ -1,4 +1,5 @@
 import { Outlet } from 'react-router'
+import { QueryHighlight } from '@/features/filter-items'
 import { AppHeader } from '@/widgets/app-header'
 import { Sidebar } from '@/widgets/sidebar'
 import { StatusBar } from '@/widgets/status-bar'
@@ -12,7 +13,9 @@ export function AppLayout() {
         <div className="flex min-w-0 flex-1 flex-col">
           <AppHeader actions={<UncommittedIndicator />} />
           <main className="min-h-0 flex-1 overflow-auto">
-            <Outlet />
+            <QueryHighlight>
+              <Outlet />
+            </QueryHighlight>
           </main>
         </div>
       </div>

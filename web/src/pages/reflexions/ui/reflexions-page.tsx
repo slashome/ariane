@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import { Link, useLocation } from 'react-router'
 import { changesFor, useUpdateItem } from '@/entities/item'
 import { useSchema } from '@/entities/schema'
+import { QueryField } from '@/features/filter-items'
 import type { Item } from '@/shared/api'
 import { routes, scopeSearch } from '@/shared/config'
 import { DragArea, Draggable, DropZone, EmptyState, ErrorState, LoadingState, PageHeader, type DragEndEvent } from '@/shared/ui'
@@ -11,7 +12,7 @@ import { ReflexionCard } from './reflexion-card'
 import { useReflexions } from './use-reflexions'
 
 export function ReflexionsPage() {
-  const { reflexions, isPending, error, scope } = useReflexions()
+  const { reflexions, total, isPending, error, scope } = useReflexions()
   const { data: schema } = useSchema()
   const update = useUpdateItem()
   const { search } = useLocation()
@@ -37,10 +38,13 @@ export function ReflexionsPage() {
         title="Reflexions"
         description={isPending ? 'Loading…' : `${reflexions.length} reflexions — drag a card, or use its menu, to change where it stands`}
         actions={
-          <Link to={{ pathname: routes.journal, search: scopeSearch(search) }} className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
-            <NotebookPen className="size-4" aria-hidden />
-            Journal of settled reflexions
-          </Link>
+          <>
+            <QueryField count={reflexions.length} total={total} />
+            <Link to={{ pathname: routes.journal, search: scopeSearch(search) }} className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
+              <NotebookPen className="size-4" aria-hidden />
+              Journal of settled reflexions
+            </Link>
+          </>
         }
       />
       {error ? (
@@ -48,8 +52,14 @@ export function ReflexionsPage() {
       ) : isPending ? (
         <LoadingState />
       ) : reflexions.length === 0 ? (
-        <EmptyState icon={Lightbulb} title="No reflexion here">
-          A reflexion is a Markdown file under <code>reflexions/</code>, open until it is settled.
+        <EmptyState icon={Lightbulb} title={total === 0 ? 'No reflexion here' : 'No reflexion matches the search'}>
+          {total === 0 ? (
+            <>
+              A reflexion is a Markdown file under <code>reflexions/</code>, open until it is settled.
+            </>
+          ) : (
+            `${total} reflexions in scope; the search field keeps none of them.`
+          )}
         </EmptyState>
       ) : (
         <DragArea

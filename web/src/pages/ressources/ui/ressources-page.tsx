@@ -1,41 +1,23 @@
-import { ExternalLink, Library, Search } from 'lucide-react'
+import { ExternalLink, Library } from 'lucide-react'
 import { useMemo } from 'react'
 import { compareNatural, excerpt, ItemLink, useItemsWithBody } from '@/entities/item'
-import { emptyFilters, filterItems, useItemFilters } from '@/features/filter-items'
+import { QueryField, useFilteredItems } from '@/features/filter-items'
 import { displayNode } from '@/shared/lib'
-import { EmptyState, ErrorState, Input, LoadingState, PageHeader } from '@/shared/ui'
+import { EmptyState, ErrorState, Highlight, LoadingState, PageHeader, useHighlightTerms } from '@/shared/ui'
 import { linksOf, snippet } from '../model/library'
 
 export function RessourcesPage() {
   const { data: items = [], isPending, error } = useItemsWithBody('ressource')
-  const { filters, setQuery } = useItemFilters()
-  const ressources = useMemo(
-    () =>
-      filterItems(items, { ...emptyFilters, node: filters.node, includeArchived: filters.includeArchived, includeDescendants: filters.includeDescendants, query: filters.query }).sort(
-        (left, right) => compareNatural(left.title ?? '', right.title ?? ''),
-      ),
-    [items, filters],
-  )
-  const total = filterItems(items, { ...emptyFilters, node: filters.node, includeArchived: filters.includeArchived, includeDescendants: filters.includeDescendants }).length
+  const terms = useHighlightTerms()
+  const { items: found, total } = useFilteredItems(items)
+  const ressources = useMemo(() => [...found].sort((left, right) => compareNatural(left.title ?? '', right.title ?? '')), [found])
 
   return (
     <div className="flex flex-col gap-5 p-6">
       <PageHeader
         title="Ressources"
-        description={isPending ? 'Loading…' : filters.query ? `${ressources.length} of ${total} match “${filters.query}”` : `${total} references kept for later`}
-        actions={
-          <div className="relative w-80">
-            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
-            <Input
-              type="search"
-              aria-label="Search the ressources, bodies included"
-              placeholder="Search titles and full text…"
-              className="pl-8"
-              value={filters.query}
-              onChange={(event) => setQuery(event.target.value)}
-            />
-          </div>
-        }
+        description={isPending ? 'Loading…' : `${total} references kept for later`}
+        actions={<QueryField count={ressources.length} total={total} />}
       />
       {error ? (
         <ErrorState message={`Could not load the ressources: ${error.message}`} />
@@ -55,7 +37,7 @@ export function RessourcesPage() {
         <ul className="grid grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-4">
           {ressources.map((item) => {
             const links = linksOf(item)
-            const match = snippet(item.body, filters.query)
+            const match = snippet(item.body, terms)
             return (
               <li key={item.path} className="flex flex-col gap-3 rounded-lg border border-border bg-background p-4 shadow-xs">
                 <div className="flex items-start gap-3">
@@ -64,14 +46,18 @@ export function RessourcesPage() {
                   </span>
                   <div className="min-w-0">
                     <h2 className="leading-snug font-medium">
-                      <ItemLink item={item}>{item.title ?? item.path}</ItemLink>
+                      <ItemLink item={item}>
+                        <Highlight text={item.title ?? item.path} />
+                      </ItemLink>
                     </h2>
                     <p className="font-mono text-[10px] text-muted-foreground">
-                      {item.id} · {displayNode(item.node)}
+                      <Highlight text={item.id ?? ''} /> · {displayNode(item.node)}
                     </p>
                   </div>
                 </div>
-                <p className="line-clamp-4 text-sm leading-relaxed text-muted-foreground">{match ?? excerpt(item.body)}</p>
+                <p className="line-clamp-4 text-sm leading-relaxed text-muted-foreground">
+                  <Highlight text={match ?? excerpt(item.body)} />
+                </p>
                 {links.length > 0 && (
                   <ul className="mt-auto flex flex-wrap gap-1.5">
                     {links.slice(0, 4).map((link) => (

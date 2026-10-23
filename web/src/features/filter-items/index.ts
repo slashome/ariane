@@ -1,5 +1,7 @@
 export { emptyFilters, filterItems, inScope, scopeItems, type ItemFilters, type Scope } from './model/filter-items'
+export { useFilteredItems } from './model/use-filtered-items'
 export { useItemFilters } from './model/use-item-filters'
 export { ArchivedToggle } from './ui/archived-toggle'
 export { ItemFiltersBar } from './ui/item-filters-bar'
-export { ItemSearchInput } from './ui/item-search-input'
+export { QueryField } from './ui/query-field'
+export { QueryHighlight } from './ui/query-highlight'

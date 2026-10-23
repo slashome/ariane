@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { changesFor, ItemCard, useItems, useUpdateItem } from '@/entities/item'
 import { useSchema } from '@/entities/schema'
-import { emptyFilters, filterItems, useItemFilters } from '@/features/filter-items'
+import { QueryField, useFilteredItems } from '@/features/filter-items'
 import { DragArea, Draggable, Switch, type DragEndEvent } from '@/shared/ui'
 import { parseCellId, placeItems } from '../model/placement'
 import { ImpactRow } from './impact-row'
@@ -9,22 +9,10 @@ import { ImpactRow } from './impact-row'
 export function MatrixPage() {
   const { data: items = [], isPending } = useItems()
   const { data: schema } = useSchema()
-  const { filters } = useItemFilters()
   const update = useUpdateItem()
   const [includeClosed, setIncludeClosed] = useState(false)
 
-  const scoped = useMemo(
-    () =>
-      filterItems(items, {
-        ...emptyFilters,
-        query: filters.query,
-        node: filters.node,
-        includeArchived: filters.includeArchived,
-        includeDescendants: filters.includeDescendants,
-        kinds: ['task'],
-      }),
-    [items, filters.query, filters.node, filters.includeArchived, filters.includeDescendants],
-  )
+  const { items: scoped, total } = useFilteredItems(items, { kinds: ['task'] })
   const matrix = useMemo(() => placeItems(scoped, schema, includeClosed), [scoped, schema, includeClosed])
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
@@ -49,10 +37,13 @@ export function MatrixPage() {
             {isPending ? 'Loading…' : 'Drag an item to estimate it. Quick wins are small and high-impact.'}
           </p>
         </div>
-        <label className="flex items-center gap-2 text-sm">
-          <Switch checked={includeClosed} onCheckedChange={setIncludeClosed} aria-label="Include done and dropped" />
-          Include done and dropped
-        </label>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm">
+            <Switch checked={includeClosed} onCheckedChange={setIncludeClosed} aria-label="Include done and dropped" />
+            Include done and dropped
+          </label>
+          <QueryField count={scoped.length} total={total} />
+        </div>
       </div>
       <DragArea
         onDragEnd={onDragEnd}

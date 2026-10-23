@@ -16,6 +16,7 @@ export function useItemFilters() {
   const filters = useMemo<ItemFilters>(
     () => ({
       query: params.get(searchParamKeys.query) ?? '',
+      orders: {},
       node: params.get(searchParamKeys.node),
       kinds: list<Kind>(params, searchParamKeys.kinds),
       categories: list<Category>(params, searchParamKeys.categories),

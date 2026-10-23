@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { changesFor, ItemCard, today, useItems, useUpdateItem, waitingSummary } from '@/entities/item'
 import { peopleOf, useNodes } from '@/entities/node'
 import { useSchema } from '@/entities/schema'
-import { emptyFilters, filterItems, useItemFilters } from '@/features/filter-items'
+import { QueryField, useFilteredItems, useItemFilters } from '@/features/filter-items'
 import { WaitingDialog, type Waiting } from '@/features/edit-item'
 import type { Item } from '@/shared/api'
 import { displayNode, neighbours, useSearchParam, useStoredSet } from '@/shared/lib'
@@ -25,18 +25,7 @@ export function KanbanPage() {
   const [opened, setOpened] = useSearchParam('item')
   const [moving, setMoving] = useState<{ item: Item; status: string } | null>(null)
 
-  const scoped = useMemo(
-    () =>
-      filterItems(items, {
-        ...emptyFilters,
-        query: filters.query,
-        node: filters.node,
-        includeArchived: filters.includeArchived,
-        includeDescendants: filters.includeDescendants,
-        kinds: ['task'],
-      }),
-    [items, filters.query, filters.node, filters.includeArchived, filters.includeDescendants],
-  )
+  const { items: scoped, total } = useFilteredItems(items, { kinds: ['task'] })
   const columns = useMemo(() => buildColumns(scoped, nodes, filters.node, schema), [scoped, nodes, filters.node, schema])
   const openedItem = items.find((item) => item.path === opened) ?? null
 
@@ -93,7 +82,8 @@ export function KanbanPage() {
 
   return (
     <div className="flex h-full flex-col gap-4 p-6">
-      <div>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
         <h1 className="text-xl font-semibold">Kanban</h1>
         <p className="text-sm text-muted-foreground">
           {isPending
@@ -102,6 +92,8 @@ export function KanbanPage() {
               ? 'All nodes — one column per status category'
               : `${displayNode(filters.node)} — its workflow`}
         </p>
+        </div>
+        <QueryField count={scoped.length} total={total} />
       </div>
       <DragArea
         onDragEnd={onDragEnd}

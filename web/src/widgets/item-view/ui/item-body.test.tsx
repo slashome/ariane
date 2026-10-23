@@ -12,7 +12,7 @@ describe('ItemBody', () => {
       initialEntries: ['/tasks/p/T1?node=p&q=x'],
     })
     render(<RouterProvider router={router} />)
-    expect(screen.getByRole('link', { name: 'the story' })).toHaveAttribute('href', '/stories/p/S1?node=p')
+    expect(screen.getByRole('link', { name: 'the story' })).toHaveAttribute('href', '/stories/p/S1?node=p&q=x')
     expect(screen.getByRole('link', { name: 'docs' })).toHaveAttribute('target', '_blank')
     expect(screen.queryByRole('link', { name: 'gone' })).not.toBeInTheDocument()
     expect(screen.getByRole('table')).toBeInTheDocument()
