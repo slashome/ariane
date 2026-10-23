@@ -132,6 +132,19 @@ export interface ItemPatch {
   changes: ItemChanges
 }
 
+export type SyncAction =
+  | { action: 'in_step' }
+  | { action: 'push'; from: string | null; to: string; mention: [string, number][] }
+  | { action: 'conflict'; monday: string | null; last: string | null }
+  | { action: 'refused'; reason: string }
+
+export type SyncStep = { item: string; ticket: number; category: Category } & SyncAction
+
+export interface SyncReport {
+  applied: boolean
+  steps: SyncStep[]
+}
+
 export interface Dashboard {
   pinned: string[]
 }

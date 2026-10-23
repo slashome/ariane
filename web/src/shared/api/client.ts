@@ -12,6 +12,7 @@ import type {
   Repo,
   Schema,
   Settings,
+  SyncReport,
   Theme,
 } from './types'
 
@@ -75,6 +76,7 @@ export const fetchDiff = (path: string) =>
 
 export const patchItem = (patch: ItemPatch) => request<Item>('PATCH', '/api/items', patch)
 export const saveDashboard = (dashboard: Dashboard) => request<Dashboard>('PUT', '/api/dashboard', dashboard)
+export const syncMonday = (path: string) => request<SyncReport>('POST', '/api/sync/monday', { path })
 export const fetchSettings = () => request<Settings>('GET', '/api/settings')
 export const saveTheme = (theme: Theme) => request<Settings>('PUT', '/api/settings/theme', theme)
 export const commitChanges = (message: string) => request<CommitResult>('POST', '/api/commit', { message })

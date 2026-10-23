@@ -1,6 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ApiError, patchItem, queryKeys, type Item, type ItemChanges } from '@/shared/api'
+import { ApiError, patchItem, queryKeys, syncMonday, type Item, type ItemChanges } from '@/shared/api'
 import { toast } from '@/shared/ui'
+import { syncMessage } from '../model/sync-message'
+
+// The changes a monday ticket follows: the status, and whom it waits for.
+const synced = ['status', 'waiting_for', 'waiting_on']
 
 export interface ItemUpdate {
   item: Item
@@ -31,11 +35,22 @@ export function useUpdateItem() {
       }
       toast.error(`Could not save: ${error.message}`)
     },
-    onSuccess: (updated) => {
+    onSuccess: (updated, { changes }) => {
       queryClient.setQueryData<Item[]>(queryKeys.items, (items) =>
-        items?.map((entry) => (entry.path === updated.path ? updated : entry)),
+        items?.map((entry) => (entry.path === updated.path ? { ...entry, ...updated } : entry)),
       )
       void queryClient.invalidateQueries({ queryKey: queryKeys.repo })
+      const followed = updated.external.some((entry) => entry.startsWith('monday:'))
+      if (followed && Object.keys(changes).some((key) => synced.includes(key))) {
+        syncMonday(updated.path)
+          .then((report) => {
+            const message = syncMessage(report)
+            if (message) {
+              toast[message.tone](message.text)
+            }
+          })
+          .catch((error: unknown) => toast.warning(`monday not updated: ${error instanceof Error ? error.message : String(error)}`))
+      }
     },
   })
 }

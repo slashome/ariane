@@ -16,6 +16,7 @@ export {
   pushChanges,
   saveDashboard,
   saveTheme,
+  syncMonday,
 } from './client'
 export { subscribeToChanges } from './events'
 export { queryKeys } from './keys'
@@ -44,6 +45,8 @@ export type {
   Schema,
   SchemaKey,
   Settings,
+  SyncReport,
+  SyncStep,
   Tracker,
   UncommittedFile,
   WaitingReason,
