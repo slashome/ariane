@@ -11,7 +11,7 @@ function Preview() {
   return (
     <div className="space-y-3 rounded-lg border border-border p-4" aria-label="Preview">
       <div className="flex items-center gap-2 font-semibold">
-        <Spool className="size-5 text-primary" aria-hidden />
+        <Spool className="size-5 text-primary" strokeWidth={2.75} aria-hidden />
         Ariane
       </div>
       <div className="flex flex-wrap items-center gap-3">

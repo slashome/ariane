@@ -6,7 +6,7 @@ const spool = [
 
 export function faviconSvg(color: string): string {
   const paths = spool.map((d) => `<path d="${d}"/>`).join('')
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.75" stroke-linecap="round" stroke-linejoin="round">${paths}</svg>`
 }
 
 export function faviconHref(color: string): string {
