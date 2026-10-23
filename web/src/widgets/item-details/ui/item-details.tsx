@@ -2,6 +2,7 @@ import { ChevronLeft, ChevronRight, ExternalLink, Maximize2 } from 'lucide-react
 import type { ReactNode } from 'react'
 import { ItemLink, waitingSummary } from '@/entities/item'
 import { ItemEditors } from '@/features/edit-item'
+import { SyncItemButton } from '@/features/sync-item'
 import { externalUrl, peopleOf, trackerOf, useNodes } from '@/entities/node'
 import { kindLabel } from '@/entities/schema'
 import type { Item, Tracker } from '@/shared/api'
@@ -63,6 +64,11 @@ export function ItemDetails({ item, onClose, stepper }: { item: Item | null; onC
         </ItemLink>
       )}
       {item && <ItemEditors item={item} />}
+      {item && !item.archived && (
+        <div>
+          <SyncItemButton item={item} />
+        </div>
+      )}
       {item && (
         <dl className="space-y-2 border-t border-border pt-3">
           <Field label="Kind" value={kindLabel(item.kind)} />

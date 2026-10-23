@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 import { Toaster } from '@/shared/ui'
+import { AppearanceSync } from './appearance-sync'
 import { LiveUpdates } from './live-updates'
 import { ThemeSync } from './theme-sync'
 
@@ -12,6 +13,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     <QueryClientProvider client={queryClient}>
       <LiveUpdates />
       <ThemeSync />
+      <AppearanceSync />
       {children}
       <Toaster />
     </QueryClientProvider>

@@ -11,6 +11,7 @@ import type {
   NodeSummary,
   Repo,
   Schema,
+  SearchHit,
   Directory,
   MondayUser,
   PersonChange,
@@ -69,6 +70,8 @@ export const fetchItemsWithBody = (kind: Kind) =>
   request<Item[]>('GET', `/api/items?${new URLSearchParams({ kind, body: '1' }).toString()}`)
 export const fetchItem = (reference: string) =>
   request<ItemDetail>('GET', `/api/show?${new URLSearchParams({ ref: reference }).toString()}`)
+export const fetchSearch = (q: string, archived: boolean) =>
+  request<SearchHit[]>('GET', `/api/search?${new URLSearchParams(archived ? { q, archived: '1' } : { q }).toString()}`)
 export const fetchDoctor = () => request<Finding[]>('GET', '/api/doctor')
 export const fetchNodes = () => request<NodeSummary[]>('GET', '/api/nodes')
 export const fetchSchema = () => request<Schema>('GET', '/api/schema')
