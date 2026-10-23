@@ -1,7 +1,10 @@
 //! Edits of item headers requested by the interface (ADR-0012, "Writing").
 //!
-//! The interface may change four keys of an item — `status`, `size`, `impact`,
-//! `priority` — and nothing else. Every change carries the value the browser
+//! The interface may change seven keys of an item — `status`, `size`, `impact`,
+//! `priority`, and the keys of waiting `waiting_for` (a list of the node's
+//! people), `waiting_on`, `waiting_since` — and nothing else. A status in the
+//! `waiting` category needs someone to wait for; leaving that category removes
+//! the keys of waiting. Every change carries the value the browser
 //! last saw (`from`) next to the value it wants (`to`): when the file on disk no
 //! longer holds `from`, the whole edit is refused with the current values, and
 //! nothing is merged. Values are checked against the schema vocabularies and,
@@ -18,11 +21,23 @@ use serde_json::Value as Json;
 use yaml_serde::{Mapping, Value};
 
 use crate::item::{self, Document, Header, Kind};
-use crate::schema::{self, LEVELS, REFLEXION_STATUSES, SIZES};
+use crate::node::Category;
+use crate::schema::{self, LEVELS, REFLEXION_STATUSES, SIZES, WAITING_REASONS};
 use crate::tree::{Item, Tree};
 
 /// The keys the interface is allowed to change.
-pub const EDITABLE: [&str; 4] = ["status", "size", "impact", "priority"];
+pub const EDITABLE: [&str; 7] = [
+    "status",
+    "size",
+    "impact",
+    "priority",
+    "waiting_for",
+    "waiting_on",
+    "waiting_since",
+];
+
+/// The keys that only mean something while the item waits.
+const WAITING_KEYS: [&str; 3] = ["waiting_for", "waiting_on", "waiting_since"];
 
 /// One requested change: the value the client saw and the value it wants.
 /// `null` on either side means "absent".
@@ -94,9 +109,10 @@ pub fn apply(tree: &Tree, patch: &Patch) -> Result<std::path::PathBuf, Refusal> 
     check_fresh(&header, &patch.changes)?;
     for (key, change) in &patch.changes {
         let wanted = wanted(key, &change.to)?;
-        validate(tree, item, key, wanted)?;
+        validate(tree, item, key, wanted.as_ref())?;
         set(&mut header, key, wanted);
     }
+    settle_waiting(tree, item, &mut header)?;
     let rewritten = item::render(&header, &document.body)
         .map_err(|error| Refusal::Failed(format!("rendering {}: {error}", patch.path)))?;
     std::fs::write(&item.file, rewritten)
@@ -131,14 +147,52 @@ fn check_fresh(header: &Mapping, changes: &BTreeMap<String, Change>) -> Result<(
     }
 }
 
-/// The value a header key holds, as JSON: a string, or `null` when absent.
+/// After the changes: an item whose status is in the `waiting` category must
+/// name someone in `waiting_for`; an item whose status is in another category
+/// loses the keys of waiting, which no longer mean anything.
+fn settle_waiting(tree: &Tree, item: &Item, header: &mut Mapping) -> Result<(), Refusal> {
+    if item.kind == Kind::Reflexion {
+        return Ok(());
+    }
+    let effective = tree.configs.effective(&item.node);
+    let category = header
+        .get("status")
+        .and_then(Value::as_str)
+        .and_then(|status| effective.status(status))
+        .map(|status| status.category);
+    if category == Some(Category::Waiting) {
+        let named = header
+            .get("waiting_for")
+            .and_then(Value::as_sequence)
+            .is_some_and(|list| !list.is_empty());
+        if !named {
+            return Err(Refusal::Invalid(
+                "a waiting item needs `waiting_for`: who does it wait for?".to_owned(),
+            ));
+        }
+    } else if category.is_some() {
+        for key in WAITING_KEYS {
+            header.shift_remove(key);
+        }
+    }
+    Ok(())
+}
+
+/// The value a header key holds, as JSON: a string, a list of strings, or
+/// `null` when absent.
 ///
-/// A non-string value (which `doctor` would already flag) is shown as its YAML
+/// Any other value (which `doctor` would already flag) is shown as its YAML
 /// text, so that the client can still send it back as `from`.
 fn current(header: &Mapping, key: &str) -> Json {
     match header.get(key) {
         None | Some(Value::Null) => Json::Null,
         Some(Value::String(text)) => Json::String(text.clone()),
+        Some(Value::Sequence(list)) if list.iter().all(Value::is_string) => Json::Array(
+            list.iter()
+                .filter_map(Value::as_str)
+                .map(|entry| Json::String(entry.to_owned()))
+                .collect(),
+        ),
         Some(other) => Json::String(
             yaml_serde::to_string(other)
                 .unwrap_or_default()
@@ -148,11 +202,29 @@ fn current(header: &Mapping, key: &str) -> Json {
     }
 }
 
-/// Reads a `to` value: a string, or `None` for `null`; anything else is refused.
-fn wanted<'a>(key: &str, to: &'a Json) -> Result<Option<&'a str>, Refusal> {
-    match to {
-        Json::Null => Ok(None),
-        Json::String(text) => Ok(Some(text.as_str())),
+/// Reads a `to` value as the YAML value to write: a string, a list of strings
+/// for `waiting_for`, or `None` for `null` or an empty list; anything else is
+/// refused.
+fn wanted(key: &str, to: &Json) -> Result<Option<Value>, Refusal> {
+    match (key, to) {
+        (_, Json::Null) => Ok(None),
+        ("waiting_for", Json::Array(list)) => {
+            let handles: Option<Vec<Value>> = list
+                .iter()
+                .map(|entry| entry.as_str().map(|text| Value::String(text.to_owned())))
+                .collect();
+            match handles {
+                Some(handles) if handles.is_empty() => Ok(None),
+                Some(handles) => Ok(Some(Value::Sequence(handles))),
+                None => Err(Refusal::Invalid(
+                    "`waiting_for` must be a list of handles".to_owned(),
+                )),
+            }
+        }
+        ("waiting_for", _) => Err(Refusal::Invalid(
+            "`waiting_for` must be a list of handles or null".to_owned(),
+        )),
+        (_, Json::String(text)) => Ok(Some(Value::String(text.clone()))),
         _ => Err(Refusal::Invalid(format!(
             "`{key}` must be a string or null"
         ))),
@@ -163,10 +235,42 @@ fn wanted<'a>(key: &str, to: &'a Json) -> Result<Option<&'a str>, Refusal> {
 ///
 /// A status is required on tasks, stories, backlog items and reflexions, so it
 /// cannot be removed there; a ressource carries none (SPEC §1.3).
-fn validate(tree: &Tree, item: &Item, key: &str, wanted: Option<&str>) -> Result<(), Refusal> {
+fn validate(tree: &Tree, item: &Item, key: &str, wanted: Option<&Value>) -> Result<(), Refusal> {
+    if key == "waiting_for" {
+        let people = tree.configs.effective(&item.node).people;
+        let unknown: Vec<&str> = wanted
+            .and_then(Value::as_sequence)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .filter(|handle| !people.contains_key(*handle))
+            .collect();
+        return if unknown.is_empty() {
+            Ok(())
+        } else {
+            Err(Refusal::Invalid(format!(
+                "not declared under `[people]` of `{}`: {}",
+                item.node,
+                unknown.join(", ")
+            )))
+        };
+    }
+    let wanted = wanted.and_then(Value::as_str);
+    if key == "waiting_since" {
+        return match wanted {
+            Some(date) if !schema::is_date(date) => Err(Refusal::Invalid(format!(
+                "`waiting_since: {date}` is not a YYYY-MM-DD date"
+            ))),
+            _ => Ok(()),
+        };
+    }
     let allowed: Vec<String> = match key {
         "size" => SIZES.iter().map(|value| (*value).to_owned()).collect(),
         "impact" | "priority" => LEVELS.iter().map(|value| (*value).to_owned()).collect(),
+        "waiting_on" => WAITING_REASONS
+            .iter()
+            .map(|value| (*value).to_owned())
+            .collect(),
         _ => return validate_status(tree, item, wanted),
     };
     match wanted {
@@ -220,12 +324,11 @@ fn validate_status(tree: &Tree, item: &Item, wanted: Option<&str>) -> Result<(),
 /// An existing key keeps its place. A new key is inserted right after the last
 /// core key that precedes it in the canonical order, so custom keys stay where
 /// they were. `Mapping` keeps insertion order, so the insertion rebuilds it.
-fn set(header: &mut Mapping, key: &str, wanted: Option<&str>) {
+fn set(header: &mut Mapping, key: &str, wanted: Option<Value>) {
     let Some(value) = wanted else {
         header.shift_remove(key);
         return;
     };
-    let value = Value::String(value.to_owned());
     if let Some(slot) = header.get_mut(key) {
         *slot = value;
         return;
@@ -289,6 +392,53 @@ mod tests {
             "---\nariane: 1\nnode: p\nid: D001\ntitle: D\n---\n# D\n",
         );
         repo
+    }
+
+    #[test]
+    fn waiting_needs_known_people_and_leaving_it_clears_its_keys() {
+        let repo = Repo::new();
+        repo.write("w/node.toml", "[people.keyvan]\nname = \"Keyvan\"\n")
+            .write(
+                "w/tasks/T1-a.md",
+                "---\nariane: 1\nnode: w\nid: T1\ntitle: A\nstatus: in_progress\n---\n# A\n",
+            );
+        let path = "tree/w/tasks/T1-a.md";
+        let tree = Tree::load(repo.root()).unwrap();
+        let alone = patch(path, &[("status", json!("in_progress"), json!("waiting"))]);
+        assert!(matches!(apply(&tree, &alone), Err(Refusal::Invalid(_))));
+        let stranger = patch(
+            path,
+            &[
+                ("status", json!("in_progress"), json!("waiting")),
+                ("waiting_for", json!(null), json!(["nobody"])),
+            ],
+        );
+        assert!(
+            matches!(apply(&tree, &stranger), Err(Refusal::Invalid(message)) if message.contains("nobody"))
+        );
+        let wait = patch(
+            path,
+            &[
+                ("status", json!("in_progress"), json!("waiting")),
+                ("waiting_for", json!(null), json!(["keyvan"])),
+                ("waiting_on", json!(null), json!("review")),
+                ("waiting_since", json!(null), json!("2026-10-23")),
+            ],
+        );
+        apply(&tree, &wait).unwrap();
+        let text = std::fs::read_to_string(repo.root().join(path)).unwrap();
+        assert!(text.contains("status: waiting\nwaiting_for:\n- keyvan\nwaiting_on: review\nwaiting_since: 2026-10-23\n"), "{text}");
+        let tree = Tree::load(repo.root()).unwrap();
+        let resume = patch(path, &[("status", json!("waiting"), json!("todo"))]);
+        apply(&tree, &resume).unwrap();
+        let text = std::fs::read_to_string(repo.root().join(path)).unwrap();
+        assert!(!text.contains("waiting"), "{text}");
+        let tree = Tree::load(repo.root()).unwrap();
+        let stale = patch(
+            path,
+            &[("waiting_for", json!(["keyvan"]), json!(["keyvan"]))],
+        );
+        assert!(matches!(apply(&tree, &stale), Err(Refusal::Conflict(_))));
     }
 
     /// Builds a patch from a path and `(key, from, to)` triples.

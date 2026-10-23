@@ -42,6 +42,7 @@ external:
 - `size` `XS`…`XL`, `impact` and `priority` `low`/`medium`/`high`, `created` `YYYY-MM-DD` — only when actually known, never from git.
 - `external`: the item's own ticket, `monday:<pulse id>` — never a board id, never another item's ticket.
 - `branches` (`<owner>/<repo>:<branch>`) and `pull_requests` (URLs): where the item's work lives. Recorded by the hook after `ariane focus`, not by hand.
+- `waiting_for` (handles of the node's `[people]`), `waiting_on` (`review`, `answer`, `other`) and `waiting_since` (`YYYY-MM-DD`): only while the status is in the `waiting` category, which requires `waiting_for`.
 - Unknown keys are preserved where they are.
 
 ## Operating rules
@@ -52,6 +53,12 @@ external:
 - **After every write, run `ariane doctor`** and leave it clean. A finding names its remedy: run the command it gives (`ariane migrate`), or lay out its resolutions for the user to choose.
 - **Never invent state** — quote the file that says it; if the tree doesn't know, say so.
 - **Lifecycle**: `reflexion → task | story → archive`. The backlog is not a directory: it is the tasks and stories whose status is in the `backlog` category. An item still under `backlog/` is reported by `ariane doctor` and moved into `tasks/` by `ariane fix`. Never delete. Archiving moves the file under `archives/<kind>/` with a closed status (`done`/`dropped`, `settled` for a reflexion) and updates the relative links that pointed to it.
+- **Waiting on someone** — as soon as the user says an item waits for someone ("j'attends la review de Keyvan", "en attente de la réponse de X", "j'ai demandé à Y"), without being asked:
+  1. Set its status to the node's status of the `waiting` category (the default workflow's is `waiting`), `waiting_for` to the handles of the people awaited, `waiting_on` to `review`, `answer` or `other`, and `waiting_since` to today.
+  2. A person not in the node's `[people]` (inherited from ancestors; see `ariane show` or the node's `node.toml`) is added to the `node.toml` that holds the node's `[tracker]`, or the node's own: `[people.<handle>]` with `name` and, for a node bound to monday, `monday = <user id>` found through the monday connector by name. Ask when the name is ambiguous; never invent an id.
+  3. If the item has `external: monday:<id>` and its node's `[tracker]` is monday, set the ticket's status column (`status_column`) to the label id `[tracker.waiting]` gives for `waiting_on`, and post an update on the ticket that @mentions each person by their monday id and says what is awaited. Say what you changed in monday.
+  4. When the wait ends ("Keyvan a répondu", "la review est faite"), ask where the item goes — one status of the workflow — set it and remove the three `waiting_*` keys; for a monday-bound item, set the label `[tracker.status]` maps to that status's category, asking when several labels map to it.
+  5. `ariane doctor`.
 - **Placement**: most specific node that the knowledge concerns (repo > project > home). Ask one focused question when ambiguous.
 - **Respect the node**: keep its language, formatting, and conventions; write only in the content repository, never in the host repository's files.
 - **`HANDOFF.md` on request only**: a departure artifact, written when the user asks — because they are the only one who knows the next session is elsewhere. You see a turn stop, never a session close. Never write or refresh it as a side effect of other work; durable knowledge goes into the node's items, not into the handoff ([ADR-0007](https://github.com/slashome/ariane/blob/develop/docs/adr/0007-write-the-handoff-on-request.md)).

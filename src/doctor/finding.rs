@@ -125,6 +125,10 @@ pub enum Check {
     FileName,
     /// An item in the former `backlog/` directory instead of `tasks/`.
     LegacyDirectory,
+    /// A `waiting_for` handle declared under no `[people]` of the node.
+    UnknownPerson,
+    /// `waiting_*` keys left on an item that no longer waits.
+    StaleWaiting,
 }
 
 /// One problem found by doctor, serialized as is by `--json`.

@@ -56,6 +56,12 @@ pub struct Row<'a> {
     pub branches: Vec<&'a str>,
     /// Pull requests of the work, as URLs.
     pub pull_requests: Vec<&'a str>,
+    /// Handles of the people the item waits for, from the node's `[people]`.
+    pub waiting_for: Vec<&'a str>,
+    /// Why it waits: `review`, `answer` or `other`.
+    pub waiting_on: Option<&'a str>,
+    /// Since when it waits.
+    pub waiting_since: Option<&'a str>,
     /// Schema version of the file; `None` for a file not migrated yet.
     pub version: Option<u64>,
     /// Path of the file relative to the repository root.
@@ -161,6 +167,9 @@ pub fn row<'a>(tree: &Tree, item: &'a Item) -> Row<'a> {
         external: document.texts("external"),
         branches: document.texts("branches"),
         pull_requests: document.texts("pull_requests"),
+        waiting_for: document.texts("waiting_for"),
+        waiting_on: document.text("waiting_on"),
+        waiting_since: document.text("waiting_since"),
         version: document.version(),
         path: item.relative.to_string_lossy().into_owned(),
         updated: None,

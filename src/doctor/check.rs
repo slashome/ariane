@@ -181,6 +181,7 @@ fn check_item(
     }
     report.node(mapping);
     report.status(mapping, &effective);
+    report.waiting(mapping, &effective);
     report.custom(mapping, &effective);
     report.file_name(mapping);
 }
@@ -321,6 +322,11 @@ impl Reporter<'_> {
                 }
                 None => self.wrong_type(name, key.value.expected()),
             },
+            ValueType::People => {
+                if string_list(value).is_none() {
+                    self.wrong_type(name, key.value.expected());
+                }
+            }
             ValueType::Branches | ValueType::PullRequests => match string_list(value) {
                 None => self.wrong_type(name, key.value.expected()),
                 Some(list) => {
@@ -476,6 +482,73 @@ impl Reporter<'_> {
                 self.open_in_archives(status);
             }
             Some(_) => {}
+        }
+    }
+
+    /// Checks the keys of waiting (SPEC.md §1.3): an item whose status is in
+    /// the `waiting` category names who it waits for, each a handle of the
+    /// node's `[people]`; an item that no longer waits carries none of them.
+    fn waiting(&mut self, mapping: &Mapping, effective: &Effective) {
+        const KEYS: [&str; 3] = ["waiting_for", "waiting_on", "waiting_since"];
+        if self.item.kind == crate::item::Kind::Reflexion {
+            return;
+        }
+        let category = mapping
+            .get("status")
+            .and_then(Value::as_str)
+            .and_then(|status| effective.status(status))
+            .map(|status| status.category);
+        let handles = mapping
+            .get("waiting_for")
+            .and_then(string_list)
+            .unwrap_or_default();
+        if category == Some(crate::node::Category::Waiting) {
+            if handles.is_empty() {
+                self.error(
+                    Check::MissingKey,
+                    "the item waits but `waiting_for` does not say for whom",
+                    Remedy::human([
+                        "list the handles of the people it waits for in `waiting_for`",
+                        "give it a status outside the waiting category",
+                    ]),
+                );
+            }
+            for handle in handles
+                .iter()
+                .filter(|handle| !effective.people.contains_key(**handle))
+            {
+                let known: Vec<&str> = effective.people.keys().map(String::as_str).collect();
+                let mut resolutions = vec![format!(
+                    "declare `[people.{handle}]` with its `name` in the node's {NODE_FILE}"
+                )];
+                if !known.is_empty() {
+                    resolutions.push(format!("use one of: {}", known.join(", ")));
+                }
+                self.error(
+                    Check::UnknownPerson,
+                    format!("`waiting_for: {handle}` is no one declared under `[people]`"),
+                    Remedy::human(resolutions),
+                );
+            }
+            return;
+        }
+        let left: Vec<&str> = KEYS
+            .into_iter()
+            .filter(|key| mapping.contains_key(*key))
+            .collect();
+        if !left.is_empty() && category.is_some() {
+            self.push(
+                Check::StaleWaiting,
+                Severity::Warning,
+                format!(
+                    "the item no longer waits but still carries {}",
+                    left.join(", ")
+                ),
+                Remedy::human([
+                    format!("remove {}", left.join(", ")),
+                    "give it back a status of the waiting category".to_owned(),
+                ]),
+            );
         }
     }
 

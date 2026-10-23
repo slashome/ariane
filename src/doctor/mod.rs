@@ -245,6 +245,57 @@ category = "done"
         only(&repo, Check::WrongType);
     }
 
+    /// A node with the default workflow and two people.
+    fn waiting_base() -> Repo {
+        let repo = Repo::new();
+        repo.write("w/INDEX.md", "# w\n").write(
+            "w/node.toml",
+            "[people.keyvan]\nname = \"Keyvan\"\nmonday = 1\n\n[people.doryan]\nname = \"Doryan\"\n",
+        );
+        repo
+    }
+
+    fn waiting_task(status: &str, extra: &str) -> String {
+        format!("---\nariane: 1\nnode: w\nid: T1\ntitle: A\nstatus: {status}\n{extra}---\n")
+    }
+
+    #[test]
+    fn a_waiting_item_names_declared_people() {
+        let repo = waiting_base();
+        repo.write(
+            "w/tasks/T1-a.md",
+            &waiting_task(
+                "waiting",
+                "waiting_for: [keyvan, doryan]\nwaiting_on: review\nwaiting_since: 2026-10-23\n",
+            ),
+        );
+        assert_eq!(checks(&repo), vec![]);
+        repo.write("w/tasks/T1-a.md", &waiting_task("waiting", ""));
+        only(&repo, Check::MissingKey);
+        repo.write(
+            "w/tasks/T1-a.md",
+            &waiting_task("waiting", "waiting_for: [keyvan, nobody]\n"),
+        );
+        only(&repo, Check::UnknownPerson);
+        repo.write(
+            "w/tasks/T1-a.md",
+            &waiting_task("waiting", "waiting_for: [keyvan]\nwaiting_on: soon\n"),
+        );
+        only(&repo, Check::OutOfVocabulary);
+    }
+
+    #[test]
+    fn waiting_keys_left_after_the_wait_are_a_warning() {
+        let repo = waiting_base();
+        repo.write(
+            "w/tasks/T1-a.md",
+            &waiting_task("in_progress", "waiting_for: [keyvan]\n"),
+        );
+        only(&repo, Check::StaleWaiting);
+        let tree = Tree::load(repo.root()).unwrap();
+        assert_eq!(diagnose(&tree, None, false)[0].severity, Severity::Warning);
+    }
+
     #[test]
     fn an_item_of_the_home_node_carries_an_empty_node() {
         let repo = Repo::new();

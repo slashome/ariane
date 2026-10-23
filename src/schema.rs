@@ -1,6 +1,6 @@
 //! The core header schema, declared once as data (SPEC.md §1.3, ADR-0008).
 //!
-//! [`CORE_KEYS`](crate::schema::CORE_KEYS) describes each of the eighteen core keys a single time: its value
+//! [`CORE_KEYS`](crate::schema::CORE_KEYS) describes each of the twenty-one core keys a single time: its value
 //! type, whether it is required depending on the item kind, and its place in the
 //! canonical key order. Everything else reads this table instead of keeping its
 //! own list:
@@ -23,6 +23,9 @@ use crate::node::Category;
 pub const SIZES: &[&str] = &["XS", "S", "M", "L", "XL"];
 /// Allowed values of `impact` and `priority`.
 pub const LEVELS: &[&str] = &["low", "medium", "high"];
+/// Why an item waits: for a `review` of its work, for an `answer` (a reply, a
+/// decision, an information), or for some `other` reason.
+pub const WAITING_REASONS: &[&str] = &["review", "answer", "other"];
 /// Statuses of a reflexion: open, being tried (`trial`), or settled.
 pub const REFLEXION_STATUSES: &[&str] = &["open", "trial", "settled"];
 /// The only reflexion status that counts as closed, for archived reflexions.
@@ -71,6 +74,8 @@ pub enum ValueType {
     Branches,
     /// A list of `https://` pull request URLs.
     PullRequests,
+    /// A list of handles of the node's people (`[people.<handle>]`).
+    People,
     /// One string out of a fixed vocabulary. `&'static` means the vocabulary is
     /// compiled into the binary and lives for the whole run.
     Enum(&'static [&'static str]),
@@ -93,6 +98,7 @@ impl ValueType {
             ValueType::External => "list<external>",
             ValueType::Branches => "list<branch>",
             ValueType::PullRequests => "list<url>",
+            ValueType::People => "list<person>",
             ValueType::Enum(_) => "enum",
         }
     }
@@ -111,6 +117,7 @@ impl ValueType {
             ValueType::External => "a list of `<connector>:<id>` strings",
             ValueType::Branches => "a list of `<owner>/<repo>:<branch>` strings",
             ValueType::PullRequests => "a list of `https://` URLs",
+            ValueType::People => "a list of handles declared under `[people]`",
             ValueType::Enum(_) => "one of its vocabulary",
         }
     }
@@ -180,6 +187,13 @@ pub const CORE_KEYS: &[CoreKey] = &[
     key("external", ValueType::External, Requirement::May),
     key("branches", ValueType::Branches, Requirement::May),
     key("pull_requests", ValueType::PullRequests, Requirement::May),
+    key("waiting_for", ValueType::People, Requirement::May),
+    key(
+        "waiting_on",
+        ValueType::Enum(WAITING_REASONS),
+        Requirement::May,
+    ),
+    key("waiting_since", ValueType::Date, Requirement::May),
 ];
 
 /// Every item kind, in the order `ariane schema --json` lists them.
@@ -349,6 +363,9 @@ mod tests {
                 "external",
                 "branches",
                 "pull_requests",
+                "waiting_for",
+                "waiting_on",
+                "waiting_since",
             ]
         );
     }
@@ -403,7 +420,7 @@ mod tests {
             .find(|key| key["name"] == "status")
             .unwrap();
         assert_eq!(status["requirement"]["ressource"], json!("must_not"));
-        assert_eq!(exported["categories"].as_array().unwrap().len(), 6);
+        assert_eq!(exported["categories"].as_array().unwrap().len(), 7);
         assert_eq!(
             exported["reflexion_statuses"],
             json!(["open", "trial", "settled"])

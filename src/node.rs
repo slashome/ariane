@@ -1,14 +1,16 @@
 //! `node.toml`: what a node declares about its items (SPEC.md §1.5, ADR-0008).
 //!
-//! A node may carry a `node.toml` next to its `INDEX.md` with three tables:
+//! A node may carry a `node.toml` next to its `INDEX.md` with four tables:
 //!
 //! - `[fields.<key>]` declares a custom header key and its type;
 //! - `[[workflow]]` lists the statuses its items may take, each with a stable
-//!   `id`, a free `label` and one of the six fixed categories;
+//!   `id`, a free `label` and one of the seven fixed categories;
+//! - `[people.<handle>]` names the people an item may wait for, with their ids
+//!   in the node's trackers;
 //! - `[tracker]` binds the node to an external tracker (ADR-0011, not used yet).
 //!
-//! A node inherits from its ancestors: fields accumulate (the nearest declaration
-//! wins), a workflow replaces the inherited one as a whole, and a node with no
+//! A node inherits from its ancestors: fields and people accumulate (the nearest
+//! declaration wins), a workflow replaces the inherited one as a whole, and a node with no
 //! workflow above it uses the default one, one status per category.
 
 use std::collections::BTreeMap;
@@ -21,7 +23,7 @@ use crate::tree::NodePath;
 /// Name of the file a node declares itself in.
 pub const FILE: &str = "node.toml";
 
-/// The six status categories fixed by Ariane. Every workflow status belongs to
+/// The seven status categories fixed by Ariane. Every workflow status belongs to
 /// one, which is what lets the dashboard aggregate nodes with different
 /// workflows. `#[serde(rename_all = "snake_case")]` writes `InProgress` as
 /// `in_progress`.
@@ -34,6 +36,8 @@ pub enum Category {
     Todo,
     /// Being worked on, or waiting for validation.
     InProgress,
+    /// Waiting for someone: a review, an answer; who is in `waiting_for`.
+    Waiting,
     /// Cannot move until something else happens.
     Blocked,
     /// Finished.
@@ -44,10 +48,11 @@ pub enum Category {
 
 impl Category {
     /// Every category, in display order.
-    pub const ALL: [Category; 6] = [
+    pub const ALL: [Category; 7] = [
         Category::Backlog,
         Category::Todo,
         Category::InProgress,
+        Category::Waiting,
         Category::Blocked,
         Category::Done,
         Category::Dropped,
@@ -59,6 +64,7 @@ impl Category {
             Category::Backlog => "backlog",
             Category::Todo => "todo",
             Category::InProgress => "in_progress",
+            Category::Waiting => "waiting",
             Category::Blocked => "blocked",
             Category::Done => "done",
             Category::Dropped => "dropped",
@@ -71,6 +77,7 @@ impl Category {
             Category::Backlog => "Backlog",
             Category::Todo => "To do",
             Category::InProgress => "In progress",
+            Category::Waiting => "Waiting",
             Category::Blocked => "Blocked",
             Category::Done => "Done",
             Category::Dropped => "Dropped",
@@ -140,6 +147,16 @@ pub struct FieldDecl {
     pub required: bool,
 }
 
+/// One person of a node's directory, `[people.<handle>]`: an item writes the
+/// handle in `waiting_for`. Every other key is the person's id in a tracker,
+/// such as `monday = 58294966`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Person {
+    pub name: String,
+    #[serde(flatten)]
+    pub ids: BTreeMap<String, toml::Value>,
+}
+
 /// The content of one `node.toml` file, exactly as written.
 /// `deny_unknown_fields` turns a misspelled table into a parse error instead of
 /// silently ignoring it.
@@ -151,6 +168,9 @@ pub struct NodeFile {
     pub fields: BTreeMap<String, FieldDecl>,
     /// The workflow declared by this file, if any.
     pub workflow: Option<Vec<Status>>,
+    /// The people declared by this file, by handle.
+    #[serde(default)]
+    pub people: BTreeMap<String, Person>,
     /// The tracker binding, kept as raw TOML until connectors exist (ADR-0011).
     pub tracker: Option<toml::Table>,
 }
@@ -164,6 +184,8 @@ pub struct Effective {
     pub workflow: Vec<Status>,
     /// Node that declared the workflow; `None` for the default workflow.
     pub workflow_from: Option<NodePath>,
+    /// People of the node and its ancestors, by handle; the nearest wins.
+    pub people: BTreeMap<String, Person>,
     /// The nearest tracker binding, if any.
     pub tracker: Option<toml::Table>,
 }
@@ -220,6 +242,7 @@ impl Configs {
             fields: BTreeMap::new(),
             workflow: default_workflow(),
             workflow_from: None,
+            people: BTreeMap::new(),
             tracker: None,
         };
         for ancestor in node.ancestors_from_root() {
@@ -230,6 +253,11 @@ impl Configs {
                 file.fields
                     .iter()
                     .map(|(key, decl)| (key.clone(), decl.clone())),
+            );
+            effective.people.extend(
+                file.people
+                    .iter()
+                    .map(|(handle, person)| (handle.clone(), person.clone())),
             );
             if let Some(workflow) = &file.workflow {
                 effective.workflow = workflow.clone();
@@ -320,6 +348,7 @@ category = "done"
                 "backlog",
                 "todo",
                 "in_progress",
+                "waiting",
                 "blocked",
                 "done",
                 "dropped"
@@ -342,6 +371,40 @@ category = "done"
         assert_eq!(effective.workflow[0].id, "valide");
         assert_eq!(effective.workflow_from, Some(NodePath::new("cmc/lib")));
         assert!(effective.tracker.is_some());
+    }
+
+    #[test]
+    fn people_accumulate_from_the_ancestors_with_their_tracker_ids() {
+        let repo = Repo::new();
+        repo.write(
+            "cmc/node.toml",
+            "[people.keyvan]\nname = \"Keyvan Coen\"\nmonday = 58294966\n\n[people.doryan]\nname = \"Doryan\"\n",
+        )
+        .write("cmc/lib/node.toml", "[people.doryan]\nname = \"Doryan B.\"\n")
+        .write("cmc/lib/tasks/t.md", "# t\n");
+        let tree = Tree::load(repo.root()).unwrap();
+        let effective = tree.configs.effective(&NodePath::new("cmc/lib"));
+        assert_eq!(effective.people["keyvan"].name, "Keyvan Coen");
+        assert_eq!(
+            effective.people["keyvan"].ids["monday"].as_integer(),
+            Some(58294966)
+        );
+        assert_eq!(effective.people["doryan"].name, "Doryan B.");
+        assert!(
+            tree.configs
+                .effective(&NodePath::new("p"))
+                .people
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn the_default_workflow_has_a_waiting_status() {
+        let waiting = default_workflow()
+            .into_iter()
+            .find(|status| status.category == Category::Waiting)
+            .unwrap();
+        assert_eq!(waiting.id, "waiting");
     }
 
     #[test]

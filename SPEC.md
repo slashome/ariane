@@ -46,6 +46,9 @@ Keys MUST be written in English, in lower case, with `_` as the word separator. 
 | `external` | list of strings | MAY | Links to external trackers, each of the form `<connector>:<id>`, e.g. `monday:2955884643` (ADR-0011). |
 | `branches` | list of strings | MAY | The git branches the item's work lives in, each of the form `<owner>/<repo>:<branch>`, e.g. `slashome/ariane:feat/web-node-select`; a task may span several repositories. |
 | `pull_requests` | list of strings | MAY | The pull requests of the item's work, as `https://` URLs. |
+| `waiting_for` | list of strings | MUST when the status is in the `waiting` category; MUST NOT otherwise | The people the item waits for, each a handle declared under `[people]` (§1.5). |
+| `waiting_on` | string | MAY when waiting; MUST NOT otherwise | Why it waits: `review` (a review of its work), `answer` (a reply, a decision, an information) or `other`. |
+| `waiting_since` | date | SHOULD when waiting; MUST NOT otherwise | When the wait began, `YYYY-MM-DD`. |
 
 Any other key is a **custom key**. A custom key SHOULD be declared in the node's `node.toml` (§1.5). A tool that reads an item MUST preserve every key it does not know, unchanged, when it writes the item back.
 
@@ -73,13 +76,15 @@ A node MAY carry a `node.toml` file next to its `INDEX.md`. It declares custom f
 
 - `id` MUST be unique within the workflow and match `^[a-z][a-z0-9-]*$`. It is the value written in items, and it is stable.
 - `label` is free text shown to humans. Changing it MUST NOT require any change to items.
-- `category` MUST be one of `backlog`, `todo`, `in_progress`, `blocked`, `done`, `dropped`.
+- `category` MUST be one of `backlog`, `todo`, `in_progress`, `waiting`, `blocked`, `done`, `dropped`. `waiting` is for an item that waits for someone — a review, an answer — named in `waiting_for`; `blocked`, for one that cannot move until something else happens.
 
 The order of entries is the display order.
 
+**People.** Each `[people.<handle>]` table declares one person an item may wait for: `name` MUST be given, free text; every other key is the person's id in a tracker, such as `monday = 58294966`. A handle matches `^[a-z][a-z0-9-]*$`.
+
 **Inheritance.** A node inherits the `node.toml` of each of its ancestors, from the root down:
 
-- `[fields]` accumulate. A descendant MAY redeclare a key inherited from an ancestor, and the descendant's declaration wins.
+- `[fields]` and `[people]` accumulate. A descendant MAY redeclare a key or a person inherited from an ancestor, and the descendant's declaration wins.
 - A `[[workflow]]` declared in a node replaces the inherited workflow **as a whole**; entries are never merged.
 - A node with no workflow anywhere above it uses the **default workflow**: one status per category, whose `id` equals the category.
 
@@ -106,6 +111,9 @@ The order of entries is the display order.
 | `parent` or `depends_on` points to an item that does not exist | error |
 | `size`, `impact`, `priority` or `created` outside its vocabulary or format | error |
 | A custom key declared in `node.toml` has a value of the wrong type | error |
+| A status in the `waiting` category without `waiting_for` | error |
+| A `waiting_for` handle declared under no applicable `[people]` | error |
+| `waiting_for`, `waiting_on` or `waiting_since` on an item whose status is not in the `waiting` category | warning |
 | A required custom key is missing | error |
 | A file name that does not begin with the item's `id`, `-` and a slug | error — remedy: `ariane fix` (renames to `<id>-<current name>` and rewrites the links); a human when the name is the bare id |
 | An item in `backlog/` or `archives/backlog/` | error — remedy: `ariane fix` (moves it into `tasks/` or `archives/tasks/` and rewrites the links) |
