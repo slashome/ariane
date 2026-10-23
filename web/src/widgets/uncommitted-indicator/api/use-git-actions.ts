@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ApiError, commitChanges, discardChanges, pushChanges, queryKeys } from '@/shared/api'
+import { ApiError, commitChanges, discardChanges, pullChanges, pushChanges, queryKeys } from '@/shared/api'
 import { toast } from '@/shared/ui'
 
 export function useCommit() {
@@ -30,6 +30,26 @@ export function usePush() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.repo })
     },
     onError: (error) => toast.error(`Push failed: ${error.message}`),
+  })
+}
+
+export function usePull() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: pullChanges,
+    onSuccess: ({ pulled }) => {
+      if (pulled === 0) {
+        toast.info('Already up to date')
+        return
+      }
+      toast.success(`Pulled ${pulled} ${pulled === 1 ? 'commit' : 'commits'}`)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.items })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.itemDetails })
+    },
+    onError: (error) => toast.error(`Pull failed: ${error.message}`),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.repo })
+    },
   })
 }
 

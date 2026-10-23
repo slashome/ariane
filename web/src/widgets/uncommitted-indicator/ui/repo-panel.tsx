@@ -1,8 +1,8 @@
-import { FolderGit2, GitBranch, GitCommitHorizontal, Undo2, Upload } from 'lucide-react'
+import { Download, FolderGit2, GitBranch, GitCommitHorizontal, Undo2, Upload } from 'lucide-react'
 import { useState } from 'react'
 import { useRepo } from '@/entities/repo'
 import { Button, ConfirmDialog, EmptyState, ErrorState, LoadingState } from '@/shared/ui'
-import { useDiscard, usePush } from '../api/use-git-actions'
+import { useDiscard, usePull, usePush } from '../api/use-git-actions'
 import { CommitForm } from './commit-form'
 import { DiffDialog } from './diff-dialog'
 import { UncommittedList } from './uncommitted-indicator'
@@ -12,6 +12,7 @@ import { UncommittedList } from './uncommitted-indicator'
 export function RepoPanel() {
   const { data: repo, isPending, error } = useRepo()
   const push = usePush()
+  const pull = usePull()
   const discard = useDiscard()
   const [viewing, setViewing] = useState<string | null>(null)
   const [discarding, setDiscarding] = useState<{ path: string | null } | null>(null)
@@ -62,6 +63,10 @@ export function RepoPanel() {
             <Button size="sm" variant="outline" disabled={repo.ahead === 0 || push.isPending} onClick={() => push.mutate()}>
               <Upload className="size-3.5" aria-hidden />
               {push.isPending ? 'Pushing…' : 'Push'}
+            </Button>
+            <Button size="sm" variant="outline" disabled={pull.isPending} onClick={() => pull.mutate()}>
+              <Download className="size-3.5" aria-hidden />
+              {pull.isPending ? 'Pulling…' : 'Pull'}
             </Button>
             {files.some((file) => file.path.startsWith('tree/') || file.path === 'settings.toml') && (
               <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400" onClick={() => setDiscarding({ path: null })}>

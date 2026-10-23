@@ -15,7 +15,8 @@
 //! - `ariane doctor` → [`doctor`], checks items without writing (ADR-0004);
 //! - `ariane migrate` → [`migrate`], upgrades items to the current schema (ADR-0009);
 //! - `ariane schema` → [`schema`], prints the header schema; it needs no repository;
-//! - `ariane serve` → [`serve`], serves the web interface (ADR-0012);
+//! - `ariane serve` → [`serve`], serves the web interface (ADR-0012), and pulls the content once;
+//! - `ariane pull` → [`serve::git`], fast-forwards the content to its upstream;
 //! - `ariane proxy` → [`proxy`], local names for the interface and the projects (ADR-0016).
 //!
 //! Exit code `3` means the command could not run at all (ADR-0004); the other
@@ -98,8 +99,9 @@ fn main() -> ExitCode {
 ///
 /// `ariane schema`, `ariane config` and `ariane service` are answered before
 /// looking for a repository: the schema is built into the binary, and the other
-/// two work on the configuration and the machine, not on content. Every other
-/// command first discovers the content repository and loads the whole tree once.
+/// two work on the configuration and the machine, not on content. `ariane pull`
+/// needs the repository but not the tree, which it is about to change. Every
+/// other command first discovers the content repository and loads the whole tree once.
 ///
 /// # Errors
 ///
@@ -111,6 +113,7 @@ fn run() -> Result<ExitCode> {
         cli::Command::Schema(args) => return schema_command(args),
         cli::Command::Config(args) => return config::command::run(args),
         cli::Command::Service(args) => return service::run(args),
+        cli::Command::Pull => return pull_command(&repo::discover(cli.repo.as_deref())?.root),
         cli::Command::Proxy(cli::ProxyArgs {
             command: Some(cli::ProxyCommand::Teardown),
             ..
@@ -157,7 +160,7 @@ fn run() -> Result<ExitCode> {
             let scope = scope(args.node.as_deref(), args.all, here);
             links::run(&tree, &args, scope.as_ref())
         }
-        cli::Command::Hook(_) | cli::Command::Connect(_) => {
+        cli::Command::Hook(_) | cli::Command::Connect(_) | cli::Command::Pull => {
             unreachable!("answered before loading the tree")
         }
         cli::Command::People(args) => {
@@ -229,6 +232,26 @@ fn schema_command(args: &cli::SchemaArgs) -> Result<ExitCode> {
             _ => String::new(),
         };
         println!("{:<11} {}{values}", key.name, key.value.id());
+    }
+    Ok(ExitCode::SUCCESS)
+}
+
+/// Fast-forwards the content repository at `root` to its upstream, and says
+/// how many commits came in.
+///
+/// # Errors
+///
+/// Fails with git's message when there is no upstream, the remote cannot be
+/// reached, or the branch diverged.
+fn pull_command(root: &std::path::Path) -> Result<ExitCode> {
+    match serve::git::pull(root)? {
+        serve::git::Pulled::UpToDate => println!("already up to date"),
+        serve::git::Pulled::Forward(count) => {
+            println!(
+                "pulled {count} {}",
+                if count == 1 { "commit" } else { "commits" }
+            );
+        }
     }
     Ok(ExitCode::SUCCESS)
 }

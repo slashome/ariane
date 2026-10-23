@@ -11,7 +11,7 @@
 //!
 //! The writing endpoints — `PATCH /api/items`, `PUT /api/dashboard`,
 //! `PUT /api/settings/theme`,
-//! `POST /api/commit`, `POST /api/push`, `POST /api/discard` — run on the
+//! `POST /api/commit`, `POST /api/push`, `POST /api/pull`, `POST /api/discard` — run on the
 //! blocking pool under the state's `busy` lock, one at a time, and never commit
 //! unless asked.
 
@@ -692,6 +692,26 @@ pub async fn commit(
 pub async fn push(Shared(state): Shared<Arc<State>>) -> Response {
     exclusive(state, |state| match git::push(&state.root) {
         Ok(()) => Json(json!({ "ok": true })).into_response(),
+        Err(failure) => error(StatusCode::BAD_GATEWAY, &format!("{failure:#}")),
+    })
+    .await
+}
+
+/// `POST /api/pull`: fast-forwards the current branch to its upstream and
+/// answers how many commits came in, `0` when it was up to date; `502` with
+/// git's message when the pull is refused or fails.
+///
+/// The tree is reloaded at once, so the items fetched right after already
+/// reflect the pulled files.
+pub async fn pull(Shared(state): Shared<Arc<State>>) -> Response {
+    exclusive(state, |state| match git::pull(&state.root) {
+        Ok(git::Pulled::UpToDate) => Json(json!({ "pulled": 0 })).into_response(),
+        Ok(git::Pulled::Forward(count)) => {
+            if let Err(failure) = state.reload() {
+                return error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}"));
+            }
+            Json(json!({ "pulled": count })).into_response()
+        }
         Err(failure) => error(StatusCode::BAD_GATEWAY, &format!("{failure:#}")),
     })
     .await

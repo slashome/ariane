@@ -202,6 +202,10 @@ export interface CommitResult {
   commit: string
 }
 
+export interface PullResult {
+  pulled: number
+}
+
 export interface DiscardResult {
   discarded: string[]
 }

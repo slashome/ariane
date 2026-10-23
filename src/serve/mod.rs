@@ -14,10 +14,14 @@
 //! `settings.toml` ([`crate::settings`]), and commits or pushes only when the
 //! owner asks ([`git`]). Writes and git actions
 //! are serialized, one at a time.
+//!
+//! As it starts, the server pulls the content once, fast-forward only, in the
+//! background: the interface opens at once on what is on disk, and the watcher
+//! shows what the pull brings.
 
 mod api;
 mod assets;
-mod git;
+pub mod git;
 mod watch;
 mod write;
 
@@ -151,6 +155,7 @@ pub fn router(state: Arc<State>) -> Router {
         )
         .route("/api/monday/users", get(api::monday_users))
         .route("/api/push", post(api::push))
+        .route("/api/pull", post(api::pull))
         .route("/api/discard", post(api::discard))
         .route("/api/diff", get(api::diff))
         .route("/api/nodes", get(api::nodes))
@@ -187,7 +192,8 @@ pub fn run(root: PathBuf, tree: Tree, args: &ServeArgs) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// Binds the port, starts the watcher, opens the front door and serves until Ctrl-C.
+/// Binds the port, starts the watcher and the first pull, opens the front door
+/// and serves until Ctrl-C.
 ///
 /// # Errors
 ///
@@ -197,6 +203,7 @@ pub fn run(root: PathBuf, tree: Tree, args: &ServeArgs) -> Result<ExitCode> {
 async fn serve(root: PathBuf, tree: Tree, config: &Config, open: bool) -> Result<()> {
     let state = State::new(root.clone(), tree);
     let _watcher = watch::start(state.clone()).context("watching the content repository")?;
+    pull_at_start(state.clone());
     let address = SocketAddr::from((Ipv4Addr::LOCALHOST, config.server.port));
     let listener = tokio::net::TcpListener::bind(address)
         .await
@@ -212,6 +219,29 @@ async fn serve(root: PathBuf, tree: Tree, config: &Config, open: bool) -> Result
         .with_graceful_shutdown(stop_on_ctrl_c(stopping))
         .await
         .context("serving")
+}
+
+/// Pulls the content once, on the blocking pool and under the `busy` lock, so
+/// that no write of the interface interleaves with it.
+///
+/// The outcome is printed and never stops the server: offline, without an
+/// upstream or on a diverged branch, the interface serves what is on disk.
+fn pull_at_start(state: Arc<State>) {
+    tokio::task::spawn_blocking(move || {
+        let Ok(_guard) = state.busy.lock() else {
+            return;
+        };
+        match git::pull(&state.root) {
+            Ok(git::Pulled::UpToDate) => eprintln!("ariane serve: the content is up to date"),
+            Ok(git::Pulled::Forward(count)) => {
+                eprintln!("ariane serve: pulled {count} commit(s)");
+                if let Err(error) = state.reload() {
+                    eprintln!("ariane serve: reloading after the pull: {error:#}");
+                }
+            }
+            Err(error) => eprintln!("ariane serve: no pull: {error:#}"),
+        }
+    });
 }
 
 /// Opens the front door of `ariane proxy` on `proxy.port`, routing by the
@@ -716,6 +746,43 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::CONFLICT);
+    }
+
+    #[tokio::test]
+    async fn pulling_without_an_upstream_is_a_bad_gateway_and_with_one_says_how_many_came() {
+        let repo = sample();
+        reinit_git(&repo);
+        send(
+            &repo,
+            "POST",
+            "/api/commit",
+            serde_json::json!({ "message": "import" }),
+        )
+        .await;
+        let (status, body) = send(&repo, "POST", "/api/pull", serde_json::json!({})).await;
+        assert_eq!(status, StatusCode::BAD_GATEWAY);
+        assert!(body["error"].is_string());
+        let remote = tempfile::tempdir().unwrap();
+        for (root, args) in [
+            (remote.path(), &["init", "-q", "--bare"][..]),
+            (
+                repo.root(),
+                &["remote", "add", "origin", remote.path().to_str().unwrap()],
+            ),
+            (repo.root(), &["push", "-q", "-u", "origin", "HEAD"]),
+        ] {
+            let ok = std::process::Command::new("git")
+                .arg("-C")
+                .arg(root)
+                .args(args)
+                .status()
+                .unwrap()
+                .success();
+            assert!(ok);
+        }
+        let (status, body) = send(&repo, "POST", "/api/pull", serde_json::json!({})).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["pulled"], 0);
     }
 
     #[tokio::test]

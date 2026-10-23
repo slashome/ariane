@@ -2,6 +2,7 @@ import type {
   CommitResult,
   Dashboard,
   DiscardResult,
+  PullResult,
   FileDiff,
   Finding,
   Item,
@@ -93,5 +94,6 @@ export const fetchSettings = () => request<Settings>('GET', '/api/settings')
 export const saveTheme = (theme: Theme) => request<Settings>('PUT', '/api/settings/theme', theme)
 export const commitChanges = (message: string) => request<CommitResult>('POST', '/api/commit', { message })
 export const pushChanges = () => request<{ ok: boolean }>('POST', '/api/push', {})
+export const pullChanges = () => request<PullResult>('POST', '/api/pull', {})
 export const discardChanges = (paths?: string[]) =>
   request<DiscardResult>('POST', '/api/discard', paths === undefined ? {} : { paths })

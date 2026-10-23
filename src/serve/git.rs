@@ -7,8 +7,8 @@
 //!
 //! It also dates each node by its latest commit, and runs the git actions the
 //! interface offers on the content it edits — `tree/` and `settings.toml`:
-//! commit what changed there, push, discard changes there, and show the diff
-//! of one file. Commit and push use the
+//! commit what changed there, push, pull, discard changes there, and show the
+//! diff of one file. Commit, push and pull use the
 //! machine's own git identity and configured upstream; nothing here sets an
 //! author or a remote.
 
@@ -137,6 +137,38 @@ pub fn commit(root: &Path, message: &str) -> Result<Committed> {
 /// Fails with git's own message when the push is refused or impossible.
 pub fn push(root: &Path) -> Result<()> {
     run(root, &["push", "-q"]).map(|_| ())
+}
+
+/// What a pull came to.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Pulled {
+    /// The branch already held every commit of its upstream.
+    UpToDate,
+    /// The branch moved forward by this many commits.
+    Forward(u32),
+}
+
+/// Fast-forwards the current branch to its configured upstream.
+///
+/// The pull is `--ff-only --no-rebase`, whatever `pull.rebase` or `pull.ff`
+/// say: it never creates a commit nor rewrites one (ADR-0012). A branch that
+/// diverged from its upstream is refused, and so is an update that would
+/// overwrite an uncommitted change; other uncommitted changes stay as they are.
+///
+/// # Errors
+///
+/// Fails with git's own message when there is no upstream, the remote cannot be
+/// reached, or the branch cannot be fast-forwarded.
+pub fn pull(root: &Path) -> Result<Pulled> {
+    let before = run(root, &["rev-parse", "HEAD"])?;
+    run(root, &["pull", "--ff-only", "--no-rebase", "-q"])?;
+    let after = run(root, &["rev-parse", "HEAD"])?;
+    if before == after {
+        return Ok(Pulled::UpToDate);
+    }
+    let range = format!("{}..{}", before.trim(), after.trim());
+    let count = run(root, &["rev-list", "--count", &range])?;
+    Ok(Pulled::Forward(count.trim().parse().unwrap_or(0)))
 }
 
 /// Runs `git -C root <args>` and returns its standard output.
@@ -546,6 +578,65 @@ mod tests {
         let local = run(dir.path(), &["rev-parse", "HEAD"]).unwrap();
         let pushed = run(remote.path(), &["rev-parse", "HEAD"]).unwrap();
         assert_eq!(local, pushed);
+    }
+
+    /// A bare remote holding `dir`'s branch as its upstream, and a second clone
+    /// of it with its own identity, from which commits reach the remote.
+    fn upstream(dir: &Path) -> (tempfile::TempDir, tempfile::TempDir) {
+        let remote = tempfile::tempdir().unwrap();
+        git(remote.path(), &["init", "-q", "--bare"]);
+        git(
+            dir,
+            &["remote", "add", "origin", remote.path().to_str().unwrap()],
+        );
+        git(dir, &["push", "-q", "-u", "origin", "HEAD"]);
+        let other = tempfile::tempdir().unwrap();
+        git(
+            other.path(),
+            &["clone", "-q", remote.path().to_str().unwrap(), "."],
+        );
+        git(other.path(), &["config", "user.name", "other"]);
+        git(other.path(), &["config", "user.email", "other@example.com"]);
+        (remote, other)
+    }
+
+    /// Writes `content` to `tree/<name>` in `root`, commits it and pushes it.
+    fn commit_and_push(root: &Path, name: &str, content: &str) {
+        std::fs::write(root.join("tree").join(name), content).unwrap();
+        git(root, &["add", "-A"]);
+        git(root, &["commit", "-q", "-m", name]);
+        git(root, &["push", "-q"]);
+    }
+
+    #[test]
+    fn pulling_needs_an_upstream_then_fast_forwards_and_keeps_uncommitted_changes() {
+        let dir = repository();
+        assert!(pull(dir.path()).is_err());
+        let (_remote, other) = upstream(dir.path());
+        assert_eq!(pull(dir.path()).unwrap(), Pulled::UpToDate);
+        commit_and_push(other.path(), "b.md", "b\n");
+        commit_and_push(other.path(), "c.md", "c\n");
+        std::fs::write(dir.path().join("tree/a.md"), "mine\n").unwrap();
+        assert_eq!(pull(dir.path()).unwrap(), Pulled::Forward(2));
+        assert!(dir.path().join("tree/c.md").exists());
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("tree/a.md")).unwrap(),
+            "mine\n"
+        );
+    }
+
+    #[test]
+    fn a_diverged_branch_is_refused_and_left_as_it_was() {
+        let dir = repository();
+        let (_remote, other) = upstream(dir.path());
+        git(dir.path(), &["config", "pull.rebase", "true"]);
+        commit_and_push(other.path(), "b.md", "theirs\n");
+        std::fs::write(dir.path().join("tree/d.md"), "mine\n").unwrap();
+        commit(dir.path(), "local").unwrap();
+        let head = run(dir.path(), &["rev-parse", "HEAD"]).unwrap();
+        assert!(pull(dir.path()).is_err());
+        assert_eq!(run(dir.path(), &["rev-parse", "HEAD"]).unwrap(), head);
+        assert!(!dir.path().join("tree/b.md").exists());
     }
 
     #[test]

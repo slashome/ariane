@@ -82,6 +82,10 @@ pub enum Command {
     )]
     Serve(ServeArgs),
     #[command(
+        about = "Fast-forward the content repository to its upstream, never creating a commit"
+    )]
+    Pull,
+    #[command(
         about = "Reach the interface and the projects' dev servers by name, such as http://ariane.local"
     )]
     Proxy(ProxyArgs),

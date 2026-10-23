@@ -36,6 +36,9 @@ Two constraints are already settled elsewhere. ADR-0005 puts the CLI in Rust, as
 
 - **The interface writes files.** Moving a kanban card rewrites the item's `status`; editing a field rewrites the front-matter; reordering dashboard cards rewrites `config.toml`. Writes go through the same front-matter writer the CLI uses, never a second one.
 - **It never commits on its own.** A **header indicator** shows that the working tree has uncommitted changes. Hovering it opens a menu of commit actions (commit everything, commit per node, push…); a modal for finer control comes later. What is committed, when and with which message stays the owner's act.
+
+> **Amended 2026-10-23.** The interface also **pulls**, and `ariane serve` pulls once as it starts, in the background, so a machine that was away opens on the content the others pushed. A pull is always `--ff-only --no-rebase`, whatever git's own `pull.*` settings say: it creates no commit and rewrites none, so this rule holds. A diverged branch, an update that would overwrite an uncommitted change, a missing upstream or an unreachable remote is reported — on stderr at start, as an error in the interface — and the server serves what is on disk. `ariane pull` does the same from the command line.
+
 - **Position against ADR-0004.** The server is a *writing surface*, in the same family as `update`, `migrate` or `sync`: it changes files and claims nothing about their validity. **Judgment stays in `doctor`.** The interface displays `doctor`'s findings — invalid headers, suspended sync items (ADR-0011) — by running the same checks, and offers their enumerated resolutions; it does not get a private notion of what is valid.
 
 **Layout and views.**
