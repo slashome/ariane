@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import type { Category, Item } from '@/shared/api'
 import { cn, displayNode } from '@/shared/lib'
+import { Markdown } from '@/shared/ui'
 import type { CardStats } from '../model/card-stats'
 import { CategoryBar } from '@/entities/item'
 
@@ -30,12 +31,14 @@ function Section({ title, items, empty }: { title: string; items: Item[]; empty:
 
 export function NodeCard({
   path,
+  description,
   stats,
   labels,
   toolbar,
   className,
 }: {
   path: string
+  description?: string | null
   stats: CardStats
   labels: (category: Category) => string
   toolbar?: ReactNode
@@ -58,6 +61,12 @@ export function NodeCard({
         </div>
         {toolbar}
       </header>
+      {description && (
+        <details className="text-sm">
+          <summary className="cursor-pointer text-xs font-semibold tracking-wide text-muted-foreground uppercase">About</summary>
+          <Markdown source={description} className="mt-1" />
+        </details>
+      )}
       <CategoryBar counts={stats.counts} labels={labels} />
       <div className="grid grid-cols-2 gap-3">
         <Section title="Quick wins" items={stats.quickWins} empty="None — size XS/S × impact high" />

@@ -93,10 +93,13 @@ fn structural(tree: &Tree, scope: Option<&NodePath>, found: &mut Vec<Finding>) {
             ),
             remedy: Remedy::human([
                 format!(
+                    "move the node's description (role, host repository, stack, sources of truth) into the `description` of its {NODE_FILE}, then delete {LEFTOVER_INDEX}"
+                ),
+                format!(
                     "move each piece of judgment (role, reasons for priorities, rules) into the item it concerns, then delete {LEFTOVER_INDEX}"
                 ),
                 format!(
-                    "move what concerns the whole node into a ressource (`D` id) of the node, then delete {LEFTOVER_INDEX}"
+                    "move the node's durable rules and conventions into a ressource (`D` id) of the node, then delete {LEFTOVER_INDEX}"
                 ),
                 format!("delete {LEFTOVER_INDEX} when the items already say all it says"),
             ]),

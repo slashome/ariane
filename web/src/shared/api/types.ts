@@ -95,6 +95,7 @@ export interface Persona {
 
 export interface NodeSummary {
   path: string
+  description?: string | null
   items: number
   workflow: WorkflowStatus[]
   people?: Record<string, Person>

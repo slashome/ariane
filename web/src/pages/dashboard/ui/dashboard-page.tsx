@@ -3,7 +3,7 @@ import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordi
 import { Pencil, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useItems } from '@/entities/item'
-import { sortNodes, useDashboard, useNodes, useSaveDashboard } from '@/entities/node'
+import { findNode, sortNodes, useDashboard, useNodes, useSaveDashboard } from '@/entities/node'
 import { useSchema } from '@/entities/schema'
 import type { Category } from '@/shared/api'
 import { displayNode } from '@/shared/lib'
@@ -121,6 +121,7 @@ export function DashboardPage() {
                   render={(toolbar) => (
                     <NodeCard
                       path={path}
+                      description={findNode(nodes, path)?.description}
                       stats={stats.get(path) ?? cardStats(items, nodes, path)}
                       labels={labels}
                       toolbar={toolbar}
@@ -135,7 +136,11 @@ export function DashboardPage() {
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(22rem,1fr))] gap-4">
           {pinned.map((path) => (
-            <NodeCard key={path} path={path} stats={stats.get(path) ?? cardStats(items, nodes, path)} labels={labels} />
+            <NodeCard
+              key={path}
+              path={path}
+              description={findNode(nodes, path)?.description}
+              stats={stats.get(path) ?? cardStats(items, nodes, path)} labels={labels} />
           ))}
         </div>
       )}

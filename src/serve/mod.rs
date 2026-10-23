@@ -326,7 +326,7 @@ mod tests {
         let repo = Repo::new();
         repo.write(
                 "p/node.toml",
-                "[[workflow]]\nid = \"a-faire\"\nlabel = \"À faire\"\ncategory = \"todo\"\n\n[tracker]\nkind = \"monday\"\nboard = 7\n",
+                "description = \"The *p* project.\"\n\n[[workflow]]\nid = \"a-faire\"\nlabel = \"À faire\"\ncategory = \"todo\"\n\n[tracker]\nkind = \"monday\"\nboard = 7\n",
             )
             .write(
                 "p/tasks/T001-a.md",
@@ -470,6 +470,7 @@ mod tests {
             .unwrap();
         assert_eq!(node["items"], 2);
         assert!(node.get("has_index").is_none());
+        assert_eq!(node["description"], "The *p* project.");
         assert_eq!(node["workflow"][0]["id"], "a-faire");
         assert_eq!(node["workflow"][0]["category"], "todo");
         assert_eq!(node["tracker"]["kind"], "monday");
@@ -481,6 +482,7 @@ mod tests {
             .find(|node| node["path"] == "")
             .unwrap();
         assert!(root["tracker"].is_null());
+        assert!(root["description"].is_null());
     }
 
     #[tokio::test]

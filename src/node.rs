@@ -1,6 +1,7 @@
 //! `node.toml`: what a node declares about its items (SPEC.md §1.5, ADR-0008).
 //!
-//! A node may carry a `node.toml` at the root of its directory with six tables:
+//! A node may carry a `node.toml` at the root of its directory: a top-level
+//! `description` of the node in Markdown, never inherited, and six tables:
 //!
 //! - `[fields.<key>]` declares a custom header key and its type;
 //! - `[[workflow]]` lists the statuses its items may take, each with a stable
@@ -176,6 +177,9 @@ pub struct Persona {
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NodeFile {
+    /// What the node is, in Markdown: its role, host repository, stack and
+    /// sources of truth (ADR-0017); never inherited.
+    pub description: Option<String>,
     /// Custom keys declared by this file.
     #[serde(default)]
     pub fields: BTreeMap<String, FieldDecl>,
@@ -266,6 +270,11 @@ impl Configs {
             }
         }
         configs
+    }
+
+    /// The `description` of `node`'s own `node.toml`, never an ancestor's.
+    pub fn description(&self, node: &NodePath) -> Option<&str> {
+        self.files.get(node)?.description.as_deref()
     }
 
     /// Combines the files from the home node down to `node` (SPEC.md §1.5): fields,
@@ -463,6 +472,24 @@ category = "done"
                 .personas
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn a_description_belongs_to_its_node_only() {
+        let repo = Repo::new();
+        repo.write(
+            "cmc/node.toml",
+            "description = \"\"\"\nThe **CMC** projects.\n\nDesign system: flow.\n\"\"\"\n\n[people.keyvan]\nname = \"Keyvan\"\n",
+        )
+        .write("cmc/lib/node.toml", "")
+        .write("cmc/lib/stories/s.md", "# s\n");
+        let tree = Tree::load(repo.root()).unwrap();
+        assert!(tree.configs.errors.is_empty(), "{:?}", tree.configs.errors);
+        assert_eq!(
+            tree.configs.description(&NodePath::new("cmc")),
+            Some("The **CMC** projects.\n\nDesign system: flow.\n")
+        );
+        assert_eq!(tree.configs.description(&NodePath::new("cmc/lib")), None);
     }
 
     #[test]

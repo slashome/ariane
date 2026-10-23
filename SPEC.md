@@ -67,7 +67,18 @@ The body of the item MUST NOT restate in prose a fact the header carries.
 
 ### 1.5 `node.toml`
 
-A node MAY carry a `node.toml` file at the root of its directory. It declares custom fields, the status workflow, the people items wait for and the personas stories are written for, and may name the node's development server.
+A node MAY carry a `node.toml` file at the root of its directory. It describes the node, declares custom fields, the status workflow, the people items wait for and the personas stories are written for, and may name the node's development server.
+
+**Description.** A top-level `description` key MAY describe the node: its role, its host repository, its stack, its sources of truth. It is a Markdown string, multi-line with TOML's `"""`, and it is **not inherited**: it describes the node whose `node.toml` holds it ([ADR-0017](docs/adr/0017-keep-a-nodes-judgment-in-its-items.md), amended). Durable rules and conventions of the node belong in its ressources, not here.
+
+```toml
+description = """
+Shared front-end library of the `cmc` apps, hosted in `choosemycompany/cmc-lib`.
+
+- Stack: Vue 3, TypeScript, Vite.
+- Sources of truth: the design system named **flow** by ChooseMyCompany; the CI of the other repositories is aligned on this one.
+"""
+```
 
 **Fields.** Each `[fields.<key>]` table declares one custom key:
 
@@ -99,6 +110,7 @@ name = "Responsable RH"
 
 - `[fields]`, `[people]` and `[personas]` accumulate. A descendant MAY redeclare a key, a person or a persona inherited from an ancestor, and the descendant's declaration wins.
 - A `[[workflow]]` declared in a node replaces the inherited workflow **as a whole**; entries are never merged.
+- `description` and `[proxy]` are never inherited.
 - A node with no workflow anywhere above it uses the **default workflow**: one status per category, whose `id` equals the category.
 
 **Tracker.** A `[tracker]` table binds the node to an external tracker. Its content is specified with the connectors (ADR-0011) and is out of scope of this section.
@@ -136,7 +148,7 @@ name = "Responsable RH"
 | An item in `backlog/` or `archives/backlog/` | error — remedy: `ariane fix` (moves it into `tasks/` or `archives/tasks/` and rewrites the links) |
 | A custom key not declared in any applicable `node.toml` | warning |
 | A `[proxy]` table whose `host` is not a host name, whose `port` is 0, or whose `host` another node declares | error |
-| An `INDEX.md` anywhere in the tree | warning — remedy: move its judgment into the item it concerns or into a ressource of the node, then delete the file |
+| An `INDEX.md` anywhere in the tree | warning — remedy: move the node's description into the `description` of its `node.toml`, its judgment into the item it concerns, its rules into a ressource of the node, then delete the file |
 
 ### 1.7 Examples
 
