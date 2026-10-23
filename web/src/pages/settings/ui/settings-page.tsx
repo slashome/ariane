@@ -1,9 +1,9 @@
-import { Eye, Pin, RotateCcw, Save, Spool, TriangleAlert } from 'lucide-react'
+import { Eye, Pin, RotateCcw, Save, TriangleAlert } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { defaultColor, previewTheme, readableOnLight, useSaveTheme, useSettings } from '@/entities/theme'
 import type { Theme } from '@/shared/api'
 import { cn } from '@/shared/lib'
-import { Button, ErrorState, LoadingState, PageHeader } from '@/shared/ui'
+import { Button, ErrorState, LoadingState, PageHeader, SpoolLogo } from '@/shared/ui'
 import { presets, sameTheme } from '../model/presets'
 import { ColorField } from './color-field'
 
@@ -11,7 +11,7 @@ function Preview() {
   return (
     <div className="space-y-3 rounded-lg border border-border p-4" aria-label="Preview">
       <div className="flex items-center gap-2 font-semibold">
-        <Spool className="size-5 text-primary" strokeWidth={2.75} aria-hidden />
+        <SpoolLogo className="size-5 text-primary" />
         Ariane
       </div>
       <div className="flex flex-wrap items-center gap-3">
