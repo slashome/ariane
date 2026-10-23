@@ -1,6 +1,7 @@
 import {
   DndContext,
   DragOverlay,
+  KeyboardCode,
   KeyboardSensor,
   PointerSensor,
   useDraggable,
@@ -9,11 +10,18 @@ import {
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core'
-import { useState, type ReactNode } from 'react'
+import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/shared/lib'
 
 export type { DragEndEvent }
+
+// Space picks a card up, so Enter stays free to open it.
+const keyboardCodes = {
+  start: [KeyboardCode.Space],
+  cancel: [KeyboardCode.Esc],
+  end: [KeyboardCode.Space, KeyboardCode.Enter],
+}
 
 // The dragged element is drawn by the overlay, portalled to the body, so it floats above
 // every column instead of being clipped by the scrolling container it comes from.
@@ -27,8 +35,9 @@ export function DragArea({
   children: ReactNode
 }) {
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor),
+    // Below 8 px the press is a click, which opens the card; a shaky click on a trackpad stays one.
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { keyboardCodes }),
   )
   const [active, setActive] = useState<string | null>(null)
   return (
@@ -54,14 +63,43 @@ export function DragArea({
 }
 
 // The element stays in place while dragged, dimmed: the overlay of DragArea moves instead.
-export function Draggable({ id, children, className }: { id: string; children: ReactNode; className?: string }) {
+// With onOpen, a click or Enter opens it; the click that ends a drag never reaches it.
+export function Draggable({
+  id,
+  children,
+  className,
+  onOpen,
+  label,
+}: {
+  id: string
+  children: ReactNode
+  className?: string
+  onOpen?: () => void
+  label?: string
+}) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id })
   return (
     <div
       ref={setNodeRef}
-      className={cn('cursor-grab touch-none active:cursor-grabbing', isDragging && 'opacity-40', className)}
+      className={cn(
+        'touch-none active:cursor-grabbing',
+        onOpen ? 'cursor-pointer rounded-md hover:ring-1 hover:ring-primary/40' : 'cursor-grab',
+        isDragging && 'opacity-40',
+        className,
+      )}
       {...attributes}
       {...listeners}
+      aria-label={label}
+      onClick={onOpen}
+      onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+        // Enter also drops a card carried with the keyboard: only a resting card opens.
+        if (onOpen && event.key === 'Enter' && !isDragging) {
+          event.preventDefault()
+          onOpen()
+          return
+        }
+        listeners?.onKeyDown?.(event)
+      }}
     >
       {children}
     </div>

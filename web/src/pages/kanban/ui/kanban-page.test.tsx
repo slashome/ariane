@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
-import { makeItem, type NodeSummary } from '@/shared/api'
+import { makeItem, type NodeSummary, type Schema } from '@/shared/api'
 import { KanbanPage } from './kanban-page'
 
 const nodes: NodeSummary[] = [
@@ -19,6 +19,14 @@ const nodes: NodeSummary[] = [
   },
 ]
 
+const schema: Schema = {
+  version: 1,
+  categories: [],
+  id_prefixes: { reflexion: 'R', ressource: 'D', story: 'S', task: 'T', unknown: 'T' },
+  keys: [],
+  reflexion_statuses: [],
+}
+
 const items = [
   makeItem({ id: 'T1', title: 'First' }),
   makeItem({ id: 'T2', title: 'Second' }),
@@ -29,7 +37,13 @@ function renderAt(url: string) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string) => {
-      const body = input.startsWith('/api/nodes') ? nodes : input.startsWith('/api/items') ? items : {}
+      const body = input.startsWith('/api/nodes')
+        ? nodes
+        : input.startsWith('/api/items')
+          ? items
+          : input.startsWith('/api/schema')
+            ? schema
+            : {}
       return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
     }),
   )
@@ -65,6 +79,13 @@ describe('KanbanPage', () => {
     expect(within(await screen.findByRole('dialog')).getByText('2 / 3')).toBeInTheDocument()
     await router.navigate(-1)
     expect(router.state.location.search).toContain('T1.md')
+  })
+
+  it('opens a card with Enter, the key Space leaves to dragging', async () => {
+    const router = renderAt('/tasks/kanban?node=p')
+    ;(await screen.findByRole('button', { name: 'Open Second' })).focus()
+    await userEvent.keyboard('{Enter}')
+    expect(router.state.location.search).toContain('item=tree%2Fp%2Ftasks%2FT2.md')
   })
 
   it('remembers a folded column', async () => {

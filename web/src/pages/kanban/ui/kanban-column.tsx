@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Eye } from 'lucide-react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { categoryTone, ItemCard } from '@/entities/item'
 import type { Item } from '@/shared/api'
 import { cn } from '@/shared/lib'
@@ -50,25 +50,17 @@ export function KanbanColumn({
       {!collapsed && (
         <div className="flex min-h-24 flex-1 flex-col gap-2 overflow-y-auto p-2">
           {column.items.map((item) => (
-            <Draggable key={item.path} id={item.path}>
+            <Draggable
+              key={item.path}
+              id={item.path}
+              label={`Open ${item.title ?? item.path}`}
+              onOpen={() => onOpen(item)}
+            >
               <ItemCard
                 item={item}
                 showNode={item.node !== scope}
                 selected={item.path === selected}
                 waiting={waitingOf(item)}
-                action={
-                  <button
-                    type="button"
-                    aria-label={`Open ${item.title ?? item.path}`}
-                    title="Open details"
-                    className="icon-button size-5"
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onKeyDown={(event) => event.stopPropagation()}
-                    onClick={() => onOpen(item)}
-                  >
-                    <Eye className="size-3.5" aria-hidden />
-                  </button>
-                }
               />
             </Draggable>
           ))}
