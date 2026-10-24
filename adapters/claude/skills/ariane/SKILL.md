@@ -83,7 +83,7 @@ external:
 | `ariane schema --json` | Core keys and vocabularies. |
 | `ariane serve --open` | The interface: dashboard, task list, kanban, size × impact. Pulls the content once as it starts. |
 | `ariane pull` | The content up to date with its upstream, fast-forward only; a diverged branch is reported, never merged. |
-| `ariane proxy status` | Whether `http://ariane.local` and each project's `[proxy]` name reach their server, link by link; `setup` (sudo, until reboot) to fix. |
+| `ariane proxy status` | Whether `http://ariane.local` and each project's `[proxy]` name reach their server, link by link; `setup` (sudo, until reboot) to fix. The interface's Proxy page shows the same and edits a node's `[proxy]` (left uncommitted; a new name needs `setup` again). |
 | `ariane settings` | Theme and dashboard pins, in the content's `settings.toml`. |
 | `ariane config get\|set <key>` | The configuration; set the content repository with `ariane config set repo <path>`. |
 | `ariane service status` | Whether the interface runs in the background; `install` to keep it running. |
