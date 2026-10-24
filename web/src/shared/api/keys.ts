@@ -13,4 +13,5 @@ export const queryKeys = {
   dashboard: ['dashboard'],
   settings: ['settings'],
   people: ['people'],
+  proxy: ['proxy'],
 } as const

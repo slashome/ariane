@@ -7,6 +7,7 @@ import { KanbanPage } from '@/pages/kanban'
 import { MatrixPage } from '@/pages/matrix'
 import { JournalPage, ReflexionsPage } from '@/pages/reflexions'
 import { PeoplePage } from '@/pages/people'
+import { ProxyPage } from '@/pages/proxy'
 import { RepoPage } from '@/pages/repo'
 import { RessourcesPage } from '@/pages/ressources'
 import { SettingsPage } from '@/pages/settings'
@@ -45,6 +46,7 @@ export const routeTree: RouteObject[] = [
       { path: 'ressources/*', element: <ItemPage sectionLabel="Ressources" /> },
       { path: 'health', element: <HealthPage /> },
       { path: 'repo', element: <RepoPage /> },
+      { path: 'proxy', element: <ProxyPage /> },
       { path: 'settings', element: <SettingsPage /> },
       { path: 'people', element: <PeoplePage /> },
       { path: '*', element: <Navigate to="/" replace /> },

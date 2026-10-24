@@ -32,12 +32,15 @@ const items = [
   makeItem({ id: 'T3', title: 'Archived task', archived: true, category: 'done', status: 'done', path: 'tree/p/archives/tasks/T3.md' }),
 ]
 
+let proxy: unknown = {}
+
 function answer(url: string): unknown {
   if (url.startsWith('/api/schema')) return schema
   if (url.startsWith('/api/nodes')) return [{ path: 'p', items: 5, workflow: [], tracker: null }]
   if (url.startsWith('/api/items')) return items
   if (url.startsWith('/api/doctor')) return []
   if (url.startsWith('/api/dashboard')) return { pinned: ['p'] }
+  if (url.startsWith('/api/proxy')) return proxy
   if (url.startsWith('/api/repo')) return { root: '/r', branch: 'main', ahead: 0, uncommitted: [{ code: 'M', path: 'tree/p/tasks/T1.md' }] }
   return {}
 }
@@ -58,6 +61,7 @@ function renderAt(url: string) {
 }
 
 afterEach(() => {
+  proxy = {}
   vi.unstubAllGlobals()
   localStorage.clear()
 })
@@ -99,5 +103,29 @@ describe('the navigation', () => {
     await userEvent.keyboard('{Enter}')
     expect(toggle).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByRole('link', { name: /^Kanban/ })).not.toBeInTheDocument()
+  })
+
+  it('puts the proxy between Repository and People, with its route count and a dot for the chain', async () => {
+    proxy = {
+      ok: false,
+      proxy_port: 27380,
+      server_port: 27317,
+      checks: [{ ok: false, what: 'alias 127.0.0.2 on lo0', hint: 'missing: run `ariane proxy setup`' }],
+      routes: [
+        { host: 'ariane.local', port: 27317, node: null, declared: false, listening: true },
+        { host: 'p.local', port: 3000, node: 'p', declared: false, listening: false },
+      ],
+      problems: [],
+    }
+    renderAt('/proxy')
+    const system = screen.getByRole('navigation', { name: 'System' })
+    const entry = await within(system).findByRole('link', { name: 'Proxy, 2, a link is broken' })
+    expect(entry).toHaveAttribute('href', '/proxy')
+    expect(within(entry).getByTestId('status-dot')).toHaveClass('bg-red-500')
+    const labels = within(system)
+      .getAllByRole('link')
+      .map((link) => link.textContent?.replace(/\d+$/, ''))
+    expect(labels).toEqual(['Health', 'Repository', 'Proxy', 'People', 'Settings'])
+    expect(await screen.findByRole('heading', { name: 'Proxy', level: 1 })).toBeInTheDocument()
   })
 })

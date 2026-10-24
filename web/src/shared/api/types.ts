@@ -220,3 +220,37 @@ export interface FileDiff {
   path: string
   diff: string
 }
+
+export interface ProxyCheck {
+  ok: boolean
+  what: string
+  hint: string
+}
+
+export interface ProxyRoute {
+  host: string
+  port: number
+  node: string | null
+  declared: boolean
+  listening: boolean
+}
+
+export interface ProxyReport {
+  ok: boolean
+  proxy_port: number
+  server_port: number
+  checks: ProxyCheck[]
+  routes: ProxyRoute[]
+  problems: string[]
+}
+
+export interface RouteTable {
+  routes: { host: string; port: number; node: string | null }[]
+  problems: string[]
+}
+
+export interface RouteChange {
+  node: string
+  host: string
+  port: number
+}

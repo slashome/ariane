@@ -14,5 +14,6 @@ export const views: { path: string; title: string; keywords: string[] }[] = [
   { path: routes.people, title: 'People', keywords: ['directory', 'waiting'] },
   { path: routes.health, title: 'Health', keywords: ['doctor', 'findings'] },
   { path: routes.repo, title: 'Repository', keywords: ['git', 'commit', 'diff'] },
+  { path: routes.proxy, title: 'Proxy', keywords: ['hosts', 'local', 'names', 'routes', 'front door'] },
   { path: routes.settings, title: 'Settings', keywords: ['theme', 'colors', 'pins'] },
 ]

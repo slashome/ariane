@@ -13,6 +13,7 @@ export const routes = {
   ressources: '/ressources',
   health: '/health',
   repo: '/repo',
+  proxy: '/proxy',
   settings: '/settings',
   people: '/people',
 } as const

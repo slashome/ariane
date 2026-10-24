@@ -11,7 +11,8 @@
 //!
 //! The interface writes too, within limits: it edits four header keys of an
 //! item ([`mod@write`]), the theme and the dashboard pins in the content's
-//! `settings.toml` ([`crate::settings`]), and commits or pushes only when the
+//! `settings.toml` ([`crate::settings`]), the `[proxy]` table of a node's
+//! `node.toml` ([`crate::proxy::declare`]), and commits or pushes only when the
 //! owner asks ([`git`]). Writes and git actions
 //! are serialized, one at a time.
 //!

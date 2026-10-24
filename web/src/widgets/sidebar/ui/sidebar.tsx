@@ -13,6 +13,7 @@ import {
   List,
   ListTodo,
   NotebookPen,
+  Network,
   Pin,
   Settings,
   Users,
@@ -23,12 +24,16 @@ import { NavLink, useLocation } from 'react-router'
 import { scopeFindings, useDoctor } from '@/entities/doctor'
 import { isClosed, useItems } from '@/entities/item'
 import { useDashboard } from '@/entities/node'
+import { useProxy } from '@/entities/proxy'
 import { useRepo } from '@/entities/repo'
 import { inScope, scopeItems, useItemFilters } from '@/features/filter-items'
 import { routes, scopeSearch, searchParamKeys } from '@/shared/config'
 import { cn, displayNode } from '@/shared/lib'
 import { Brand } from '@/shared/ui'
 import { navCounts } from '../model/nav-counts'
+import { proxyEntry } from '../model/proxy-entry'
+
+const proxyRefetch = 30_000
 
 const collapsedKey = 'ariane.sidebar.collapsed'
 
@@ -53,6 +58,8 @@ function Entry({
   icon: Icon,
   count,
   tone,
+  dot,
+  status,
   end,
   search,
   nested,
@@ -62,15 +69,18 @@ function Entry({
   icon: LucideIcon
   count?: number
   tone?: string
+  dot?: string
+  status?: string
   end?: boolean
   search: string
   nested?: boolean
 }) {
+  const named = [label, count, status].filter((part) => part !== undefined).join(', ')
   return (
     <NavLink
       to={{ pathname: to, search }}
       end={end}
-      aria-label={count === undefined ? label : `${label}, ${count}`}
+      aria-label={named}
       className={({ isActive }) =>
         cn(
           'flex items-center gap-2.5 rounded-md py-1.5 pr-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground',
@@ -81,6 +91,7 @@ function Entry({
     >
       <Icon className="size-4 shrink-0" aria-hidden />
       <span className="truncate">{label}</span>
+      {dot && <span data-testid="status-dot" className={cn('size-2 shrink-0 rounded-full', dot)} aria-hidden />}
       <Count value={count} tone={tone} />
     </NavLink>
   )
@@ -128,6 +139,8 @@ export function Sidebar() {
   const { data: findings = [] } = useDoctor()
   const { data: repo } = useRepo()
   const { data: dashboard } = useDashboard()
+  const { data: proxyReport } = useProxy({ refetchInterval: proxyRefetch })
+  const proxy = proxyEntry(proxyReport)
   const [collapsed, setCollapsed] = useState(readCollapsed)
   const scope = scopeSearch(search)
 
@@ -228,6 +241,7 @@ export function Sidebar() {
           tone={(repo?.uncommitted.length ?? 0) > 0 ? 'bg-amber-500/15 text-amber-700 dark:text-amber-300' : undefined}
           search={scope}
         />
+        <Entry to={routes.proxy} label="Proxy" icon={Network} count={proxy.count} dot={proxy.dot} status={proxy.status} search={scope} />
         <Entry to={routes.people} label="People" icon={Users} search={scope} />
         <Entry to={routes.settings} label="Settings" icon={Settings} search={scope} />
       </nav>
