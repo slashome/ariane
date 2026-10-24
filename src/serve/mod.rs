@@ -266,8 +266,8 @@ fn pull_at_start(state: Arc<State>) {
 /// When the port is taken — usually by `ariane proxy` run alone — the reason
 /// is printed and the interface keeps serving without it.
 async fn open_front_door(state: &Arc<State>, config: &Config) {
-    let listener = match crate::proxy::door::bind(config.proxy.port).await {
-        Ok(listener) => listener,
+    let listeners = match crate::proxy::door::bind(config.proxy.port).await {
+        Ok(listeners) => listeners,
         Err(error) => {
             eprintln!("ariane serve: no front door: {error:#}");
             return;
@@ -281,11 +281,12 @@ async fn open_front_door(state: &Arc<State>, config: &Config) {
             .cloned()
     });
     eprintln!(
-        "ariane serve: front door on 127.0.0.1:{}, http://{} once `ariane proxy setup` ran",
-        config.proxy.port, config.server.host
+        "ariane serve: front door on 127.0.0.1:{port} and [::1]:{port}, http://{host} once `ariane proxy setup` ran",
+        port = config.proxy.port,
+        host = config.server.host
     );
     tokio::spawn(async move {
-        if let Err(error) = crate::proxy::door::serve(listener, lookup).await {
+        if let Err(error) = crate::proxy::door::serve(listeners, lookup).await {
             eprintln!("ariane serve: the front door stopped: {error:#}");
         }
     });
@@ -377,7 +378,7 @@ mod tests {
             macos: true,
             hosts: repo.root().join("hosts"),
             staging: repo.root().join("staging"),
-            redirected: SocketAddr::from((Ipv4Addr::LOCALHOST, closed_port())),
+            redirected: [SocketAddr::from((Ipv4Addr::LOCALHOST, closed_port())); 2],
             runner: Arc::new(Quiet),
         };
         State::new(
@@ -768,11 +769,12 @@ mod tests {
         let report = json(&body);
         assert_eq!(report["ok"], false);
         let checks = report["checks"].as_array().unwrap();
-        assert_eq!(checks.len(), 7);
+        assert_eq!(checks.len(), 11);
         assert_eq!(checks[0]["what"], "alias 127.0.0.2 on lo0");
         assert_eq!(checks[0]["ok"], false);
         assert_eq!(checks[0]["hint"], "missing: run `ariane proxy setup`");
-        assert_eq!(checks[6]["ok"], true);
+        assert_eq!(checks[1]["what"], "alias fd61:7269:616e:6500::2 on lo0");
+        assert_eq!(checks[10]["ok"], true);
         let routes = report["routes"].as_array().unwrap();
         assert_eq!(routes.len(), 2);
         assert_eq!(routes[0]["host"], "ariane.local");

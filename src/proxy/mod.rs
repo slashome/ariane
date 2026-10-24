@@ -3,15 +3,17 @@
 //!
 //! Three pieces, from the browser inward:
 //!
-//! 1. **The names.** `/etc/hosts` sends every routed name to `127.0.0.2`, an
-//!    alias of the loopback interface that only Ariane uses.
-//! 2. **The redirect.** A `pf` rule sends port 80 of `127.0.0.2` to the front
-//!    door. Port 80 is out of reach of a process that is not root (only a bind
+//! 1. **The names.** `/etc/hosts` sends every routed name to `127.0.0.2` and
+//!    to [`ALIAS_V6`], two aliases of the loopback interface that only Ariane
+//!    uses: without the IPv6 line, macOS waits seconds for an mDNS answer to a
+//!    `.local` name.
+//! 2. **The redirect.** Two `pf` rules send port 80 of each alias to the front
+//!    door, one per address family. Port 80 is out of reach of a process that is not root (only a bind
 //!    on every interface is exempt, and Docker holds that one), so the alias,
 //!    the rule and the names are set up once with `sudo` by [`machine`], and
 //!    last until the next reboot.
 //! 3. **The front door** ([`door`]): an HTTP server on `127.0.0.1:<proxy.port>`
-//!    that reads the `Host` of each request and forwards it to the port of the
+//!    and `[::1]:<proxy.port>` that reads the `Host` of each request and forwards it to the port of the
 //!    matching route. `ariane serve` opens it next to the interface; `ariane
 //!    proxy` opens it alone when the server does not run.
 //!
@@ -23,7 +25,7 @@ pub mod declare;
 pub mod door;
 pub mod machine;
 
-use std::net::Ipv4Addr;
+use std::net::{Ipv4Addr, Ipv6Addr};
 use std::process::ExitCode;
 
 use anyhow::{Result, bail};
@@ -36,6 +38,11 @@ use crate::tree::{NodePath, Tree};
 /// The loopback alias the routed names point to, kept apart from `127.0.0.1`
 /// so that its port 80 can be redirected without touching anyone else's.
 pub const ALIAS: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 2);
+
+/// The IPv6 loopback alias the routed names also point to,
+/// `fd61:7269:616e:6500::2`: a unique local address whose bytes after `fd`
+/// spell `ariane`, ending in `2` like [`ALIAS`].
+pub const ALIAS_V6: Ipv6Addr = Ipv6Addr::new(0xfd61, 0x7269, 0x616e, 0x6500, 0, 0, 0, 2);
 
 /// One name the front door answers to, and where it forwards.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -209,7 +216,7 @@ fn alone(config: &Config, table: Table) -> Result<ExitCode> {
         .enable_all()
         .build()?;
     runtime.block_on(async {
-        let listener = door::bind(config.proxy.port).await.map_err(|error| {
+        let listeners = door::bind(config.proxy.port).await.map_err(|error| {
             anyhow::anyhow!(
                 "{error:#}; `ariane serve` may already hold the front door, and it forwards every route"
             )
@@ -222,10 +229,13 @@ fn alone(config: &Config, table: Table) -> Result<ExitCode> {
                 route.owner()
             );
         }
-        eprintln!("ariane proxy: front door on 127.0.0.1:{} (Ctrl-C to stop)", config.proxy.port);
+        eprintln!(
+            "ariane proxy: front door on 127.0.0.1:{port} and [::1]:{port} (Ctrl-C to stop)",
+            port = config.proxy.port
+        );
         let lookup: door::Lookup = std::sync::Arc::new(move |host| table.find(host).cloned());
         tokio::select! {
-            served = door::serve(listener, lookup) => served,
+            served = door::serve(listeners, lookup) => served,
             _ = tokio::signal::ctrl_c() => Ok(()),
         }
     })?;

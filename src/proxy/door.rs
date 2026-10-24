@@ -1,5 +1,7 @@
-//! The front door: an HTTP server on `127.0.0.1` that forwards each request to
-//! the port of the route its `Host` names (ADR-0016).
+//! The front door: an HTTP server on `127.0.0.1` and `::1` that forwards each
+//! request to the port of the route its `Host` names (ADR-0016). It listens on
+//! both loopback addresses because a `pf` redirect cannot change the address
+//! family: the IPv4 alias reaches `127.0.0.1`, the IPv6 one `::1`.
 //!
 //! One upstream connection per request, opened with `hyper`'s low-level
 //! client: on the loopback interface a connection costs nothing, and there is
@@ -15,7 +17,7 @@
 //! Every answer the front door writes itself carries [`MARK`], which is how
 //! `ariane proxy status` tells it apart from another server on the same port.
 
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
@@ -34,27 +36,43 @@ pub const MARK: &str = "x-ariane-door";
 /// Finds the route of a host name, as the `Host` header gives it.
 pub type Lookup = Arc<dyn Fn(&str) -> Option<Route> + Send + Sync>;
 
-/// Binds the front door's port on `127.0.0.1`.
+/// Binds the front door's port on `127.0.0.1` and on `::1`.
 ///
 /// # Errors
 ///
-/// Fails when the port is taken, naming the port and its configuration key.
-pub async fn bind(port: u16) -> Result<tokio::net::TcpListener> {
-    let address = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
-    tokio::net::TcpListener::bind(address)
-        .await
-        .with_context(|| format!("opening the front door on {address} (`proxy.port`)"))
+/// Fails when the port is taken on either address, naming the address and
+/// its configuration key.
+pub async fn bind(port: u16) -> Result<Vec<tokio::net::TcpListener>> {
+    let mut listeners = Vec::new();
+    for address in [
+        SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
+        SocketAddr::from((Ipv6Addr::LOCALHOST, port)),
+    ] {
+        let listener = tokio::net::TcpListener::bind(address)
+            .await
+            .with_context(|| format!("opening the front door on {address} (`proxy.port`)"))?;
+        listeners.push(listener);
+    }
+    Ok(listeners)
 }
 
-/// Serves the front door on `listener` until the task is dropped.
+/// Serves the front door on every listener until the task is dropped.
 ///
 /// # Errors
 ///
-/// Fails only when the server itself stops on an I/O error.
-pub async fn serve(listener: tokio::net::TcpListener, lookup: Lookup) -> Result<()> {
-    axum::serve(listener, router(lookup))
-        .await
-        .context("serving the front door")
+/// Fails only when a server itself stops on an I/O error.
+pub async fn serve(listeners: Vec<tokio::net::TcpListener>, lookup: Lookup) -> Result<()> {
+    let router = router(lookup);
+    let mut servers = tokio::task::JoinSet::new();
+    for listener in listeners {
+        servers.spawn(axum::serve(listener, router.clone()).into_future());
+    }
+    while let Some(served) = servers.join_next().await {
+        served
+            .context("serving the front door")?
+            .context("serving the front door")?;
+    }
+    Ok(())
 }
 
 /// The front door's router: every request, whatever its path, goes to [`forward`].
@@ -268,6 +286,37 @@ mod tests {
             answer.ends_with(&format!("/echo?a=1 localhost:{upstream} app.local")),
             "{answer}"
         );
+    }
+
+    #[tokio::test]
+    async fn the_front_door_listens_on_both_loopback_addresses() {
+        let free = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = free.local_addr().unwrap().port();
+        drop(free);
+        let listeners = bind(port).await.unwrap();
+        let addresses: Vec<SocketAddr> = listeners
+            .iter()
+            .map(|listener| listener.local_addr().unwrap())
+            .collect();
+        assert_eq!(
+            addresses,
+            [
+                SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
+                SocketAddr::from((Ipv6Addr::LOCALHOST, port)),
+            ]
+        );
+        let lookup: Lookup = Arc::new(|_| None);
+        tokio::spawn(serve(listeners, lookup));
+        let mut stream = tokio::net::TcpStream::connect((Ipv6Addr::LOCALHOST, port))
+            .await
+            .unwrap();
+        stream
+            .write_all(b"GET / HTTP/1.1\r\nHost: x.local\r\nConnection: close\r\n\r\n")
+            .await
+            .unwrap();
+        let mut answer = String::new();
+        stream.read_to_string(&mut answer).await.unwrap();
+        assert!(answer.starts_with("HTTP/1.1 404"), "{answer}");
     }
 
     #[test]

@@ -1,15 +1,16 @@
 //! What `ariane proxy setup`, `status` and `teardown` do to the machine
-//! (ADR-0016): the loopback alias, the `pf` redirect and the names in
-//! `/etc/hosts`, all three until the next reboot.
+//! (ADR-0016): the loopback aliases, the `pf` redirects and the names in
+//! `/etc/hosts`, all three until the next reboot. Each comes twice, once per
+//! address family: [`ALIAS`] and [`ALIAS_V6`].
 //!
 //! Every command that needs root runs through `sudo`, one at a time, printed
-//! before it runs. The `pf` rule lives in its own anchor, `com.apple/ariane`,
+//! before it runs. The `pf` rules live in its own anchor, `com.apple/ariane`,
 //! which the stock `/etc/pf.conf` already loads (`rdr-anchor "com.apple/*"`),
 //! so no system file but `/etc/hosts` is edited, and only between two marker
 //! lines. The files handed to `sudo` are written next to `config.toml` first.
 
 use std::io::{Read, Write};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -19,7 +20,7 @@ use anyhow::{Context, Result, bail};
 use serde::Serialize;
 
 use super::door::MARK;
-use super::{ALIAS, Table};
+use super::{ALIAS, ALIAS_V6, Table};
 use crate::config::Config;
 use crate::service::{Runner, System};
 use crate::tree::NodePath;
@@ -44,8 +45,9 @@ pub struct Machine {
     pub hosts: PathBuf,
     /// Where the `pf` rules and the next hosts file are written before `sudo` reads them.
     pub staging: PathBuf,
-    /// The address whose port the redirect sends to the front door: port 80 of [`ALIAS`].
-    pub redirected: SocketAddr,
+    /// The addresses whose port the redirects send to the front door: port 80
+    /// of [`ALIAS`], then of [`ALIAS_V6`].
+    pub redirected: [SocketAddr; 2],
     /// How the commands run.
     pub runner: Arc<dyn Runner + Send + Sync>,
 }
@@ -58,14 +60,17 @@ impl Machine {
             macos: cfg!(target_os = "macos"),
             hosts: PathBuf::from("/etc/hosts"),
             staging: config.parent().map(Path::to_path_buf).unwrap_or_default(),
-            redirected: SocketAddr::from((ALIAS, 80)),
+            redirected: [
+                SocketAddr::from((ALIAS, 80)),
+                SocketAddr::from((ALIAS_V6, 80)),
+            ],
             runner: Arc::new(System),
         }
     }
 }
 
-/// Aliases [`ALIAS`], redirects its port 80 to the front door on `port`, and
-/// declares every route's name in `/etc/hosts`.
+/// Aliases [`ALIAS`] and [`ALIAS_V6`], redirects their port 80 to the front
+/// door on `port`, and declares every route's name in `/etc/hosts` under both.
 ///
 /// # Errors
 ///
@@ -80,7 +85,8 @@ pub fn setup(machine: &Machine, table: &Table, port: u16) -> Result<ExitCode> {
     std::fs::create_dir_all(&machine.staging)
         .with_context(|| format!("creating {}", machine.staging.display()))?;
     let rules = machine.staging.join("pf.conf");
-    std::fs::write(&rules, rule(port)).with_context(|| format!("writing {}", rules.display()))?;
+    std::fs::write(&rules, rules_for(port))
+        .with_context(|| format!("writing {}", rules.display()))?;
     let names: Vec<&str> = table
         .routes
         .iter()
@@ -88,6 +94,15 @@ pub fn setup(machine: &Machine, table: &Table, port: u16) -> Result<ExitCode> {
         .collect();
     let mut steps = vec![
         sudo(&["ifconfig", "lo0", "alias", &ALIAS.to_string(), "up"]),
+        sudo(&[
+            "ifconfig",
+            "lo0",
+            "inet6",
+            &ALIAS_V6.to_string(),
+            "prefixlen",
+            "128",
+            "alias",
+        ]),
         sudo(&["pfctl", "-a", ANCHOR, "-f", &rules.display().to_string()]),
         sudo(&["pfctl", "-E"]),
     ];
@@ -97,7 +112,9 @@ pub fn setup(machine: &Machine, table: &Table, port: u16) -> Result<ExitCode> {
     for step in &steps {
         execute(machine, step, true)?;
     }
-    println!("until the next reboot, these names reach the front door on 127.0.0.1:{port}:");
+    println!(
+        "until the next reboot, these names reach the front door on 127.0.0.1:{port} and [::1]:{port}:"
+    );
     for route in &table.routes {
         println!(
             "  http://{} → 127.0.0.1:{} ({})",
@@ -110,8 +127,8 @@ pub fn setup(machine: &Machine, table: &Table, port: u16) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-/// Undoes [`setup`]: empties the anchor, removes the alias and Ariane's block
-/// of `/etc/hosts`. A step that fails is reported and the others still run.
+/// Undoes [`setup`]: empties the anchor, removes both aliases and Ariane's
+/// block of `/etc/hosts`. A step that fails is reported and the others still run.
 ///
 /// # Errors
 ///
@@ -123,6 +140,7 @@ pub fn teardown(machine: &Machine) -> Result<ExitCode> {
     let mut steps = vec![
         sudo(&["pfctl", "-a", ANCHOR, "-F", "all"]),
         sudo(&["ifconfig", "lo0", "-alias", &ALIAS.to_string()]),
+        sudo(&["ifconfig", "lo0", "inet6", &ALIAS_V6.to_string(), "-alias"]),
     ];
     steps.extend(rewrite_hosts(machine, &[])?);
     steps.push(sudo(&["dscacheutil", "-flushcache"]));
@@ -179,7 +197,7 @@ pub struct RouteState {
     pub port: u16,
     /// The node that declares the route; `None` for the interface itself.
     pub node: Option<NodePath>,
-    /// Whether the hosts file sends the name to [`ALIAS`].
+    /// Whether the hosts file sends the name to [`ALIAS`] and to [`ALIAS_V6`].
     pub declared: bool,
     /// Whether something accepts connections on the port.
     pub listening: bool,
@@ -202,42 +220,55 @@ pub struct Report {
     pub problems: Vec<String>,
 }
 
-/// Checks every link from the browser to each route: the alias, the front
-/// door, the redirect, then each route's name in the hosts file and its port.
+/// Checks every link from the browser to each route: the aliases, the front
+/// door, the redirects, then each route's names in the hosts file and its port.
+///
+/// The front door holds when it answers directly on its loopback port or
+/// through either redirect: once `pf` is enabled, a direct connection to the
+/// redirect's target may time out while the redirect itself works (ADR-0016).
 ///
 /// The probes are blocking connections, each bounded by [`PROBE`].
 pub fn check(machine: &Machine, config: &Config, table: &Table) -> Report {
     let mut checks = Vec::new();
-    let aliased = machine
+    let interface = machine
         .runner
         .run("ifconfig", &["lo0".to_owned()])
-        .is_ok_and(|outcome| outcome.stdout.contains(&format!("inet {ALIAS} ")));
-    checks.push(Check::new(
-        aliased,
-        format!("alias {ALIAS} on lo0"),
-        "missing: run `ariane proxy setup`",
-    ));
-    let door = SocketAddr::from((Ipv4Addr::LOCALHOST, config.proxy.port));
-    checks.push(probe_check(
-        probe(door),
-        format!("front door on {door}"),
-        "is `ariane serve` or `ariane proxy` running?",
-    ));
-    let redirected = machine.redirected;
-    checks.push(probe_check(
-        probe(redirected),
-        format!("{redirected} redirected to the front door"),
-        "run `ariane proxy setup`",
-    ));
+        .map(|outcome| outcome.stdout)
+        .unwrap_or_default();
+    for (family, alias) in [("inet", IpAddr::V4(ALIAS)), ("inet6", IpAddr::V6(ALIAS_V6))] {
+        checks.push(Check::new(
+            interface.contains(&format!("{family} {alias} ")),
+            format!("alias {alias} on lo0"),
+            "missing: run `ariane proxy setup`",
+        ));
+    }
+    let redirects: Vec<(SocketAddr, Answer)> = machine
+        .redirected
+        .iter()
+        .map(|&address| (address, probe(address)))
+        .collect();
+    let through_redirect = redirects.iter().any(|(_, answer)| *answer == Answer::Door);
+    checks.push(front_door_check(config.proxy.port, through_redirect));
+    for (address, answer) in redirects {
+        checks.push(probe_check(
+            answer,
+            format!("{address} redirected to the front door"),
+            "run `ariane proxy setup`",
+        ));
+    }
     let hosts = std::fs::read_to_string(&machine.hosts).unwrap_or_default();
     let mut routes = Vec::new();
     for route in &table.routes {
-        let declared = resolves_to(&hosts, &route.host) == Some(IpAddr::V4(ALIAS));
-        checks.push(Check::new(
-            declared,
-            format!("{} → {ALIAS} in {}", route.host, machine.hosts.display()),
-            "run `ariane proxy setup` to declare it",
-        ));
+        let mut declared = true;
+        for alias in [IpAddr::V4(ALIAS), IpAddr::V6(ALIAS_V6)] {
+            let named = resolves_to(&hosts, &route.host, alias.is_ipv4()) == Some(alias);
+            declared &= named;
+            checks.push(Check::new(
+                named,
+                format!("{} → {alias} in {}", route.host, machine.hosts.display()),
+                "run `ariane proxy setup` to declare it",
+            ));
+        }
         let upstream = SocketAddr::from((Ipv4Addr::LOCALHOST, route.port));
         let listening = TcpStream::connect_timeout(&upstream, PROBE).is_ok();
         checks.push(Check::new(
@@ -288,6 +319,48 @@ enum Answer {
     Nothing(String),
 }
 
+/// The check of the front door on `port` of both loopback addresses: alive
+/// when it answered `through_redirect`, otherwise probed directly on each.
+fn front_door_check(port: u16, through_redirect: bool) -> Check {
+    let direct = [
+        SocketAddr::from((Ipv4Addr::LOCALHOST, port)),
+        SocketAddr::from((Ipv6Addr::LOCALHOST, port)),
+    ];
+    let what = format!("front door on {} or {}", direct[0], direct[1]);
+    if through_redirect {
+        return Check::new(true, what, "");
+    }
+    let answers: Vec<(SocketAddr, Answer)> = direct
+        .iter()
+        .map(|&address| (address, probe(address)))
+        .collect();
+    if answers.iter().any(|(_, answer)| *answer == Answer::Door) {
+        return Check::new(true, what, "");
+    }
+    if answers.iter().any(|(_, answer)| *answer == Answer::Other) {
+        return Check::new(
+            false,
+            what,
+            "another server answers there instead of the front door",
+        );
+    }
+    let reasons: Vec<String> = answers
+        .iter()
+        .filter_map(|(address, answer)| match answer {
+            Answer::Nothing(reason) => Some(format!("{address}: {reason}")),
+            _ => None,
+        })
+        .collect();
+    Check::new(
+        false,
+        what,
+        format!(
+            "{}; is `ariane serve` or `ariane proxy` running?",
+            reasons.join(", ")
+        ),
+    )
+}
+
 /// The check of a probe of `what`; `hint` when nothing answers.
 fn probe_check(answer: Answer, what: String, hint: &str) -> Check {
     match answer {
@@ -321,9 +394,14 @@ fn probe(address: SocketAddr) -> Answer {
     }
 }
 
-/// The `pf` rule sending port 80 of [`ALIAS`] to the front door on `port`.
-fn rule(port: u16) -> String {
-    format!("rdr pass on lo0 inet proto tcp from any to {ALIAS} port 80 -> 127.0.0.1 port {port}\n")
+/// The `pf` rules sending port 80 of [`ALIAS`] and of [`ALIAS_V6`] to the
+/// front door on `port`, each to the loopback address of its own family: a
+/// redirect cannot translate between IPv4 and IPv6.
+fn rules_for(port: u16) -> String {
+    format!(
+        "rdr pass on lo0 inet proto tcp from any to {ALIAS} port 80 -> 127.0.0.1 port {port}\n\
+         rdr pass on lo0 inet6 proto tcp from any to {ALIAS_V6} port 80 -> ::1 port {port}\n"
+    )
 }
 
 /// The steps that give `/etc/hosts` Ariane's block for `names` (none removes
@@ -350,8 +428,9 @@ fn rewrite_hosts(machine: &Machine, names: &[&str]) -> Result<Vec<Vec<String>>> 
     ])])
 }
 
-/// `hosts` with Ariane's block replaced by one naming `names`, at the end;
-/// without any block when `names` is empty. Every other line is kept as is.
+/// `hosts` with Ariane's block replaced by one naming `names`, at the end,
+/// each under [`ALIAS`] then [`ALIAS_V6`]; without any block when `names` is
+/// empty. Every other line is kept as is.
 fn with_block(hosts: &str, names: &[&str]) -> String {
     let mut kept = Vec::new();
     let mut inside = false;
@@ -375,7 +454,7 @@ fn with_block(hosts: &str, names: &[&str]) -> String {
         text.push_str(BEGIN);
         text.push('\n');
         for name in names {
-            text.push_str(&format!("{ALIAS}\t{name}\n"));
+            text.push_str(&format!("{ALIAS}\t{name}\n{ALIAS_V6}\t{name}\n"));
         }
         text.push_str(END);
         text.push('\n');
@@ -383,16 +462,15 @@ fn with_block(hosts: &str, names: &[&str]) -> String {
     text
 }
 
-/// The address `/etc/hosts` gives `name`, its first line naming it.
-fn resolves_to(hosts: &str, name: &str) -> Option<IpAddr> {
+/// The address of one family `/etc/hosts` gives `name`: that of its first
+/// line naming it with an IPv4 address, or with an IPv6 one when `ipv4` is false.
+fn resolves_to(hosts: &str, name: &str, ipv4: bool) -> Option<IpAddr> {
     hosts.lines().find_map(|line| {
         let line = line.split('#').next().unwrap_or_default();
         let mut words = line.split_whitespace();
-        let address = words.next()?;
-        words
-            .any(|word| word.eq_ignore_ascii_case(name))
-            .then(|| address.parse().ok())
-            .flatten()
+        let address: IpAddr = words.next()?.parse().ok()?;
+        (address.is_ipv4() == ipv4 && words.any(|word| word.eq_ignore_ascii_case(name)))
+            .then_some(address)
     })
 }
 
@@ -474,7 +552,7 @@ mod tests {
             macos: true,
             hosts: dir.join("etc-hosts"),
             staging: dir.join("staging"),
-            redirected: SocketAddr::from((Ipv4Addr::LOCALHOST, closed_port())),
+            redirected: [SocketAddr::from((Ipv4Addr::LOCALHOST, closed_port())); 2],
             runner,
         }
     }
@@ -504,23 +582,38 @@ mod tests {
         let added = with_block(hosts, &["ariane.local", "d.local"]);
         assert_eq!(
             added,
-            format!("{hosts}\n{BEGIN}\n127.0.0.2\tariane.local\n127.0.0.2\td.local\n{END}\n")
+            format!(
+                "{hosts}\n{BEGIN}\n\
+                 127.0.0.2\tariane.local\nfd61:7269:616e:6500::2\tariane.local\n\
+                 127.0.0.2\td.local\nfd61:7269:616e:6500::2\td.local\n{END}\n"
+            )
         );
         let replaced = with_block(&added, &["ariane.local"]);
         assert_eq!(
             replaced,
-            format!("{hosts}\n{BEGIN}\n127.0.0.2\tariane.local\n{END}\n")
+            format!(
+                "{hosts}\n{BEGIN}\n127.0.0.2\tariane.local\nfd61:7269:616e:6500::2\tariane.local\n{END}\n"
+            )
         );
         assert_eq!(with_block(&replaced, &[]), hosts);
         assert_eq!(with_block(&added, &["ariane.local", "d.local"]), added);
     }
 
     #[test]
-    fn a_name_resolves_through_its_first_line_ignoring_comments() {
-        let hosts = "# 10.0.0.1 a.local\n127.0.0.2\tA.local b.local\n127.0.0.1 a.local\n";
-        assert_eq!(resolves_to(hosts, "a.local"), Some(IpAddr::V4(ALIAS)));
-        assert_eq!(resolves_to(hosts, "b.local"), Some(IpAddr::V4(ALIAS)));
-        assert_eq!(resolves_to(hosts, "c.local"), None);
+    fn a_name_resolves_through_its_first_line_of_each_family_ignoring_comments() {
+        let hosts = "# 10.0.0.1 a.local\n::1 b.local\n127.0.0.2\tA.local b.local\n\
+                     127.0.0.1 a.local\nfd61:7269:616e:6500::2 a.local\n";
+        assert_eq!(resolves_to(hosts, "a.local", true), Some(IpAddr::V4(ALIAS)));
+        assert_eq!(resolves_to(hosts, "b.local", true), Some(IpAddr::V4(ALIAS)));
+        assert_eq!(
+            resolves_to(hosts, "a.local", false),
+            Some(IpAddr::V6(ALIAS_V6))
+        );
+        assert_eq!(
+            resolves_to(hosts, "b.local", false),
+            Some(IpAddr::V6(Ipv6Addr::LOCALHOST))
+        );
+        assert_eq!(resolves_to(hosts, "c.local", true), None);
     }
 
     #[test]
@@ -534,6 +627,7 @@ mod tests {
             fake.commands(),
             [
                 "sudo ifconfig lo0 alias 127.0.0.2 up".to_owned(),
+                "sudo ifconfig lo0 inet6 fd61:7269:616e:6500::2 prefixlen 128 alias".to_owned(),
                 format!(
                     "sudo pfctl -a com.apple/ariane -f {}",
                     staging.join("pf.conf").display()
@@ -550,10 +644,15 @@ mod tests {
         );
         assert_eq!(
             std::fs::read_to_string(staging.join("pf.conf")).unwrap(),
-            "rdr pass on lo0 inet proto tcp from any to 127.0.0.2 port 80 -> 127.0.0.1 port 27380\n"
+            "rdr pass on lo0 inet proto tcp from any to 127.0.0.2 port 80 -> 127.0.0.1 port 27380\n\
+             rdr pass on lo0 inet6 proto tcp from any to fd61:7269:616e:6500::2 port 80 -> ::1 port 27380\n"
         );
         let staged = std::fs::read_to_string(staging.join("hosts")).unwrap();
-        assert!(staged.contains("127.0.0.2\tdreamcatchr.local\n"));
+        assert!(
+            staged.contains(
+                "127.0.0.2\tdreamcatchr.local\nfd61:7269:616e:6500::2\tdreamcatchr.local\n"
+            )
+        );
     }
 
     #[test]
@@ -575,7 +674,7 @@ mod tests {
     }
 
     #[test]
-    fn teardown_empties_the_anchor_removes_the_alias_and_the_block() {
+    fn teardown_empties_the_anchor_removes_both_aliases_and_the_block() {
         let dir = tempfile::tempdir().unwrap();
         let fake = Arc::new(Fake::default());
         let hosts = with_block("127.0.0.1 localhost\n", &["ariane.local"]);
@@ -584,7 +683,11 @@ mod tests {
         let commands = fake.commands();
         assert_eq!(commands[0], "sudo pfctl -a com.apple/ariane -F all");
         assert_eq!(commands[1], "sudo ifconfig lo0 -alias 127.0.0.2");
-        assert!(commands[2].starts_with("sudo cp "));
+        assert_eq!(
+            commands[2],
+            "sudo ifconfig lo0 inet6 fd61:7269:616e:6500::2 -alias"
+        );
+        assert!(commands[3].starts_with("sudo cp "));
         assert_eq!(
             std::fs::read_to_string(dir.path().join("staging/hosts")).unwrap(),
             "127.0.0.1 localhost\n"
@@ -639,20 +742,28 @@ mod tests {
         port
     }
 
+    /// The output of `ifconfig lo0` once both aliases are set.
+    const ALIASED: &str = "lo0: flags\n\tinet 127.0.0.1 netmask 0xff000000\n\tinet6 ::1 prefixlen 128 \n\tinet 127.0.0.2 netmask 0xff000000\n\tinet6 fd61:7269:616e:6500::2 prefixlen 128 \n";
+
     #[test]
     fn the_report_checks_each_link_in_the_order_status_prints_them() {
         let dir = tempfile::tempdir().unwrap();
         let fake = Arc::new(Fake {
-            stdout: "lo0: flags\n\tinet 127.0.0.1 netmask 0xff000000\n\tinet 127.0.0.2 netmask 0xff000000\n".to_owned(),
+            stdout: ALIASED.to_owned(),
             ..Fake::default()
         });
         let hosts = with_block("127.0.0.1 localhost\n", &["ariane.local"]);
         let mut machine = machine(dir.path(), &hosts, fake.clone());
         let door = front_door();
-        machine.redirected = SocketAddr::from((Ipv4Addr::LOCALHOST, door));
+        let silent = closed_port();
+        machine.redirected = [
+            SocketAddr::from((Ipv4Addr::LOCALHOST, door)),
+            SocketAddr::from((Ipv4Addr::LOCALHOST, silent)),
+        ];
         let upstream = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let mut config = Config::default();
-        config.proxy.port = door;
+        config.proxy.port = closed_port();
+        let proxy_port = config.proxy.port;
         let mut table = table();
         table.routes[0].port = upstream.local_addr().unwrap().port();
         table.routes[1].port = closed_port();
@@ -664,21 +775,33 @@ mod tests {
 
         assert_eq!(fake.commands(), ["ifconfig lo0"]);
         let lines: Vec<String> = report.checks.iter().map(ToString::to_string).collect();
-        assert_eq!(lines.len(), 7);
+        assert_eq!(lines.len(), 11);
         assert_eq!(lines[0], "✓ alias 127.0.0.2 on lo0");
-        assert_eq!(lines[1], format!("✓ front door on 127.0.0.1:{door}"));
+        assert_eq!(lines[1], "✓ alias fd61:7269:616e:6500::2 on lo0");
         assert_eq!(
             lines[2],
+            format!("✓ front door on 127.0.0.1:{proxy_port} or [::1]:{proxy_port}")
+        );
+        assert_eq!(
+            lines[3],
             format!("✓ 127.0.0.1:{door} redirected to the front door")
         );
-        assert!(lines[3].starts_with("✓ ariane.local → 127.0.0.2 in "));
-        assert!(lines[4].ends_with(", the interface (`server.host`)"));
-        assert!(lines[4].starts_with("✓ "));
-        assert!(lines[5].starts_with("✗ dreamcatchr.local → 127.0.0.2 in "));
-        assert!(lines[5].ends_with(": run `ariane proxy setup` to declare it"));
-        assert!(lines[6].ends_with("node slashome/dreamcatchr: nothing listens: start its server"));
+        assert!(lines[4].starts_with(&format!(
+            "✗ 127.0.0.1:{silent} redirected to the front door: "
+        )));
+        assert!(lines[4].ends_with("; run `ariane proxy setup`"));
+        assert!(lines[5].starts_with("✓ ariane.local → 127.0.0.2 in "));
+        assert!(lines[6].starts_with("✓ ariane.local → fd61:7269:616e:6500::2 in "));
+        assert!(lines[7].ends_with(", the interface (`server.host`)"));
+        assert!(lines[7].starts_with("✓ "));
+        assert!(lines[8].starts_with("✗ dreamcatchr.local → 127.0.0.2 in "));
+        assert!(lines[8].ends_with(": run `ariane proxy setup` to declare it"));
+        assert!(lines[9].starts_with("✗ dreamcatchr.local → fd61:7269:616e:6500::2 in "));
+        assert!(
+            lines[10].ends_with("node slashome/dreamcatchr: nothing listens: start its server")
+        );
         assert!(!report.ok);
-        assert_eq!(report.proxy_port, door);
+        assert_eq!(report.proxy_port, proxy_port);
         assert_eq!(report.server_port, config.server.port);
         assert_eq!(
             report.routes[0],
@@ -695,6 +818,31 @@ mod tests {
     }
 
     #[test]
+    fn a_name_declared_in_one_family_only_is_not_declared() {
+        let dir = tempfile::tempdir().unwrap();
+        let hosts = "127.0.0.2\tariane.local\n";
+        let machine = machine(dir.path(), hosts, Arc::new(Fake::default()));
+        let mut table = table();
+        table.routes.truncate(1);
+        let report = check(&machine, &Config::default(), &table);
+        assert!(report.checks[5].ok);
+        assert!(!report.checks[6].ok);
+        assert!(!report.routes[0].declared);
+    }
+
+    #[test]
+    fn a_front_door_answering_directly_holds_without_any_redirect() {
+        let dir = tempfile::tempdir().unwrap();
+        let machine = machine(dir.path(), "", Arc::new(Fake::default()));
+        let mut config = Config::default();
+        config.proxy.port = front_door();
+        let report = check(&machine, &config, &Table::default());
+        assert!(report.checks[2].ok, "{}", report.checks[2]);
+        assert!(!report.checks[3].ok);
+        assert!(!report.checks[4].ok);
+    }
+
+    #[test]
     fn a_missing_alias_and_a_silent_door_are_broken_with_their_remedy() {
         let dir = tempfile::tempdir().unwrap();
         let machine = machine(dir.path(), "", Arc::new(Fake::default()));
@@ -703,20 +851,27 @@ mod tests {
         let table = Table::default();
         let report = check(&machine, &config, &table);
         assert!(!report.ok);
-        assert_eq!(report.checks.len(), 3);
+        assert_eq!(report.checks.len(), 5);
         assert_eq!(
             report.checks[0].to_string(),
             "✗ alias 127.0.0.2 on lo0: missing: run `ariane proxy setup`"
         );
+        assert_eq!(
+            report.checks[1].to_string(),
+            "✗ alias fd61:7269:616e:6500::2 on lo0: missing: run `ariane proxy setup`"
+        );
+        let door = &report.checks[2].hint;
         assert!(
-            report.checks[1]
-                .hint
-                .ends_with("; is `ariane serve` or `ariane proxy` running?")
+            door.contains(&format!("127.0.0.1:{}: ", config.proxy.port)),
+            "{door}"
         );
         assert!(
-            report.checks[2]
-                .hint
-                .ends_with("; run `ariane proxy setup`")
+            door.contains(&format!("[::1]:{}: ", config.proxy.port)),
+            "{door}"
         );
+        assert!(door.ends_with("; is `ariane serve` or `ariane proxy` running?"));
+        for redirect in &report.checks[3..] {
+            assert!(redirect.hint.ends_with("; run `ariane proxy setup`"));
+        }
     }
 }
