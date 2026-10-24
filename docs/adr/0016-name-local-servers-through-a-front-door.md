@@ -33,7 +33,7 @@ What stands in the way, verified on the owner's machine:
 
 **The processes.**
 
-- **`ariane serve` opens the front door** next to the interface, and its routes follow the tree as the watcher reloads it. When the port is taken, it says so and keeps serving the interface.
+- **`ariane serve` opens the front door** next to the interface, and its routes follow the tree as the watcher reloads it. When the port is taken, it says so and keeps serving the interface. With `--open`, it opens the interface by its name, `http://<server.host>`, when `/etc/hosts` gives that name `127.0.0.2` and port 80 of the alias answers as the front door; otherwise on its loopback port.
 - **`ariane proxy [node…]` opens it alone,** for when the server does not run: every route, or only those of the nodes named by path or last segment. It refuses to start while `ariane serve` holds the port, since the server already forwards every route.
 
 **The root step.**

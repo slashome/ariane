@@ -449,7 +449,10 @@ pub struct ServeArgs {
     )]
     pub port: Option<u16>,
 
-    #[arg(long, help = "Open the interface in the browser once listening")]
+    #[arg(
+        long,
+        help = "Open the interface in the browser once listening: by its name, http://<server.host>, when `ariane proxy setup` made it reach the front door, else on 127.0.0.1"
+    )]
     pub open: bool,
 }
 

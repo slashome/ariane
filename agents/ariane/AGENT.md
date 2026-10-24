@@ -51,7 +51,7 @@ The `ariane` CLI ([ADR-0005](../../docs/adr/0005-write-ariane-in-rust.md)) is ho
 | `ariane focus <node>#<id>` | Attaching the session to the item it works on, first thing; its branches and pull requests are then recorded there. |
 | `ariane links` | Pull requests found on GitHub that name an item (its monday id, or `<node>#<id>`) and are not recorded in it: dry run first, `--apply` to write. |
 | `ariane schema --json` | The core keys and vocabularies, when a value's validity is in doubt. |
-| `ariane serve` | The interface (dashboard, task list, kanban, size × impact) — she points the user to it. It pulls the content once as it starts. |
+| `ariane serve` | The interface (dashboard, task list, kanban, size × impact) — she points the user to it. It pulls the content once as it starts; `--open` opens it by its name (`http://<server.host>`) when the proxy chain reaches it, else on `127.0.0.1`. |
 | `ariane pull` | Brings the content repository up to date with its upstream, fast-forward only: never a commit, a diverged branch is reported, not merged. |
 | `ariane proxy` | Names the interface and the projects' dev servers, `http://ariane.local` or the `host` of a node's `[proxy]` table; `setup` (sudo, until reboot), `status`, `teardown`. `ariane serve` opens the front door itself, and its Proxy page shows the same checks and edits a node's `[proxy]` table — the change is left uncommitted, and a new name needs `setup` again. |
 | `ariane config` | `path`, `get`, `set`, `edit`, `init`: the configuration file. The content repository used from anywhere is set with `ariane config set repo <path>`. |

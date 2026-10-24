@@ -38,6 +38,7 @@ const END: &str = "# <<< ariane proxy <<<";
 const PROBE: Duration = Duration::from_secs(1);
 
 /// The machine the proxy is set up on.
+#[derive(Clone)]
 pub struct Machine {
     /// Whether the machine runs macOS, the only system whose redirect Ariane knows.
     pub macos: bool,
@@ -317,6 +318,19 @@ enum Answer {
     Other,
     /// Nothing, with the reason.
     Nothing(String),
+}
+
+/// Whether `host` reaches the front door by name: `/etc/hosts` gives it
+/// [`ALIAS`] and port 80 of that alias answers as the front door. `ariane
+/// serve --open` opens the interface by its name only then.
+pub fn reaches_by_name(machine: &Machine, host: &str) -> bool {
+    let hosts = std::fs::read_to_string(&machine.hosts).unwrap_or_default();
+    resolves_to(&hosts, host, true) == Some(IpAddr::V4(ALIAS))
+        && machine
+            .redirected
+            .iter()
+            .filter(|address| address.is_ipv4())
+            .any(|&address| probe(address) == Answer::Door)
 }
 
 /// The check of the front door on `port` of both loopback addresses: alive
@@ -828,6 +842,17 @@ mod tests {
         assert!(report.checks[5].ok);
         assert!(!report.checks[6].ok);
         assert!(!report.routes[0].declared);
+    }
+
+    #[test]
+    fn a_name_reaches_the_front_door_once_declared_and_redirected() {
+        let dir = tempfile::tempdir().unwrap();
+        let hosts = with_block("127.0.0.1 localhost\n", &["ariane.local"]);
+        let mut machine = machine(dir.path(), &hosts, Arc::new(Fake::default()));
+        assert!(!reaches_by_name(&machine, "ariane.local"));
+        machine.redirected[0] = SocketAddr::from((Ipv4Addr::LOCALHOST, front_door()));
+        assert!(reaches_by_name(&machine, "ariane.local"));
+        assert!(!reaches_by_name(&machine, "dreamcatchr.local"));
     }
 
     #[test]

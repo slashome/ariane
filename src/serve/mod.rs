@@ -227,7 +227,7 @@ async fn serve(root: PathBuf, tree: Tree, config: &Config, open: bool) -> Result
     eprintln!("ariane serve: {} on {url} (Ctrl-C to stop)", root.display());
     open_front_door(&state, config).await;
     if open {
-        open_browser(&url);
+        open_browser(&url_to_open(&state, config, url.clone()).await);
     }
     let stopping = state.stopping.clone();
     axum::serve(listener, router(state))
@@ -313,6 +313,23 @@ async fn stop_on_ctrl_c(stopping: signal::Sender<bool>) {
 
 /// How long the graceful shutdown may take before the process exits anyway.
 const FORCE_AFTER: std::time::Duration = std::time::Duration::from_secs(3);
+
+/// The address `--open` uses: the interface's name, `http://<server.host>`,
+/// when it reaches the front door, else `url` on its loopback port.
+async fn url_to_open(state: &Arc<State>, config: &Config, url: String) -> String {
+    let machine = state.machine.clone();
+    let host = config.server.host.clone();
+    let named = tokio::task::spawn_blocking(move || {
+        crate::proxy::machine::reaches_by_name(&machine, &host)
+    })
+    .await
+    .unwrap_or(false);
+    if named {
+        format!("http://{}", config.server.host)
+    } else {
+        url
+    }
+}
 
 /// Opens `url` in the default browser: `open` on macOS, `xdg-open` elsewhere.
 ///

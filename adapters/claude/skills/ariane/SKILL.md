@@ -81,7 +81,7 @@ external:
 | `ariane people` | The people items may wait for, by node with a tracker, and who waits for each. `add`, `set`, `rename` (rewrites the items), `remove` (refused while awaited), `find --account <a> <name>` for a monday id. |
 | `ariane links` | Pull requests on GitHub that name an item (monday id or `<node>#<id>`) and are not recorded in it. Dry run by default, `--apply` to write. |
 | `ariane schema --json` | Core keys and vocabularies. |
-| `ariane serve --open` | The interface: dashboard, task list, kanban, size × impact. Pulls the content once as it starts. |
+| `ariane serve --open` | The interface: dashboard, task list, kanban, size × impact. Pulls the content once as it starts. `--open` opens it by its name (`http://ariane.local`) when the proxy chain reaches it, else on `127.0.0.1`. |
 | `ariane pull` | The content up to date with its upstream, fast-forward only; a diverged branch is reported, never merged. |
 | `ariane proxy status` | Whether `http://ariane.local` and each project's `[proxy]` name reach their server, link by link; `setup` (sudo, until reboot) to fix. The interface's Proxy page shows the same and edits a node's `[proxy]` (left uncommitted; a new name needs `setup` again). |
 | `ariane settings` | Theme and dashboard pins, in the content's `settings.toml`. |
