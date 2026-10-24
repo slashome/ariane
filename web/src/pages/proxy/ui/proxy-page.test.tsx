@@ -10,7 +10,7 @@ const report: ProxyReport = {
   server_port: 27317,
   checks: [
     { ok: true, what: 'alias 127.0.0.2 on lo0', hint: 'missing: run `ariane proxy setup`' },
-    { ok: true, what: 'front door on 127.0.0.1:27380', hint: '' },
+    { ok: true, what: 'front door on 127.0.0.1:27380 or [::1]:27380', hint: '' },
     { ok: true, what: '127.0.0.2:80 redirected to the front door', hint: '' },
     { ok: true, what: 'ariane.local → 127.0.0.2 in /etc/hosts', hint: 'run `ariane proxy setup` to declare it' },
     { ok: true, what: 'ariane.local → 127.0.0.1:27317, the interface (`server.host`)', hint: 'nothing listens: start its server' },

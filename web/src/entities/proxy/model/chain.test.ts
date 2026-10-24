@@ -7,7 +7,7 @@ const report = (ok: boolean): ProxyReport => ({
   server_port: 27317,
   checks: [
     { ok: true, what: 'alias 127.0.0.2 on lo0', hint: '' },
-    { ok, what: 'front door on 127.0.0.1:27380', hint: 'is `ariane serve` or `ariane proxy` running?' },
+    { ok, what: 'front door on 127.0.0.1:27380 or [::1]:27380', hint: 'is `ariane serve` or `ariane proxy` running?' },
   ],
   routes: [],
   problems: [],

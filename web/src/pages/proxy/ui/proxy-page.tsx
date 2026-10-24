@@ -8,7 +8,7 @@ import { useRemoveRoute } from '../api/use-route-edits'
 import { RouteDialog } from './route-dialog'
 
 const commands = [
-  { command: 'ariane proxy setup', does: 'Aliases 127.0.0.2, redirects its port 80 to the front door and declares every name in /etc/hosts.' },
+  { command: 'ariane proxy setup', does: 'Aliases 127.0.0.2 and fd61:7269:616e:6500::2, redirects their port 80 to the front door and declares every name in /etc/hosts under both.' },
   { command: 'ariane proxy teardown', does: 'Undoes all three.' },
 ]
 
@@ -58,7 +58,7 @@ export function ProxyPage() {
         title="Proxy"
         description={
           report
-            ? `Local names for the interface and the projects' development servers, through the front door on 127.0.0.1:${report.proxy_port}.`
+            ? `Local names for the interface and the projects' development servers, through the front door on 127.0.0.1:${report.proxy_port} and [::1]:${report.proxy_port}.`
             : "Local names for the interface and the projects' development servers, through the front door."
         }
         actions={
