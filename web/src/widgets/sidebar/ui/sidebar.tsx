@@ -210,7 +210,8 @@ export function Sidebar() {
           <Entry to={routes.journal} label="Journal" icon={NotebookPen} count={counts.settled} search={scope} nested />
         </Section>
         <Entry to={routes.ressources} label="Ressources" icon={Library} count={counts.ressources} search={scope} />
-        <div className="my-1 border-t border-border" />
+      </nav>
+      <nav aria-label="System" className="flex shrink-0 flex-col gap-2 border-t border-border p-2">
         <Entry
           to={routes.health}
           label="Health"
