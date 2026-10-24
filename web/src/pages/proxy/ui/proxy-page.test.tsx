@@ -24,13 +24,20 @@ const report: ProxyReport = {
   problems: [],
 }
 
-function renderPage() {
+const healthy: ProxyReport = {
+  ...report,
+  ok: true,
+  checks: report.checks.map((check) => ({ ...check, ok: true })),
+  routes: report.routes.map((route) => ({ ...route, listening: true })),
+}
+
+function renderPage(served: ProxyReport = report) {
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
     void init
     const body = url.startsWith('/api/proxy/routes')
       ? { routes: [], problems: [] }
       : url.startsWith('/api/proxy')
-        ? report
+        ? served
         : url.startsWith('/api/nodes')
           ? [{ path: 'slashome/dreamcatchr' }, { path: 'cmc/lib' }]
           : []
@@ -114,5 +121,33 @@ describe('ProxyPage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Remove' }))
     await waitFor(() => expect(sent(fetch, 'DELETE')).toHaveLength(1))
     expect(bodyOf(sent(fetch, 'DELETE'))).toEqual({ node: 'slashome/dreamcatchr' })
+  })
+  it('folds the chain and the root step once every link holds, and unfolds them on demand', async () => {
+    renderPage(healthy)
+    const chain = await screen.findByRole('button', { name: 'The chain' })
+    expect(chain).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.getByText('Every link holds · 7 checks')).toBeInTheDocument()
+    expect(screen.queryByText('alias 127.0.0.2 on lo0')).not.toBeInTheDocument()
+    const root = screen.getByRole('button', { name: 'The root step' })
+    expect(root).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('button', { name: 'Copy ariane proxy setup' })).not.toBeInTheDocument()
+    await userEvent.click(chain)
+    expect(chain).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('alias 127.0.0.2 on lo0')).toBeInTheDocument()
+    await userEvent.click(root)
+    expect(screen.getByRole('button', { name: 'Copy ariane proxy setup' })).toBeInTheDocument()
+  })
+
+  it('opens the root step when a name is missing from /etc/hosts, the chain staying folded', async () => {
+    renderPage({ ...healthy, routes: healthy.routes.map((route) => (route.node === null ? route : { ...route, declared: false })) })
+    expect(await screen.findByRole('button', { name: 'The root step' })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('button', { name: 'The chain' })).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('lists the routes before the chain', async () => {
+    renderPage()
+    const routes = await screen.findByRole('heading', { name: /^Routes/ })
+    const chain = screen.getByRole('button', { name: 'The chain' })
+    expect(routes.compareDocumentPosition(chain) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 })

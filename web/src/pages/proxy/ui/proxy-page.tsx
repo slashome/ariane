@@ -5,6 +5,7 @@ import type { ProxyRoute } from '@/shared/api'
 import { cn } from '@/shared/lib'
 import { Button, ConfirmDialog, ErrorState, LoadingState, PageHeader, toast } from '@/shared/ui'
 import { useRemoveRoute } from '../api/use-route-edits'
+import { Fold } from './fold'
 import { RouteDialog } from './route-dialog'
 
 const commands = [
@@ -51,6 +52,7 @@ export function ProxyPage() {
   const [reminder, setReminder] = useState<string | null>(null)
 
   const broken = report ? brokenChecks(report) : 0
+  const needsRoot = report ? !report.ok || reminder !== null || report.routes.some((route) => !route.declared) : false
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -91,27 +93,6 @@ export function ProxyPage() {
         <LoadingState rows={4} label="Checking the proxy…" />
       ) : (
         <>
-          <section className="space-y-2" aria-labelledby="proxy-chain">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 id="proxy-chain" className="text-sm font-semibold">
-                The chain
-              </h2>
-              <Verdict ok={report.ok} label={report.ok ? 'Every link holds' : `${broken} ${broken === 1 ? 'link' : 'links'} broken`} />
-            </div>
-            <p className="text-xs text-muted-foreground">The checks of `ariane proxy status`, from the machine inward to each route.</p>
-            <ul className="divide-y divide-border rounded-lg border border-border">
-              {report.checks.map((check, index) => (
-                <li key={`${check.what}-${index}`} className="grid gap-1 p-3 md:grid-cols-[5.5rem_minmax(0,1fr)]">
-                  <Verdict ok={check.ok} label={check.ok ? 'ok' : 'broken'} />
-                  <div className="min-w-0 space-y-0.5 text-sm">
-                    <p className="font-mono text-xs">{check.what}</p>
-                    {!check.ok && check.hint !== '' && <p className="text-xs text-muted-foreground">{check.hint}</p>}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
-
           <section className="space-y-2" aria-labelledby="proxy-routes">
             <h2 id="proxy-routes" className="text-sm font-semibold">
               Routes <span className="font-normal text-muted-foreground">({report.routes.length})</span>
@@ -193,10 +174,35 @@ export function ProxyPage() {
             )}
           </section>
 
-          <section className="space-y-2" aria-labelledby="proxy-root">
-            <h2 id="proxy-root" className="text-sm font-semibold">
-              The root step
-            </h2>
+          <Fold
+            title="The chain"
+            openWhen={!report.ok}
+            summary={
+              <Verdict
+                ok={report.ok}
+                label={report.ok ? `Every link holds · ${report.checks.length} checks` : `${broken} ${broken === 1 ? 'link' : 'links'} broken`}
+              />
+            }
+          >
+            <p className="text-xs text-muted-foreground">The checks of `ariane proxy status`, from the machine inward to each route.</p>
+            <ul className="divide-y divide-border rounded-lg border border-border">
+              {report.checks.map((check, index) => (
+                <li key={`${check.what}-${index}`} className="grid gap-1 p-3 md:grid-cols-[5.5rem_minmax(0,1fr)]">
+                  <Verdict ok={check.ok} label={check.ok ? 'ok' : 'broken'} />
+                  <div className="min-w-0 space-y-0.5 text-sm">
+                    <p className="font-mono text-xs">{check.what}</p>
+                    {!check.ok && check.hint !== '' && <p className="text-xs text-muted-foreground">{check.hint}</p>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Fold>
+
+          <Fold
+            title="The root step"
+            openWhen={needsRoot}
+            summary={<span className="text-xs text-muted-foreground">{needsRoot ? 'Run ariane proxy setup' : 'Nothing to run'}</span>}
+          >
             <p className="text-xs text-muted-foreground">
               These commands need root: they run through sudo, which asks for your password, and what they set lasts until the next reboot. The interface never
               runs them; copy one into a terminal.
@@ -209,7 +215,7 @@ export function ProxyPage() {
                 </li>
               ))}
             </ul>
-          </section>
+          </Fold>
         </>
       )}
       {editing && report && (
