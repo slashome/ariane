@@ -145,26 +145,6 @@ fn node_file(tree: &Tree, node: &NodePath) -> PathBuf {
     tree.node_dir(node).join(NODE_FILE)
 }
 
-fn edit_node(
-    file: &Path,
-    change: impl FnOnce(&mut DocumentMut) -> Result<(), Refusal>,
-) -> Result<Result<(), Refusal>> {
-    let text = match std::fs::read_to_string(file) {
-        Ok(text) => text,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
-        Err(error) => return Err(error).with_context(|| format!("reading {}", file.display())),
-    };
-    let mut document: DocumentMut = text
-        .parse()
-        .with_context(|| format!("parsing {}", file.display()))?;
-    if let Err(refusal) = change(&mut document) {
-        return Ok(Err(refusal));
-    }
-    std::fs::write(file, document.to_string())
-        .with_context(|| format!("writing {}", file.display()))?;
-    Ok(Ok(()))
-}
-
 fn people_table(document: &mut DocumentMut) -> &mut Table {
     if !document.contains_table("people") {
         let mut table = Table::new();
@@ -200,7 +180,7 @@ pub fn add(
     if !tree.node_dir(node).is_dir() {
         return Ok(Err(Refusal::Invalid(format!("`{node}` is not a node"))));
     }
-    edit_node(&node_file(tree, node), |document| {
+    crate::node::edit(&node_file(tree, node), |document| {
         let people = people_table(document);
         if people.contains_key(handle) {
             return Err(Refusal::Invalid(format!(
@@ -228,7 +208,7 @@ pub fn set(
     handle: &str,
     change: &Change,
 ) -> Result<Result<(), Refusal>> {
-    edit_node(&node_file(tree, node), |document| {
+    crate::node::edit(&node_file(tree, node), |document| {
         let people = people_table(document);
         let Some(person) = people.get_mut(handle).and_then(TomlItem::as_table_like_mut) else {
             return Err(Refusal::Invalid(format!(
@@ -274,7 +254,7 @@ pub fn rename(
         ))));
     }
     let items = waiting_for(tree, node, old);
-    let renamed = edit_node(&node_file(tree, node), |document| {
+    let renamed = crate::node::edit(&node_file(tree, node), |document| {
         let people = people_table(document);
         if people.contains_key(new) {
             return Err(Refusal::Invalid(format!(
@@ -331,7 +311,7 @@ pub fn remove(tree: &Tree, node: &NodePath, handle: &str) -> Result<Result<(), R
     if !awaited.is_empty() {
         return Ok(Err(Refusal::Awaited(awaited)));
     }
-    edit_node(&node_file(tree, node), |document| {
+    crate::node::edit(&node_file(tree, node), |document| {
         if people_table(document).remove(handle).is_none() {
             return Err(Refusal::Invalid(format!(
                 "no `{handle}` declared in `{node}`"

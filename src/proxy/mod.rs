@@ -16,15 +16,18 @@
 //!    proxy` opens it alone when the server does not run.
 //!
 //! The routes ([`Table`]) are the interface's own, `server.host` of the
-//! configuration, and one per node whose `node.toml` has a `[proxy]` table.
+//! configuration, and one per node whose `node.toml` has a `[proxy]` table,
+//! which the interface can also write ([`declare`]).
 
+pub mod declare;
 pub mod door;
-mod machine;
+pub mod machine;
 
 use std::net::Ipv4Addr;
 use std::process::ExitCode;
 
 use anyhow::{Result, bail};
+use serde::Serialize;
 
 use crate::cli::{ProxyArgs, ProxyCommand};
 use crate::config::{self, Config};
@@ -35,7 +38,7 @@ use crate::tree::{NodePath, Tree};
 pub const ALIAS: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 2);
 
 /// One name the front door answers to, and where it forwards.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Route {
     /// The host name typed in the browser, such as `dreamcatchr.local`.
     pub host: String,
@@ -56,7 +59,7 @@ impl Route {
 }
 
 /// Every route, and the `[proxy]` tables that could not become one.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 pub struct Table {
     /// The routes, the interface's first, then the nodes' in path order.
     pub routes: Vec<Route>,

@@ -20,7 +20,9 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use toml_edit::DocumentMut;
 
 use crate::tree::NodePath;
 
@@ -332,6 +334,33 @@ pub fn default_workflow() -> Vec<Status> {
             category,
         })
         .collect()
+}
+
+/// Edits the `node.toml` at `file` in place, comments and order kept; a
+/// missing file starts empty. A change that refuses writes nothing and hands
+/// back its refusal.
+///
+/// # Errors
+///
+/// Fails when the file cannot be read, parsed or written.
+pub fn edit<E>(
+    file: &Path,
+    change: impl FnOnce(&mut DocumentMut) -> Result<(), E>,
+) -> Result<Result<(), E>> {
+    let text = match std::fs::read_to_string(file) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(error) => return Err(error).with_context(|| format!("reading {}", file.display())),
+    };
+    let mut document: DocumentMut = text
+        .parse()
+        .with_context(|| format!("parsing {}", file.display()))?;
+    if let Err(refusal) = change(&mut document) {
+        return Ok(Err(refusal));
+    }
+    std::fs::write(file, document.to_string())
+        .with_context(|| format!("writing {}", file.display()))?;
+    Ok(Ok(()))
 }
 
 /// Path of the `node.toml` a node would hold.

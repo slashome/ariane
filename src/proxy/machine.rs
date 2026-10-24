@@ -12,14 +12,17 @@ use std::io::{Read, Write};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
+use serde::Serialize;
 
 use super::door::MARK;
 use super::{ALIAS, Table};
 use crate::config::Config;
 use crate::service::{Runner, System};
+use crate::tree::NodePath;
 
 /// The `pf` anchor holding the redirect.
 const ANCHOR: &str = "com.apple/ariane";
@@ -34,26 +37,29 @@ const END: &str = "# <<< ariane proxy <<<";
 const PROBE: Duration = Duration::from_secs(1);
 
 /// The machine the proxy is set up on.
-pub struct Machine<'a> {
+pub struct Machine {
     /// Whether the machine runs macOS, the only system whose redirect Ariane knows.
     pub macos: bool,
     /// The hosts file, `/etc/hosts`.
     pub hosts: PathBuf,
     /// Where the `pf` rules and the next hosts file are written before `sudo` reads them.
     pub staging: PathBuf,
+    /// The address whose port the redirect sends to the front door: port 80 of [`ALIAS`].
+    pub redirected: SocketAddr,
     /// How the commands run.
-    pub runner: &'a dyn Runner,
+    pub runner: Arc<dyn Runner + Send + Sync>,
 }
 
-impl Machine<'static> {
+impl Machine {
     /// This machine.
-    pub fn current() -> Machine<'static> {
+    pub fn current() -> Machine {
         let config = crate::config::file();
         Machine {
             macos: cfg!(target_os = "macos"),
             hosts: PathBuf::from("/etc/hosts"),
             staging: config.parent().map(Path::to_path_buf).unwrap_or_default(),
-            runner: &System,
+            redirected: SocketAddr::from((ALIAS, 80)),
+            runner: Arc::new(System),
         }
     }
 }
@@ -132,69 +138,21 @@ pub fn teardown(machine: &Machine) -> Result<ExitCode> {
     })
 }
 
-/// Checks every link from the browser to each route, one line each, and
-/// exits with `1` when one is broken.
-pub fn status(machine: &Machine, config: &Config, table: &Table) -> ExitCode {
-    let mut lines = Vec::new();
-    let aliased = machine
-        .runner
-        .run("ifconfig", &["lo0".to_owned()])
-        .is_ok_and(|outcome| outcome.stdout.contains(&format!("inet {ALIAS} ")));
-    lines.push(Line::new(
-        aliased,
-        format!("alias {ALIAS} on lo0"),
-        "missing: run `ariane proxy setup`",
-    ));
-    let door = SocketAddr::from((Ipv4Addr::LOCALHOST, config.proxy.port));
-    lines.push(probe_line(
-        probe(door),
-        format!("front door on {door}"),
-        "is `ariane serve` or `ariane proxy` running?",
-    ));
-    let redirected = SocketAddr::from((ALIAS, 80));
-    lines.push(probe_line(
-        probe(redirected),
-        format!("{redirected} redirected to the front door"),
-        "run `ariane proxy setup`",
-    ));
-    let hosts = std::fs::read_to_string(&machine.hosts).unwrap_or_default();
-    for route in &table.routes {
-        lines.push(Line::new(
-            resolves_to(&hosts, &route.host) == Some(IpAddr::V4(ALIAS)),
-            format!("{} → {ALIAS} in {}", route.host, machine.hosts.display()),
-            "run `ariane proxy setup` to declare it",
-        ));
-        let upstream = SocketAddr::from((Ipv4Addr::LOCALHOST, route.port));
-        lines.push(Line::new(
-            TcpStream::connect_timeout(&upstream, PROBE).is_ok(),
-            format!("{} → {upstream}, {}", route.host, route.owner()),
-            "nothing listens: start its server",
-        ));
-    }
-    for line in &lines {
-        println!("{line}");
-    }
-    if lines.iter().all(|line| line.ok) {
-        ExitCode::SUCCESS
-    } else {
-        ExitCode::from(1)
-    }
-}
-
-/// One line of the status report.
-struct Line {
+/// One link of the chain from the browser to a route, checked.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Check {
     /// Whether the link holds.
-    ok: bool,
-    /// What the line checks.
-    what: String,
-    /// What to do when it does not hold.
-    hint: String,
+    pub ok: bool,
+    /// What the check is about, such as `alias 127.0.0.2 on lo0`.
+    pub what: String,
+    /// What to do when the link does not hold; empty when there is nothing to say.
+    pub hint: String,
 }
 
-impl Line {
-    /// A line for `what`, with `hint` shown only when the link is broken.
-    fn new(ok: bool, what: String, hint: impl Into<String>) -> Line {
-        Line {
+impl Check {
+    /// A check of `what`, with `hint` shown only when the link is broken.
+    fn new(ok: bool, what: String, hint: impl Into<String>) -> Check {
+        Check {
             ok,
             what,
             hint: hint.into(),
@@ -202,13 +160,120 @@ impl Line {
     }
 }
 
-impl std::fmt::Display for Line {
+impl std::fmt::Display for Check {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.ok {
             write!(f, "✓ {}", self.what)
         } else {
             write!(f, "✗ {}: {}", self.what, self.hint)
         }
+    }
+}
+
+/// One route with the two links that are its own.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RouteState {
+    /// The host name typed in the browser.
+    pub host: String,
+    /// The port of `127.0.0.1` the requests are forwarded to.
+    pub port: u16,
+    /// The node that declares the route; `None` for the interface itself.
+    pub node: Option<NodePath>,
+    /// Whether the hosts file sends the name to [`ALIAS`].
+    pub declared: bool,
+    /// Whether something accepts connections on the port.
+    pub listening: bool,
+}
+
+/// Every check of the chain, and the routes they concern.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Report {
+    /// Whether every link holds.
+    pub ok: bool,
+    /// The port of the front door, `proxy.port`.
+    pub proxy_port: u16,
+    /// The port of the interface, `server.port`.
+    pub server_port: u16,
+    /// The checks, in the order `ariane proxy status` prints them.
+    pub checks: Vec<Check>,
+    /// The routes, the interface's first.
+    pub routes: Vec<RouteState>,
+    /// Why a declared route was left out of the table.
+    pub problems: Vec<String>,
+}
+
+/// Checks every link from the browser to each route: the alias, the front
+/// door, the redirect, then each route's name in the hosts file and its port.
+///
+/// The probes are blocking connections, each bounded by [`PROBE`].
+pub fn check(machine: &Machine, config: &Config, table: &Table) -> Report {
+    let mut checks = Vec::new();
+    let aliased = machine
+        .runner
+        .run("ifconfig", &["lo0".to_owned()])
+        .is_ok_and(|outcome| outcome.stdout.contains(&format!("inet {ALIAS} ")));
+    checks.push(Check::new(
+        aliased,
+        format!("alias {ALIAS} on lo0"),
+        "missing: run `ariane proxy setup`",
+    ));
+    let door = SocketAddr::from((Ipv4Addr::LOCALHOST, config.proxy.port));
+    checks.push(probe_check(
+        probe(door),
+        format!("front door on {door}"),
+        "is `ariane serve` or `ariane proxy` running?",
+    ));
+    let redirected = machine.redirected;
+    checks.push(probe_check(
+        probe(redirected),
+        format!("{redirected} redirected to the front door"),
+        "run `ariane proxy setup`",
+    ));
+    let hosts = std::fs::read_to_string(&machine.hosts).unwrap_or_default();
+    let mut routes = Vec::new();
+    for route in &table.routes {
+        let declared = resolves_to(&hosts, &route.host) == Some(IpAddr::V4(ALIAS));
+        checks.push(Check::new(
+            declared,
+            format!("{} → {ALIAS} in {}", route.host, machine.hosts.display()),
+            "run `ariane proxy setup` to declare it",
+        ));
+        let upstream = SocketAddr::from((Ipv4Addr::LOCALHOST, route.port));
+        let listening = TcpStream::connect_timeout(&upstream, PROBE).is_ok();
+        checks.push(Check::new(
+            listening,
+            format!("{} → {upstream}, {}", route.host, route.owner()),
+            "nothing listens: start its server",
+        ));
+        routes.push(RouteState {
+            host: route.host.clone(),
+            port: route.port,
+            node: route.node.clone(),
+            declared,
+            listening,
+        });
+    }
+    Report {
+        ok: checks.iter().all(|check| check.ok),
+        proxy_port: config.proxy.port,
+        server_port: config.server.port,
+        checks,
+        routes,
+        problems: table.problems.clone(),
+    }
+}
+
+/// Prints every check of [`check`], one line each, and exits with `1` when a
+/// link is broken.
+pub fn status(machine: &Machine, config: &Config, table: &Table) -> ExitCode {
+    let report = check(machine, config, table);
+    for check in &report.checks {
+        println!("{check}");
+    }
+    if report.ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
     }
 }
 
@@ -223,16 +288,16 @@ enum Answer {
     Nothing(String),
 }
 
-/// The status line of a probe of `what`; `hint` when nothing answers.
-fn probe_line(answer: Answer, what: String, hint: &str) -> Line {
+/// The check of a probe of `what`; `hint` when nothing answers.
+fn probe_check(answer: Answer, what: String, hint: &str) -> Check {
     match answer {
-        Answer::Door => Line::new(true, what, ""),
-        Answer::Other => Line::new(
+        Answer::Door => Check::new(true, what, ""),
+        Answer::Other => Check::new(
             false,
             what,
             "another server answers there instead of the front door",
         ),
-        Answer::Nothing(reason) => Line::new(false, what, format!("{reason}; {hint}")),
+        Answer::Nothing(reason) => Check::new(false, what, format!("{reason}; {hint}")),
     }
 }
 
@@ -365,33 +430,51 @@ mod tests {
     use super::*;
     use crate::proxy::Route;
     use crate::service::Outcome;
-    use std::cell::RefCell;
+    use std::sync::Mutex;
 
-    /// A runner that records every command and succeeds.
+    /// A runner that records every command and succeeds, printing `stdout`.
     #[derive(Default)]
     struct Fake {
-        commands: RefCell<Vec<String>>,
+        commands: Mutex<Vec<String>>,
+        stdout: String,
+    }
+
+    impl Fake {
+        /// The commands run so far.
+        fn commands(&self) -> Vec<String> {
+            self.commands.lock().unwrap().clone()
+        }
     }
 
     impl Runner for Fake {
         fn run(&self, program: &str, args: &[String]) -> Result<Outcome> {
             self.commands
-                .borrow_mut()
+                .lock()
+                .unwrap()
                 .push(format!("{program} {}", args.join(" ")));
             Ok(Outcome {
                 success: true,
+                stdout: self.stdout.clone(),
                 ..Outcome::default()
             })
         }
     }
 
-    /// A macOS machine whose hosts file holds `hosts`, in a temporary directory.
-    fn machine<'a>(dir: &Path, hosts: &str, runner: &'a Fake) -> Machine<'a> {
+    /// A port of `127.0.0.1` that nothing listens on.
+    fn closed_port() -> u16 {
+        let listener = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        listener.local_addr().unwrap().port()
+    }
+
+    /// A macOS machine whose hosts file holds `hosts`, in a temporary directory,
+    /// whose redirect leads nowhere.
+    fn machine(dir: &Path, hosts: &str, runner: Arc<Fake>) -> Machine {
         std::fs::write(dir.join("etc-hosts"), hosts).unwrap();
         Machine {
             macos: true,
             hosts: dir.join("etc-hosts"),
             staging: dir.join("staging"),
+            redirected: SocketAddr::from((Ipv4Addr::LOCALHOST, closed_port())),
             runner,
         }
     }
@@ -443,12 +526,12 @@ mod tests {
     #[test]
     fn setup_aliases_redirects_declares_and_flushes_in_that_order() {
         let dir = tempfile::tempdir().unwrap();
-        let fake = Fake::default();
-        let machine = machine(dir.path(), "127.0.0.1 localhost\n", &fake);
+        let fake = Arc::new(Fake::default());
+        let machine = machine(dir.path(), "127.0.0.1 localhost\n", fake.clone());
         setup(&machine, &table(), 27380).unwrap();
         let staging = dir.path().join("staging");
         assert_eq!(
-            *fake.commands.borrow(),
+            fake.commands(),
             [
                 "sudo ifconfig lo0 alias 127.0.0.2 up".to_owned(),
                 format!(
@@ -476,17 +559,16 @@ mod tests {
     #[test]
     fn hosts_already_declared_are_not_copied_again() {
         let dir = tempfile::tempdir().unwrap();
-        let fake = Fake::default();
+        let fake = Arc::new(Fake::default());
         let hosts = with_block(
             "127.0.0.1 localhost\n",
             &["ariane.local", "dreamcatchr.local"],
         );
-        let machine = machine(dir.path(), &hosts, &fake);
+        let machine = machine(dir.path(), &hosts, fake.clone());
         setup(&machine, &table(), 27380).unwrap();
         assert!(
             !fake
-                .commands
-                .borrow()
+                .commands()
                 .iter()
                 .any(|command| command.contains(" cp "))
         );
@@ -495,11 +577,11 @@ mod tests {
     #[test]
     fn teardown_empties_the_anchor_removes_the_alias_and_the_block() {
         let dir = tempfile::tempdir().unwrap();
-        let fake = Fake::default();
+        let fake = Arc::new(Fake::default());
         let hosts = with_block("127.0.0.1 localhost\n", &["ariane.local"]);
-        let machine = machine(dir.path(), &hosts, &fake);
+        let machine = machine(dir.path(), &hosts, fake.clone());
         teardown(&machine).unwrap();
-        let commands = fake.commands.borrow();
+        let commands = fake.commands();
         assert_eq!(commands[0], "sudo pfctl -a com.apple/ariane -F all");
         assert_eq!(commands[1], "sudo ifconfig lo0 -alias 127.0.0.2");
         assert!(commands[2].starts_with("sudo cp "));
@@ -512,11 +594,11 @@ mod tests {
     #[test]
     fn setup_refuses_another_system() {
         let dir = tempfile::tempdir().unwrap();
-        let fake = Fake::default();
-        let mut machine = machine(dir.path(), "", &fake);
+        let fake = Arc::new(Fake::default());
+        let mut machine = machine(dir.path(), "", fake.clone());
         machine.macos = false;
         assert!(setup(&machine, &table(), 27380).is_err());
-        assert!(fake.commands.borrow().is_empty());
+        assert!(fake.commands().is_empty());
     }
 
     #[test]
@@ -536,5 +618,105 @@ mod tests {
                 .unwrap();
         });
         assert_eq!(probe(address), Answer::Other);
+    }
+
+    /// Answers every connection on a free port of `127.0.0.1` as the front
+    /// door does, marked with [`MARK`], and returns the port.
+    fn front_door() -> u16 {
+        let listener = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            for socket in listener.incoming() {
+                let Ok(mut socket) = socket else { continue };
+                let mut buffer = [0; 512];
+                let _ = socket.read(&mut buffer);
+                let _ = socket.write_all(
+                    format!("HTTP/1.1 404 Not Found\r\n{MARK}: 1\r\ncontent-length: 0\r\n\r\n")
+                        .as_bytes(),
+                );
+            }
+        });
+        port
+    }
+
+    #[test]
+    fn the_report_checks_each_link_in_the_order_status_prints_them() {
+        let dir = tempfile::tempdir().unwrap();
+        let fake = Arc::new(Fake {
+            stdout: "lo0: flags\n\tinet 127.0.0.1 netmask 0xff000000\n\tinet 127.0.0.2 netmask 0xff000000\n".to_owned(),
+            ..Fake::default()
+        });
+        let hosts = with_block("127.0.0.1 localhost\n", &["ariane.local"]);
+        let mut machine = machine(dir.path(), &hosts, fake.clone());
+        let door = front_door();
+        machine.redirected = SocketAddr::from((Ipv4Addr::LOCALHOST, door));
+        let upstream = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let mut config = Config::default();
+        config.proxy.port = door;
+        let mut table = table();
+        table.routes[0].port = upstream.local_addr().unwrap().port();
+        table.routes[1].port = closed_port();
+        table
+            .problems
+            .push("node q: `Q` is not a host name".to_owned());
+
+        let report = check(&machine, &config, &table);
+
+        assert_eq!(fake.commands(), ["ifconfig lo0"]);
+        let lines: Vec<String> = report.checks.iter().map(ToString::to_string).collect();
+        assert_eq!(lines.len(), 7);
+        assert_eq!(lines[0], "✓ alias 127.0.0.2 on lo0");
+        assert_eq!(lines[1], format!("✓ front door on 127.0.0.1:{door}"));
+        assert_eq!(
+            lines[2],
+            format!("✓ 127.0.0.1:{door} redirected to the front door")
+        );
+        assert!(lines[3].starts_with("✓ ariane.local → 127.0.0.2 in "));
+        assert!(lines[4].ends_with(", the interface (`server.host`)"));
+        assert!(lines[4].starts_with("✓ "));
+        assert!(lines[5].starts_with("✗ dreamcatchr.local → 127.0.0.2 in "));
+        assert!(lines[5].ends_with(": run `ariane proxy setup` to declare it"));
+        assert!(lines[6].ends_with("node slashome/dreamcatchr: nothing listens: start its server"));
+        assert!(!report.ok);
+        assert_eq!(report.proxy_port, door);
+        assert_eq!(report.server_port, config.server.port);
+        assert_eq!(
+            report.routes[0],
+            RouteState {
+                host: "ariane.local".to_owned(),
+                port: table.routes[0].port,
+                node: None,
+                declared: true,
+                listening: true,
+            }
+        );
+        assert!(!report.routes[1].declared && !report.routes[1].listening);
+        assert_eq!(report.problems, table.problems);
+    }
+
+    #[test]
+    fn a_missing_alias_and_a_silent_door_are_broken_with_their_remedy() {
+        let dir = tempfile::tempdir().unwrap();
+        let machine = machine(dir.path(), "", Arc::new(Fake::default()));
+        let mut config = Config::default();
+        config.proxy.port = closed_port();
+        let table = Table::default();
+        let report = check(&machine, &config, &table);
+        assert!(!report.ok);
+        assert_eq!(report.checks.len(), 3);
+        assert_eq!(
+            report.checks[0].to_string(),
+            "✗ alias 127.0.0.2 on lo0: missing: run `ariane proxy setup`"
+        );
+        assert!(
+            report.checks[1]
+                .hint
+                .ends_with("; is `ariane serve` or `ariane proxy` running?")
+        );
+        assert!(
+            report.checks[2]
+                .hint
+                .ends_with("; run `ariane proxy setup`")
+        );
     }
 }

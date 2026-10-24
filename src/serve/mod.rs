@@ -38,6 +38,7 @@ use tokio::sync::{broadcast, watch as signal};
 
 use crate::cli::ServeArgs;
 use crate::config::Config;
+use crate::proxy::machine::Machine;
 use crate::tree::{NodePath, Tree};
 
 /// What every request handler shares: the repository root, the tree loaded from
@@ -65,14 +66,20 @@ pub struct State {
     /// Turns `true` when the server stops, which ends every `/api/events`
     /// stream so the graceful shutdown is not held open by a browser tab.
     pub stopping: signal::Sender<bool>,
+    /// The configuration the server started with, whose ports and
+    /// `server.host` the front door routes by.
+    pub config: Config,
+    /// The machine `/api/proxy` checks the chain of `ariane proxy` on.
+    pub machine: Machine,
 }
 
 impl State {
-    /// Wraps a loaded tree into shared state, ready to be cloned into handlers.
+    /// Wraps a loaded tree into shared state, ready to be cloned into handlers,
+    /// with the configuration it serves under and the machine it runs on.
     ///
     /// `Arc` is a reference-counted pointer: cloning it is cheap and every clone
     /// points to the same state, which is how axum hands it to each request.
-    pub fn new(root: PathBuf, tree: Tree) -> Arc<State> {
+    pub fn new(root: PathBuf, tree: Tree, config: Config, machine: Machine) -> Arc<State> {
         let (changes, _) = broadcast::channel(16);
         let (stopping, _) = signal::channel(false);
         let last_change = RwLock::new(last_changes(&root, &tree));
@@ -85,6 +92,8 @@ impl State {
             busy: Mutex::new(()),
             changes,
             stopping,
+            config,
+            machine,
         })
     }
 
@@ -162,6 +171,11 @@ pub fn router(state: Arc<State>) -> Router {
         .route("/api/schema", get(api::schema))
         .route("/api/doctor", get(api::doctor))
         .route("/api/repo", get(api::repo))
+        .route("/api/proxy", get(api::proxy))
+        .route(
+            "/api/proxy/routes",
+            put(api::set_route).delete(api::remove_route),
+        )
         .route("/api/events", get(api::events))
         .route("/api", get(api::not_found))
         .route("/api/{*rest}", get(api::not_found))
@@ -201,7 +215,7 @@ pub fn run(root: PathBuf, tree: Tree, args: &ServeArgs) -> Result<ExitCode> {
 /// front door that cannot open is reported, not an error: the interface stays
 /// reachable on its port.
 async fn serve(root: PathBuf, tree: Tree, config: &Config, open: bool) -> Result<()> {
-    let state = State::new(root.clone(), tree);
+    let state = State::new(root.clone(), tree, config.clone(), Machine::current());
     let _watcher = watch::start(state.clone()).context("watching the content repository")?;
     pull_at_start(state.clone());
     let address = SocketAddr::from((Ipv4Addr::LOCALHOST, config.server.port));
@@ -259,10 +273,11 @@ async fn open_front_door(state: &Arc<State>, config: &Config) {
         }
     };
     let state = state.clone();
-    let server = config.server.clone();
     let lookup: crate::proxy::door::Lookup = Arc::new(move |host| {
         let tree = state.tree.read().ok()?;
-        crate::proxy::Table::of(&tree, &server).find(host).cloned()
+        crate::proxy::Table::of(&tree, &state.config.server)
+            .find(host)
+            .cloned()
     });
     eprintln!(
         "ariane serve: front door on 127.0.0.1:{}, http://{} once `ariane proxy setup` ran",
@@ -336,9 +351,45 @@ mod tests {
         repo
     }
 
+    /// A runner that answers every command with empty output.
+    struct Quiet;
+
+    impl crate::service::Runner for Quiet {
+        fn run(&self, _: &str, _: &[String]) -> anyhow::Result<crate::service::Outcome> {
+            Ok(crate::service::Outcome::default())
+        }
+    }
+
+    /// A port of `127.0.0.1` that nothing listens on.
+    fn closed_port() -> u16 {
+        let listener = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        listener.local_addr().unwrap().port()
+    }
+
+    /// The state of a server over `repo` whose ports nothing listens on, on a
+    /// machine with an empty hosts file and no alias.
+    fn state(repo: &Repo) -> Arc<State> {
+        let mut config = Config::default();
+        config.server.port = closed_port();
+        config.proxy.port = closed_port();
+        let machine = Machine {
+            macos: true,
+            hosts: repo.root().join("hosts"),
+            staging: repo.root().join("staging"),
+            redirected: SocketAddr::from((Ipv4Addr::LOCALHOST, closed_port())),
+            runner: Arc::new(Quiet),
+        };
+        State::new(
+            repo.root().to_path_buf(),
+            Tree::load(repo.root()).unwrap(),
+            config,
+            machine,
+        )
+    }
+
     /// Sends a GET to a router over `repo` and returns the status and body.
     async fn get(repo: &Repo, path: &str) -> (StatusCode, Vec<u8>, Option<String>) {
-        let state = State::new(repo.root().to_path_buf(), Tree::load(repo.root()).unwrap());
+        let state = state(repo);
         let response = router(state)
             .oneshot(Request::get(path).body(Body::empty()).unwrap())
             .await
@@ -530,7 +581,7 @@ mod tests {
         path: &str,
         body: serde_json::Value,
     ) -> (StatusCode, serde_json::Value) {
-        let state = State::new(repo.root().to_path_buf(), Tree::load(repo.root()).unwrap());
+        let state = state(repo);
         let request = Request::builder()
             .method(method)
             .uri(path)
@@ -698,6 +749,123 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
     }
 
+    #[tokio::test]
+    async fn the_proxy_report_checks_each_link_and_each_route() {
+        let repo = sample();
+        let upstream = std::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = upstream.local_addr().unwrap().port();
+        repo.write(
+            "p/node.toml",
+            &format!("[proxy]\nhost = \"p.local\"\nport = {port}\n"),
+        )
+        .write(
+            "q/node.toml",
+            "[proxy]\nhost = \"ariane.local\"\nport = 9\n",
+        );
+        let (status, body, _) = get(&repo, "/api/proxy").await;
+        assert_eq!(status, StatusCode::OK);
+        let report = json(&body);
+        assert_eq!(report["ok"], false);
+        let checks = report["checks"].as_array().unwrap();
+        assert_eq!(checks.len(), 7);
+        assert_eq!(checks[0]["what"], "alias 127.0.0.2 on lo0");
+        assert_eq!(checks[0]["ok"], false);
+        assert_eq!(checks[0]["hint"], "missing: run `ariane proxy setup`");
+        assert_eq!(checks[6]["ok"], true);
+        let routes = report["routes"].as_array().unwrap();
+        assert_eq!(routes.len(), 2);
+        assert_eq!(routes[0]["host"], "ariane.local");
+        assert!(routes[0]["node"].is_null());
+        assert_eq!(routes[0]["listening"], false);
+        assert_eq!(
+            routes[1],
+            serde_json::json!({ "host": "p.local", "port": port, "node": "p", "declared": false, "listening": true })
+        );
+        assert!(report["proxy_port"].is_u64());
+        assert!(report["server_port"].is_u64());
+        assert!(
+            report["problems"][0]
+                .as_str()
+                .unwrap()
+                .contains("already the name of the interface")
+        );
+    }
+
+    #[tokio::test]
+    async fn a_route_is_written_to_node_toml_refused_with_its_reason_and_removed() {
+        let repo = sample();
+        let file = repo.root().join("tree/p/node.toml");
+        let route =
+            |host: &str, port: i64| serde_json::json!({ "node": "p", "host": host, "port": port });
+        let (status, body) = send(&repo, "PUT", "/api/proxy/routes", route("p.local", 3000)).await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["routes"][1]["host"], "p.local");
+        assert_eq!(body["routes"][1]["node"], "p");
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert!(text.starts_with("description = \"The *p* project.\"\n"));
+        assert!(text.contains("[tracker]"));
+        assert!(text.ends_with("[proxy]\nhost = \"p.local\"\nport = 3000\n"));
+        for (host, port, reason) in [
+            ("P.local", 3000, "not a host name"),
+            ("ariane.local", 3000, "the interface"),
+            ("p.local", 70000, "between 1 and 65535"),
+        ] {
+            let (status, body) = send(&repo, "PUT", "/api/proxy/routes", route(host, port)).await;
+            assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{host}:{port}");
+            assert!(body["error"].as_str().unwrap().contains(reason), "{body}");
+        }
+        let (status, _) = send(
+            &repo,
+            "PUT",
+            "/api/proxy/routes",
+            serde_json::json!({ "node": "nowhere", "host": "n.local", "port": 1 }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        let (status, body) = send(
+            &repo,
+            "DELETE",
+            "/api/proxy/routes",
+            serde_json::json!({ "node": "p" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["routes"].as_array().unwrap().len(), 1);
+        assert!(!std::fs::read_to_string(&file).unwrap().contains("proxy"));
+        let (status, _) = send(
+            &repo,
+            "DELETE",
+            "/api/proxy/routes",
+            serde_json::json!({ "node": "p" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    }
+
+    #[tokio::test]
+    async fn a_route_write_reloads_the_tree_and_notifies_subscribers() {
+        let repo = sample();
+        let state = state(&repo);
+        let mut changes = state.changes.subscribe();
+        let request = Request::builder()
+            .method("PUT")
+            .uri("/api/proxy/routes")
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({ "node": "p", "host": "p.local", "port": 3000 }).to_string(),
+            ))
+            .unwrap();
+        let response = router(state.clone()).oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(changes.try_recv().is_ok());
+        let tree = state.tree.read().unwrap();
+        assert!(
+            crate::proxy::Table::of(&tree, &state.config.server)
+                .find("p.local")
+                .is_some()
+        );
+    }
+
     /// Replaces the fixture's repository by a fresh one with its own identity,
     /// so commits run as in production without touching the machine's config.
     fn reinit_git(repo: &Repo) {
@@ -838,7 +1006,7 @@ mod tests {
     #[tokio::test]
     async fn the_event_stream_ends_when_the_server_stops() {
         let repo = sample();
-        let state = State::new(repo.root().to_path_buf(), Tree::load(repo.root()).unwrap());
+        let state = state(&repo);
         let response = router(state.clone())
             .oneshot(Request::get("/api/events").body(Body::empty()).unwrap())
             .await
@@ -858,7 +1026,7 @@ mod tests {
     #[tokio::test]
     async fn a_reload_swaps_the_tree_and_notifies_subscribers() {
         let repo = sample();
-        let state = State::new(repo.root().to_path_buf(), Tree::load(repo.root()).unwrap());
+        let state = state(&repo);
         let mut changes = state.changes.subscribe();
         repo.write(
             "p/tasks/T002-b.md",

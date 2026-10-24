@@ -6,11 +6,12 @@
 //! `--body`), `/api/search?q=` is `ariane search --json` (`?kind=`, `?node=` and
 //! `?archived=1` are `--kind`, `--node` and `--archived`),
 //! `/api/show?ref=` is `ariane show --json`, `/api/schema` is
-//! `ariane schema --json`, `/api/doctor` is `ariane doctor --all --json`. Responses are built under a short read lock on
+//! `ariane schema --json`, `/api/doctor` is `ariane doctor --all --json`,
+//! `/api/proxy` is the checks of `ariane proxy status`. Responses are built under a short read lock on
 //! the tree, released before anything is sent.
 //!
 //! The writing endpoints — `PATCH /api/items`, `PUT /api/dashboard`,
-//! `PUT /api/settings/theme`,
+//! `PUT /api/settings/theme`, `PUT` and `DELETE /api/proxy/routes`,
 //! `POST /api/commit`, `POST /api/push`, `POST /api/pull`, `POST /api/discard` — run on the
 //! blocking pool under the state's `busy` lock, one at a time, and never commit
 //! unless asked.
@@ -796,6 +797,117 @@ pub async fn diff(Shared(state): Shared<Arc<State>>, Query(query): Query<DiffQue
         Ok(Err(failure)) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
         Err(_) => error(StatusCode::INTERNAL_SERVER_ERROR, "git diff did not finish"),
     }
+}
+
+/// `GET /api/proxy`: every check of `ariane proxy status` with its verdict,
+/// each route with whether its name is declared and its port listens, the
+/// ports of the front door and of the interface, and the `[proxy]` tables
+/// left out.
+///
+/// The probes are blocking connections, so they run on the blocking pool.
+pub async fn proxy(Shared(state): Shared<Arc<State>>) -> Response {
+    let table = match state.tree.read() {
+        Ok(tree) => crate::proxy::Table::of(&tree, &state.config.server),
+        Err(_) => {
+            return error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "the tree lock is poisoned",
+            );
+        }
+    };
+    let checked = tokio::task::spawn_blocking(move || {
+        crate::proxy::machine::check(&state.machine, &state.config, &table)
+    })
+    .await;
+    match checked {
+        Ok(report) => Json(report).into_response(),
+        Err(_) => error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "the checks did not finish",
+        ),
+    }
+}
+
+/// The body of `PUT /api/proxy/routes`.
+#[derive(Debug, Deserialize)]
+pub struct RouteRequest {
+    /// The node whose `[proxy]` table is written.
+    pub node: String,
+    pub host: String,
+    /// Read wide, so that a port out of range is refused with a reason.
+    pub port: i64,
+}
+
+/// The body of `DELETE /api/proxy/routes`.
+#[derive(Debug, Deserialize)]
+pub struct RouteRemoval {
+    pub node: String,
+}
+
+/// Runs one write of a `[proxy]` table, reloads the tree and answers the new
+/// route table; `422` with the reason for a refused write.
+async fn change_route(
+    state: Arc<State>,
+    change: impl FnOnce(&Tree, &crate::config::Config) -> anyhow::Result<Result<(), String>>
+    + Send
+    + 'static,
+) -> Response {
+    exclusive(state, move |state| {
+        let outcome = match state.tree.read() {
+            Ok(tree) => change(&tree, &state.config),
+            Err(_) => {
+                return error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "the tree lock is poisoned",
+                );
+            }
+        };
+        match outcome {
+            Err(failure) => {
+                return error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}"));
+            }
+            Ok(Err(refusal)) => return error(StatusCode::UNPROCESSABLE_ENTITY, &refusal),
+            Ok(Ok(())) => {}
+        }
+        if let Err(failure) = state.reload() {
+            return error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}"));
+        }
+        with_tree(state, |tree| {
+            serde_json::to_value(crate::proxy::Table::of(tree, &state.config.server))
+                .unwrap_or(Value::Null)
+        })
+    })
+    .await
+}
+
+/// `PUT /api/proxy/routes`: gives a node the route `host` → `port`, in the
+/// `[proxy]` table of its `node.toml`, and answers the route table.
+pub async fn set_route(
+    Shared(state): Shared<Arc<State>>,
+    Json(request): Json<RouteRequest>,
+) -> Response {
+    change_route(state, move |tree, config| {
+        crate::proxy::declare::set(
+            tree,
+            config,
+            &crate::tree::NodePath::new(&request.node),
+            &request.host,
+            request.port,
+        )
+    })
+    .await
+}
+
+/// `DELETE /api/proxy/routes`: takes a node's route away, and answers the
+/// route table.
+pub async fn remove_route(
+    Shared(state): Shared<Arc<State>>,
+    Json(request): Json<RouteRemoval>,
+) -> Response {
+    change_route(state, move |tree, _| {
+        crate::proxy::declare::remove(tree, &crate::tree::NodePath::new(&request.node))
+    })
+    .await
 }
 
 /// Any `/api/…` path that is not an endpoint: a JSON `404`.
