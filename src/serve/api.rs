@@ -625,6 +625,113 @@ pub async fn remove_person(
     .await
 }
 
+/// `GET /api/personas`: the nodes that declare a tracker or personas, with
+/// their personas and the items written for each.
+pub async fn personas(Shared(state): Shared<Arc<State>>) -> Response {
+    with_tree(&state, |tree| {
+        serde_json::to_value(crate::personas::list(tree)).unwrap_or(Value::Null)
+    })
+}
+
+/// The body of the writes of `/api/personas`.
+#[derive(Debug, Deserialize)]
+pub struct PersonaRequest {
+    pub node: String,
+    pub id: String,
+    #[serde(default)]
+    pub name: Option<String>,
+    /// A new id, rewritten in the items that name the persona.
+    #[serde(default)]
+    pub rename_to: Option<String>,
+}
+
+/// Runs one change of the personas, reloads the tree and answers the new
+/// directory; `422` for a refused change, `409` with the items for a persona
+/// still named.
+async fn change_personas(
+    state: Arc<State>,
+    change: impl FnOnce(&crate::tree::Tree) -> anyhow::Result<Result<(), crate::personas::Refusal>>
+    + Send
+    + 'static,
+) -> Response {
+    exclusive(state, move |state| {
+        let outcome = match state.tree.read() {
+            Ok(tree) => change(&tree),
+            Err(_) => return error(StatusCode::INTERNAL_SERVER_ERROR, "the tree lock is poisoned"),
+        };
+        match outcome {
+            Err(failure) => return error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
+            Ok(Err(crate::personas::Refusal::Used(items))) => {
+                return (
+                    StatusCode::CONFLICT,
+                    Json(json!({ "error": crate::personas::Refusal::Used(items.clone()).to_string(), "items": items })),
+                )
+                    .into_response();
+            }
+            Ok(Err(refusal)) => return error(StatusCode::UNPROCESSABLE_ENTITY, &refusal.to_string()),
+            Ok(Ok(())) => {}
+        }
+        if let Err(failure) = state.reload() {
+            return error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}"));
+        }
+        with_tree(state, |tree| serde_json::to_value(crate::personas::list(tree)).unwrap_or(Value::Null))
+    })
+    .await
+}
+
+/// `POST /api/personas`: declares a persona.
+pub async fn add_persona(
+    Shared(state): Shared<Arc<State>>,
+    Json(request): Json<PersonaRequest>,
+) -> Response {
+    change_personas(state, move |tree| {
+        crate::personas::add(
+            tree,
+            &crate::tree::NodePath::new(&request.node),
+            &request.id,
+            request.name.as_deref().unwrap_or_default(),
+        )
+    })
+    .await
+}
+
+/// `PATCH /api/personas`: changes a persona's name, and renames the id
+/// (items rewritten) when `rename_to` is given.
+pub async fn change_persona(
+    Shared(state): Shared<Arc<State>>,
+    Json(request): Json<PersonaRequest>,
+) -> Response {
+    change_personas(state, move |tree| {
+        let node = crate::tree::NodePath::new(&request.node);
+        if let Some(name) = request.name.as_deref()
+            && let Err(refusal) = crate::personas::set_name(tree, &node, &request.id, name)?
+        {
+            return Ok(Err(refusal));
+        }
+        match request.rename_to.as_deref().filter(|to| *to != request.id) {
+            Some(to) => crate::personas::rename(tree, &node, &request.id, to)
+                .map(|outcome| outcome.map(|_| ())),
+            None => Ok(Ok(())),
+        }
+    })
+    .await
+}
+
+/// `DELETE /api/personas`: removes a persona no item names.
+pub async fn remove_persona(
+    Shared(state): Shared<Arc<State>>,
+    Json(request): Json<PersonaRequest>,
+) -> Response {
+    change_personas(state, move |tree| {
+        crate::personas::remove(
+            tree,
+            &crate::tree::NodePath::new(&request.node),
+            &request.id,
+        )
+    })
+    .await
+}
+
 /// The query of `GET /api/monday/users`.
 #[derive(Debug, Deserialize)]
 pub struct UsersQuery {

@@ -18,6 +18,8 @@ The `cmc` nodes serve several audiences at once — the company's own developers
 - **A core key, `personas`,** a list of ids, meant for stories. `doctor` reports an id declared under no applicable `[personas]` as an error, and `personas` on any other kind as a warning: the key is not forbidden there, but it is out of place.
 - **Exposed where it costs nothing:** in the rows of `ariane tasks --json` and `ariane show --json`, in `/api/nodes` with the effective personas of each node, and on the story page of the interface, by name.
 
+> **Amended 2026-10-26: personas are edited in the interface.** The *People* page has a *Personas* tab beside *People*: per node that binds a tracker or declares personas, each persona with the stories written for it, added, named, or renamed — the new id rewritten in the `personas` of every story that names it — and removed only when no story names it any more. `/api/personas` serves and changes them, as `/api/people` does for people (ADR-0015).
+
 ## Consequences
 
 - Stories of one persona can be listed and filtered by id; a persona's label changes in one place.

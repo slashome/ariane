@@ -163,6 +163,13 @@ pub fn router(state: Arc<State>) -> Router {
                 .patch(api::change_person)
                 .delete(api::remove_person),
         )
+        .route(
+            "/api/personas",
+            get(api::personas)
+                .post(api::add_persona)
+                .patch(api::change_persona)
+                .delete(api::remove_persona),
+        )
         .route("/api/monday/users", get(api::monday_users))
         .route("/api/push", post(api::push))
         .route("/api/pull", post(api::pull))
@@ -711,6 +718,52 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn the_personas_are_listed_added_renamed_and_kept_while_named() {
+        let repo = sample();
+        repo.write(
+            "p/stories/S001-a.md",
+            "---\nariane: 1\nnode: p\nid: S001\ntitle: A\nstatus: a-faire\npersonas: [\"user:rh\"]\n---\n",
+        );
+        let (status, body) = send(
+            &repo,
+            "POST",
+            "/api/personas",
+            serde_json::json!({ "node": "p", "id": "user:rh", "name": "RH" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body[0]["personas"][0]["used_by"][0], "p#S001");
+        let (status, body) = send(
+            &repo,
+            "PATCH",
+            "/api/personas",
+            serde_json::json!({ "node": "p", "id": "user:rh", "name": "Responsable RH", "rename_to": "user:hr" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body[0]["personas"][0]["id"], "user:hr");
+        assert_eq!(body[0]["personas"][0]["name"], "Responsable RH");
+        assert_eq!(body[0]["personas"][0]["used_by"][0], "p#S001");
+        let (status, body) = send(
+            &repo,
+            "DELETE",
+            "/api/personas",
+            serde_json::json!({ "node": "p", "id": "user:hr" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body["items"][0], "p#S001");
+        let (status, _) = send(
+            &repo,
+            "POST",
+            "/api/personas",
+            serde_json::json!({ "node": "p", "id": "rh", "name": "X" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
     }
 
     #[tokio::test]

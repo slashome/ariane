@@ -162,6 +162,25 @@ export interface Directory {
   people: PersonEntry[]
 }
 
+export interface PersonaEntry {
+  id: string
+  name: string
+  used_by: string[]
+}
+
+// A node that declares a tracker or personas, with its personas.
+export interface PersonaDirectory {
+  node: string
+  personas: PersonaEntry[]
+}
+
+export interface PersonaChange {
+  node: string
+  id: string
+  name?: string
+  rename_to?: string
+}
+
 export interface PersonChange {
   node: string
   handle: string

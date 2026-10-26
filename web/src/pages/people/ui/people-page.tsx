@@ -1,18 +1,31 @@
 import { Pencil, Plus, Trash2, Users } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { usePeople, useRemovePerson } from '../api/use-people'
+import { usePersonas } from '../api/use-personas'
 import { useItems } from '@/entities/item'
 import { QueryField, useFilteredItems, useItemFilters } from '@/features/filter-items'
 import { ApiError, type Directory, type PersonEntry } from '@/shared/api'
-import { displayNode, isWithinNode } from '@/shared/lib'
+import { cn, displayNode, isWithinNode } from '@/shared/lib'
 import { Button, ConfirmDialog, EmptyState, ErrorState, Highlight, LoadingState, PageHeader } from '@/shared/ui'
 import { ItemReference } from './item-reference'
+import { PersonasList } from './personas-list'
 import { PersonDialog } from './person-dialog'
 
 type Editing = { directory: Directory; person: PersonEntry | null }
 
+// The two directories the page edits, the current one kept in the URL.
+const tabs = [
+  { value: 'people', label: 'People', description: 'Whom items may wait for, declared where a node binds its tracker and shared by everything below it.' },
+  { value: 'personas', label: 'Personas', description: 'Whom stories are written for, declared on a node and shared by everything below it.' },
+] as const
+const tabParam = 'tab'
+
 export function PeoplePage() {
+  const [params, setParams] = useSearchParams()
+  const tab = tabs.find((entry) => entry.value === params.get(tabParam)) ?? tabs[0]
   const { data: directories = [], isPending, error } = usePeople()
+  const personas = usePersonas()
   const { filters } = useItemFilters()
   const remove = useRemovePerson()
   const [editing, setEditing] = useState<Editing | null>(null)
@@ -38,6 +51,36 @@ export function PeoplePage() {
   }, [directories, matching, scope, searching])
   const awaited = (list: Directory[]) => list.reduce((sum, directory) => sum + directory.people.reduce((count, person) => count + person.awaited_by.length, 0), 0)
   const total = awaited(directories.filter((directory) => shown.some((entry) => entry.node === directory.node)))
+  // The same scope and search for the personas: with a search, each keeps only the stories it finds.
+  const personaDirectories = useMemo(() => {
+    const found = new Set(matching.map((item) => item.reference))
+    return (personas.data ?? [])
+      .filter((directory) => scope === null || isWithinNode(directory.node, scope) || isWithinNode(scope, directory.node))
+      .map((directory) => ({
+        ...directory,
+        personas: searching
+          ? directory.personas
+              .map((persona) => ({ ...persona, used_by: persona.used_by.filter((reference) => found.has(reference)) }))
+              .filter((persona) => persona.used_by.length > 0)
+          : directory.personas,
+      }))
+  }, [personas.data, matching, scope, searching])
+  const written = (list: { personas: { used_by: string[] }[] }[]) => list.reduce((sum, directory) => sum + directory.personas.reduce((count, persona) => count + persona.used_by.length, 0), 0)
+  const writtenTotal = written((personas.data ?? []).filter((directory) => personaDirectories.some((entry) => entry.node === directory.node)))
+
+  const selectTab = (value: string) =>
+    setParams(
+      (current) => {
+        const next = new URLSearchParams(current)
+        if (value === tabs[0].value) {
+          next.delete(tabParam)
+        } else {
+          next.set(tabParam, value)
+        }
+        return next
+      },
+      { replace: true },
+    )
 
   const confirmRemove = () => {
     if (removing === null) {
@@ -61,10 +104,41 @@ export function PeoplePage() {
     <div className="flex flex-col gap-6 p-6">
       <PageHeader
         title="People"
-        description="Whom items may wait for, declared where a node binds its tracker and shared by everything below it. The header lists only those nodes here."
-        actions={<QueryField count={awaited(shown)} total={total} />}
+        description={tab.description}
+        actions={
+          tab.value === 'personas' ? (
+            <QueryField count={written(personaDirectories)} total={writtenTotal} />
+          ) : (
+            <QueryField count={awaited(shown)} total={total} />
+          )
+        }
       />
-      {error ? (
+      <div role="tablist" aria-label="Directories" className="flex gap-1 border-b border-border">
+        {tabs.map((entry) => (
+          <button
+            key={entry.value}
+            type="button"
+            role="tab"
+            aria-selected={tab.value === entry.value}
+            onClick={() => selectTab(entry.value)}
+            className={cn(
+              '-mb-px border-b-2 border-transparent px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground',
+              tab.value === entry.value && 'border-primary font-medium text-foreground',
+            )}
+          >
+            {entry.label}
+          </button>
+        ))}
+      </div>
+      {tab.value === 'personas' ? (
+        personas.error ? (
+          <ErrorState message={`Could not read the personas: ${personas.error.message}`} />
+        ) : personas.isPending ? (
+          <LoadingState rows={3} />
+        ) : (
+          <PersonasList directories={personaDirectories} searching={searching} />
+        )
+      ) : error ? (
         <ErrorState message={`Could not read the people: ${error.message}`} />
       ) : isPending ? (
         <LoadingState rows={3} />

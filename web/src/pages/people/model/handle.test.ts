@@ -1,4 +1,4 @@
-import { isHandle, suggestHandle } from './handle'
+import { isHandle, isPersonaId, suggestHandle } from './handle'
 
 describe('handles', () => {
   it('are suggested from the first word of a name', () => {
@@ -12,5 +12,14 @@ describe('handles', () => {
     expect(isHandle('kcoen-2')).toBe(true)
     expect(isHandle('Keyvan')).toBe(false)
     expect(isHandle('2k')).toBe(false)
+  })
+})
+
+describe('isPersonaId', () => {
+  it('takes a group and a role', () => {
+    expect(isPersonaId('user:rh')).toBe(true)
+    expect(isPersonaId('rh')).toBe(false)
+    expect(isPersonaId('User:rh')).toBe(false)
+    expect(isPersonaId('user:')).toBe(false)
   })
 })

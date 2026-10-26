@@ -50,6 +50,8 @@ mod monday;
 mod node;
 /// `ariane people`: whom items may wait for.
 mod people;
+/// The personas a story is written for, as the interface edits them.
+mod personas;
 /// `ariane proxy`: local names for the interface and the projects' servers.
 mod proxy;
 /// Parents, children, dependencies and dependents of items.

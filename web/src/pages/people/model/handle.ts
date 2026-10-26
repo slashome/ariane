@@ -14,3 +14,8 @@ export function suggestHandle(name: string): string | null {
 export function isHandle(handle: string): boolean {
   return /^[a-z][a-z0-9-]*$/.test(handle)
 }
+
+// A persona id reads `<group>:<role>`, each part a handle (`cmc:dev`, `user:rh`).
+export function isPersonaId(id: string): boolean {
+  return /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/.test(id)
+}
