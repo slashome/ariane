@@ -13,7 +13,7 @@ describe('syncMessage', () => {
   it('warns about a conflict or a refusal, and keeps quiet when in step', () => {
     expect(syncMessage({ applied: true, steps: [{ ...base, action: 'conflict', monday: '8', last: null }] })?.text).toContain('never synced yet')
     expect(syncMessage({ applied: true, steps: [{ ...base, action: 'refused', reason: 'no label' }] })?.tone).toBe('warning')
-    expect(syncMessage({ applied: true, steps: [{ ...base, action: 'in_step' }] })).toBeNull()
+    expect(syncMessage({ applied: true, steps: [{ ...base, action: 'in_step', label: '3' }] })).toBeNull()
     expect(syncMessage({ applied: true, steps: [] })).toBeNull()
   })
 })

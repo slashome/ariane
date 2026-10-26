@@ -77,7 +77,7 @@ external:
 | `ariane search <words> --all --json` | Finding an item by id, reference, title or body words, case and accents ignored, best first (exact id, then title, then body) with an excerpt. Before creating an item, to avoid a duplicate; `--kind`, `--node`, `--archived` narrow it. |
 | `ariane show <node>#<id> --json` | One item: header, body, parent, children, dependencies, dependents. |
 | `ariane focus <node>#<id>` | First thing in a discussion about work: attaches the session to its item, where branches and pull requests are then recorded. |
-| `ariane sync monday` | Sends items' statuses to their monday tickets (`[tracker.push]`, `[tracker.waiting]`), mentioning the people awaited; a conflict or a missing label is reported, never forced. Dry run by default, `--apply` to send, `--item <ref>` for one. Needs `ariane connect monday --account <account>` once. |
+| `ariane sync monday` | Sends items' statuses to their monday tickets (`[tracker.push]`, `[tracker.waiting]`), mentioning the people awaited; a conflict or a missing label is reported, never forced. Dry run by default (it still remembers the tickets found in step, so later moves are pushed), `--apply` to send, `--item <ref>` for one. Needs `ariane connect monday --account <account>` once. |
 | `ariane people` | The people items may wait for, by node with a tracker, and who waits for each. `add`, `set`, `rename` (rewrites the items), `remove` (refused while awaited), `find --account <a> <name>` for a monday id. |
 | `ariane links` | Pull requests on GitHub that name an item (monday id or `<node>#<id>`) and are not recorded in it. Dry run by default, `--apply` to write. |
 | `ariane schema --json` | Core keys and vocabularies. |

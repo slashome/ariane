@@ -177,7 +177,7 @@ export interface MondayUser {
 }
 
 export type SyncAction =
-  | { action: 'in_step' }
+  | { action: 'in_step'; label: string }
   | { action: 'push'; from: string | null; to: string; mention: [string, number][] }
   | { action: 'conflict'; monday: string | null; last: string | null }
   | { action: 'refused'; reason: string }

@@ -14,11 +14,13 @@
 //!   entering a wait also posts an update that @mentions the people awaited;
 //! - a **conflict** when both moved, or when they disagree and no sync has
 //!   recorded what the ticket was: the connector refuses to guess and lists
-//!   it for the owner to settle;
+//!   it for the owner to settle — except a ticket that has no label yet,
+//!   which holds nothing to lose and is pushed;
 //! - **refused** when no label is declared for the item's category.
 //!
 //! What each ticket last read is machine state in
-//! `$XDG_STATE_HOME/ariane/monday.json`. Without `--apply`, nothing is sent.
+//! `$XDG_STATE_HOME/ariane/monday.json`, recorded by every sync, a dry run
+//! included, for the tickets found in step. Without `--apply`, nothing is sent.
 //! The token comes from `secrets.toml` ([`crate::secrets`]), by account.
 
 use std::collections::BTreeMap;
@@ -120,8 +122,8 @@ impl Binding {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum Action {
-    /// The ticket already reads as the item.
-    InStep,
+    /// The ticket already reads as the item, on `label`.
+    InStep { label: String },
     /// Set the ticket's label; `mention` lists the people to tell, by name and
     /// monday id, when the item enters a wait.
     Push {
@@ -222,12 +224,14 @@ pub fn plan(
                         "monday:{ticket} is not found: deleted, or not visible with this token"
                     ),
                 }
-            } else if in_step {
-                Action::InStep
+            } else if let Some(label) = current.clone().filter(|_| in_step) {
+                Action::InStep { label }
             } else if let Some(to) = wanted {
-                let monday_moved = last
-                    .as_ref()
-                    .is_none_or(|last| Some(last) != current.as_ref());
+                // A ticket never synced and without a label holds nothing to overwrite.
+                let monday_moved = match &last {
+                    Some(last) => Some(last) != current.as_ref(),
+                    None => current.is_some(),
+                };
                 if monday_moved {
                     Action::Conflict {
                         monday: current.clone(),
@@ -320,13 +324,10 @@ pub fn waiting_update(
 ///
 /// Fails on the first call monday refuses; what was sent before is recorded.
 pub fn apply(api: &dyn Api, tree: &Tree, steps: &[Step], state: &mut State) -> Result<()> {
+    remember(steps, state);
     for step in steps {
         match &step.action {
-            Action::InStep => {
-                if let Some(label) = current_label(tree, step) {
-                    state.insert(step.ticket.to_string(), label);
-                }
-            }
+            Action::InStep { .. } => {}
             Action::Push { to, mention, .. } => {
                 api.set_label(step.board, step.ticket, &step.column, to)
                     .with_context(|| format!("moving monday:{} for {}", step.ticket, step.item))?;
@@ -349,11 +350,14 @@ pub fn apply(api: &dyn Api, tree: &Tree, steps: &[Step], state: &mut State) -> R
     Ok(())
 }
 
-/// For a step in step, the label to remember: the one that reads as the item.
-fn current_label(tree: &Tree, step: &Step) -> Option<String> {
-    let item = crate::show::find(tree, &step.item, None).ok()?;
-    let binding = Binding::from_tracker(tree.configs.effective(&item.node).tracker.as_ref()?)?;
-    binding.label_for(step.category, item.document.text("waiting_on"))
+/// Records the label of every ticket found in step, so a later move of the
+/// item is pushed rather than reported as a ticket never synced.
+fn remember(steps: &[Step], state: &mut State) {
+    for step in steps {
+        if let Action::InStep { label } = &step.action {
+            state.insert(step.ticket.to_string(), label.clone());
+        }
+    }
 }
 
 /// `$XDG_STATE_HOME/ariane/monday.json`.
@@ -646,11 +650,14 @@ pub fn sync(
             labels.extend(api.labels(&ids, &column)?);
         }
         let planned = plan(tree, &bound, &labels, &state);
-        if apply_it {
-            let outcome = apply(api.as_ref(), tree, &planned, &mut state);
-            save_state(state_path, &state)?;
-            outcome?;
-        }
+        let outcome = if apply_it {
+            apply(api.as_ref(), tree, &planned, &mut state)
+        } else {
+            remember(&planned, &mut state);
+            Ok(())
+        };
+        save_state(state_path, &state)?;
+        outcome?;
         steps.extend(planned);
     }
     Ok(Report {
@@ -772,7 +779,7 @@ fn print_report(report: &Report) {
     let mut in_step = 0;
     for step in &report.steps {
         match &step.action {
-            Action::InStep => in_step += 1,
+            Action::InStep { .. } => in_step += 1,
             Action::Push { from, to, mention } => {
                 let told = if mention.is_empty() {
                     String::new()
@@ -904,7 +911,12 @@ mod tests {
         assert_eq!(
             actions(&steps),
             [
-                ("p#T1".to_owned(), Action::InStep),
+                (
+                    "p#T1".to_owned(),
+                    Action::InStep {
+                        label: "3".to_owned()
+                    }
+                ),
                 (
                     "p#T2".to_owned(),
                     Action::Push {
@@ -957,6 +969,55 @@ mod tests {
         let state = State::from([("2".to_owned(), "3".to_owned())]);
         let steps = plan(&tree, &bound, &labels, &state);
         assert!(matches!(steps[1].action, Action::Conflict { .. }));
+    }
+
+    #[test]
+    fn a_ticket_never_synced_and_without_a_label_is_pushed() {
+        let tree = sample();
+        let bound = tickets(&tree, None, None);
+        let labels = BTreeMap::from([(1, None)]);
+        let steps = plan(&tree, &bound, &labels, &State::new());
+        assert_eq!(
+            steps[0].action,
+            Action::Push {
+                from: None,
+                to: "3".to_owned(),
+                mention: vec![]
+            }
+        );
+    }
+
+    #[test]
+    fn a_ticket_in_step_is_remembered_on_its_own_label() {
+        let tree = sample();
+        let bound = tickets(&tree, None, None);
+        let labels = BTreeMap::from([(2, Some("9".to_owned()))]);
+        let steps = plan(&tree, &bound, &labels, &State::new());
+        assert_eq!(
+            steps[1].action,
+            Action::InStep {
+                label: "9".to_owned()
+            }
+        );
+    }
+
+    #[test]
+    fn a_dry_run_sends_nothing_but_remembers_the_tickets_in_step() {
+        let tree = sample();
+        let dir = tempfile::tempdir().unwrap();
+        let secrets = dir.path().join("secrets.toml");
+        crate::secrets::store(&secrets, "monday", "acme", "token").unwrap();
+        let state_path = dir.path().join("monday.json");
+        let connect = |_: String| -> Box<dyn Api> {
+            Box::new(Fake {
+                labels: BTreeMap::from([(1, Some("3".to_owned())), (2, Some("3".to_owned()))]),
+                ..Fake::default()
+            })
+        };
+        let report = sync(&tree, None, None, false, &secrets, &state_path, &connect).unwrap();
+        assert!(!report.applied);
+        let state = load_state(&state_path);
+        assert_eq!(state, State::from([("1".to_owned(), "3".to_owned())]));
     }
 
     #[test]
