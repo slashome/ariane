@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ApiError, patchItem, queryKeys, syncMonday, type Item, type ItemChanges } from '@/shared/api'
+import { ApiError, patchItem, queryKeys, syncMonday, type Item, type ItemChanges, type NodeSummary } from '@/shared/api'
 import { toast } from '@/shared/ui'
 import { syncMessage } from '../model/sync-message'
 
@@ -41,8 +41,18 @@ export function useUpdateItem() {
       )
       void queryClient.invalidateQueries({ queryKey: queryKeys.repo })
       void queryClient.invalidateQueries({ queryKey: queryKeys.itemDetails })
+      if (!Object.keys(changes).some((key) => synced.includes(key))) {
+        return
+      }
       const followed = updated.external.some((entry) => entry.startsWith('monday:'))
-      if (followed && Object.keys(changes).some((key) => synced.includes(key))) {
+      // On a node bound to monday, an item without a ticket says so rather than moving silently.
+      const bound = queryClient
+        .getQueryData<NodeSummary[]>(queryKeys.nodes)
+        ?.some((node) => node.path === updated.node && node.tracker?.kind === 'monday')
+      if (!followed && bound) {
+        toast.info(`${updated.reference ?? updated.path}: no monday ticket linked, monday not updated`)
+      }
+      if (followed) {
         syncMonday(updated.path)
           .then((report) => {
             const message = syncMessage(report)
