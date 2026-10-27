@@ -25,6 +25,7 @@ const keyHints: Record<FilterKey, string> = {
   size: 'a size, or a comparison such as size:<=M',
   impact: 'an impact, or a comparison such as impact:>=medium',
   priority: 'a priority, or a comparison such as priority:>low',
+  epic: 'the epic of a story, or of a task’s story',
 }
 
 const limit = 8

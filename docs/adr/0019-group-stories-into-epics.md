@@ -16,11 +16,12 @@ A task groups nothing; a story groups tasks through their `parent`. Nothing grou
 - **One level per link.** Only a story names an epic in `parent`. An epic has no `parent` — the key is forbidden for its kind — and `doctor` reports a task, a reflexion or a ressource whose `parent` is an epic. A task belongs to an epic through its story, so a task moved between stories never leaves a stale epic behind.
 - **Progress is computed, never written.** `ariane show` of an item with children gives their count and how many are done or dropped; for an epic, its stories. Nothing in the epic's header records it.
 
+> **Amended 2026-10-27: epics in the interface.** Every row of `ariane tasks --json` and `/api/items` carries `epic`, the epic of a story or of a task's story, computed from the `parent` links. The interface lists epics under *Epics*, each with the progress of its stories and of their tasks; an epic's page lists its stories; a story's page names its epic; *Stories* groups by epic; and the search field filters any view with `epic:E002` or `epic:<node>#E002`.
+
 ## Consequences
 
 - `ariane tasks --kind epic`, `ariane show <node>#E001` and `ariane search` read epics with no further change; `ariane schema --json` lists the kind and its prefix, so the interface learns them from the export.
 - `ariane show --json` gains a `progress` object (`total`, `done`, `dropped`) on any item with children, stories included.
-- The interface has no epic page yet: an epic opens on the generic item page until it gets its own.
 - An epic's progress counts its stories, not their tasks: a story half done counts as not done.
 
 ## Alternatives considered

@@ -6,6 +6,7 @@ export interface NavCounts {
   open: number
   toEstimate: number
   backlog: number
+  epics: number
   stories: number
   reflexions: number
   settled: number
@@ -24,6 +25,7 @@ export function navCounts(items: Item[], findings: Finding[]): NavCounts {
     open: open.length,
     toEstimate: open.filter((item) => item.size === null || item.impact === null).length,
     backlog: tasks.filter((item) => item.category === 'backlog').length,
+    epics: items.filter((item) => item.kind === 'epic').length,
     stories: items.filter((item) => item.kind === 'story').length,
     reflexions: reflexions.filter((item) => item.status !== 'settled').length,
     settled: reflexions.filter((item) => item.status === 'settled').length,

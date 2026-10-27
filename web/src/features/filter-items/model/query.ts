@@ -1,7 +1,7 @@
 // The search field's language, GitHub style: `status:` `category:` `is:open|closed` `size:<=M` `impact:`
-// `priority:` `@handle`, `-` to negate, quotes for a phrase, and free text for the rest.
+// `priority:` `epic:` `@handle`, `-` to negate, quotes for a phrase, and free text for the rest.
 
-export const filterKeys = ['status', 'category', 'is', 'size', 'impact', 'priority'] as const
+export const filterKeys = ['status', 'category', 'is', 'size', 'impact', 'priority', 'epic'] as const
 export type FilterKey = (typeof filterKeys)[number]
 
 // The keys whose values are ordered by the schema, which accept `<`, `<=`, `>`, `>=`.

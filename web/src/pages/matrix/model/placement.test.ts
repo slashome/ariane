@@ -27,6 +27,7 @@ function item(overrides: Partial<Item>): Item {
     release: null,
     milestone: null,
     parent: null,
+    epic: null,
     depends_on: [],
     external: [],
     branches: [],

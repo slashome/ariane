@@ -1,5 +1,5 @@
 import { enumValues } from '@/entities/schema'
-import type { NodeSummary, Schema } from '@/shared/api'
+import type { Item, NodeSummary, Schema } from '@/shared/api'
 import { foldText } from '@/shared/lib'
 import { filterKeys, isRankedKey, isValues, rankedKeys, type Clause, type FilterKey, type ItemQuery, type RankedKey, type Span } from './query'
 
@@ -9,7 +9,7 @@ export interface Term {
 }
 
 // The values the field knows: statuses of every workflow, categories and ordered values of the schema,
-// handles of every directory.
+// handles of every directory, epics by id and by reference.
 export interface QueryVocabulary {
   status: Term[]
   category: Term[]
@@ -17,6 +17,7 @@ export interface QueryVocabulary {
   impact: Term[]
   priority: Term[]
   people: Term[]
+  epic: Term[]
 }
 
 function unique(terms: Term[]): Term[] {
@@ -29,7 +30,8 @@ function unique(terms: Term[]): Term[] {
   return [...seen.values()]
 }
 
-export function buildVocabulary(nodes: NodeSummary[], schema: Schema | undefined): QueryVocabulary {
+export function buildVocabulary(nodes: NodeSummary[], schema: Schema | undefined, items: Item[] = []): QueryVocabulary {
+  const epics = items.filter((item) => item.kind === 'epic' && item.id !== null && item.reference !== null)
   const ranked = (key: RankedKey) => enumValues(schema, key).map((value) => ({ value }))
   return {
     status: unique([
@@ -43,6 +45,10 @@ export function buildVocabulary(nodes: NodeSummary[], schema: Schema | undefined
     people: unique(
       nodes.flatMap((node) => Object.entries(node.people ?? {}).map(([handle, person]) => ({ value: handle, label: person.name }))),
     ).sort((left, right) => left.value.localeCompare(right.value)),
+    epic: unique([
+      ...epics.map((epic) => ({ value: epic.id as string, label: epic.title ?? undefined })),
+      ...epics.map((epic) => ({ value: epic.reference as string, label: epic.title ?? undefined })),
+    ]),
   }
 }
 

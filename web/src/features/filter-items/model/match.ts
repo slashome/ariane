@@ -30,6 +30,11 @@ function compare(index: number, target: number, comparator: Comparator): boolean
   }
 }
 
+// Whether `value` names the epic `reference`, by its `<node>#<id>` or its bare id.
+function names(reference: string | null, value: string): boolean {
+  return reference !== null && (same(reference, value) || same(reference.slice(reference.indexOf('#') + 1), value))
+}
+
 function rankOf(order: string[], value: string | null): number {
   return value === null ? -1 : order.findIndex((entry) => same(entry, value))
 }
@@ -61,6 +66,8 @@ function holds(clause: Clause, item: Item, orders: RankOrders, text: () => strin
           return clause.values.some((value) => same(item.status, value))
         case 'category':
           return clause.values.some((value) => same(item.category, value))
+        case 'epic':
+          return clause.values.some((value) => names(item.epic, value))
         case 'is':
           return clause.values.some((value) => (same('closed', value) ? closed(item) : same('open', value) && !closed(item)))
         case 'size':

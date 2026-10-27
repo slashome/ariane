@@ -25,7 +25,12 @@ export function StoriesPage() {
   const groups = useMemo(() => {
     const tasks = scopeItems(items, { node: null, includeArchived: filters.includeArchived, includeDescendants: false })
     const statusLabel = (key: string) => schema?.categories.find((entry) => entry.id === key)?.label ?? key
-    return groupStories(stories, tasks, grouping, grouping === 'status' ? statusLabel : undefined)
+    const epicLabel = (key: string) => {
+      const epic = items.find((item) => item.reference === key)
+      return epic ? `${epic.id} — ${epic.title ?? epic.path}` : key
+    }
+    const label = grouping === 'status' ? statusLabel : grouping === 'epic' ? epicLabel : undefined
+    return groupStories(stories, tasks, grouping, label)
   }, [items, stories, filters.includeArchived, grouping, schema])
   const count = groups.reduce((sum, group) => sum + group.items.length, 0)
 

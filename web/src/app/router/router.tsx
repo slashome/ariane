@@ -1,6 +1,8 @@
 import { createBrowserRouter, Navigate, useLocation, type RouteObject } from 'react-router'
 import { BacklogPage } from '@/pages/backlog'
 import { DashboardPage } from '@/pages/dashboard'
+import { EpicPage } from '@/pages/epic'
+import { EpicsPage } from '@/pages/epics'
 import { HealthPage } from '@/pages/health'
 import { ItemPage } from '@/pages/item'
 import { KanbanPage } from '@/pages/kanban'
@@ -37,6 +39,8 @@ export const routeTree: RouteObject[] = [
       { path: 'tasks/matrix', element: <MatrixPage /> },
       { path: 'tasks/backlog', element: <BacklogPage /> },
       { path: 'tasks/*', element: <ItemPage sectionLabel="Tasks" /> },
+      { path: 'epics', element: <EpicsPage /> },
+      { path: 'epics/*', element: <EpicPage /> },
       { path: 'stories', element: <StoriesPage /> },
       { path: 'stories/*', element: <StoryPage /> },
       { path: 'reflexions', element: <ReflexionsPage /> },

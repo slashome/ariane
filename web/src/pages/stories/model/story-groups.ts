@@ -1,11 +1,12 @@
 import { categoryOrder, childrenOf, compareNatural, groupBy, progressOf, type Group, type Progress } from '@/entities/item'
 import type { Item } from '@/shared/api'
 
-export type StoryGrouping = 'milestone' | 'release' | 'node' | 'status'
+export type StoryGrouping = 'milestone' | 'release' | 'epic' | 'node' | 'status'
 
 export const groupings: { value: StoryGrouping; label: string }[] = [
   { value: 'milestone', label: 'Release › milestone' },
   { value: 'release', label: 'Release' },
+  { value: 'epic', label: 'Epic' },
   { value: 'node', label: 'Node' },
   { value: 'status', label: 'Status' },
 ]
@@ -28,6 +29,8 @@ function keyOf(grouping: StoryGrouping, story: Item): string | null {
         : [story.release ?? '—', story.milestone].filter((part) => part !== null).join(' › ')
     case 'release':
       return story.release
+    case 'epic':
+      return story.epic
     case 'node':
       return story.node === '' ? '(home)' : story.node
     case 'status':
@@ -38,6 +41,7 @@ function keyOf(grouping: StoryGrouping, story: Item): string | null {
 const noneLabels: Record<StoryGrouping, string> = {
   milestone: 'No release or milestone',
   release: 'No release',
+  epic: 'No epic',
   node: '(home)',
   status: 'No status',
 }
