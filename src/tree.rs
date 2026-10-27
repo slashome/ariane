@@ -459,6 +459,8 @@ mod tests {
         let repo = Repo::new();
         repo.write("cmc/cmc-lib/tasks/t1.md", "# T1\n")
             .write("cmc/cmc-lib/archives/stories/s1.md", "# S1\n")
+            .write("cmc/cmc-lib/archives/epics/e2.md", "# E2\n")
+            .write("cmc/cmc-lib/epics/e1.md", "# E1\n")
             .write("cmc/cmc-lib/archives/loose.md", "# loose\n")
             .write("cmc/cmc-lib/backlog/README.md", "# not an item\n")
             .write("cmc/cmc-lib/backlog/b1.md", "# B1\n")
@@ -472,9 +474,11 @@ mod tests {
         assert_eq!(
             found,
             vec![
+                ("cmc/cmc-lib", Kind::Epic, true, false),
                 ("cmc/cmc-lib", Kind::Unknown, true, false),
                 ("cmc/cmc-lib", Kind::Story, true, false),
                 ("cmc/cmc-lib", Kind::Task, false, true),
+                ("cmc/cmc-lib", Kind::Epic, false, false),
                 ("cmc/cmc-lib", Kind::Task, false, false),
             ]
         );

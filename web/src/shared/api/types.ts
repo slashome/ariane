@@ -2,7 +2,7 @@ export type Category = 'backlog' | 'todo' | 'in_progress' | 'waiting' | 'blocked
 
 export type WaitingReason = 'review' | 'validation' | 'answer' | 'other'
 
-export type Kind = 'task' | 'story' | 'reflexion' | 'ressource' | 'unknown'
+export type Kind = 'task' | 'epic' | 'story' | 'reflexion' | 'ressource' | 'unknown'
 
 export interface Item {
   node: string

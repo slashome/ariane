@@ -15,7 +15,7 @@ const schema: Schema = {
     { id: 'done', label: 'Done' },
     { id: 'dropped', label: 'Dropped' },
   ],
-  id_prefixes: { reflexion: 'R', ressource: 'D', story: 'S', task: 'T', unknown: 'T' },
+  id_prefixes: { epic: 'E', reflexion: 'R', ressource: 'D', story: 'S', task: 'T', unknown: 'T' },
   keys: [{ name: 'size', type: 'enum', values: ['XS', 'S', 'M', 'L', 'XL'] }],
   reflexion_statuses: ['open', 'trial', 'settled'],
 }

@@ -5,7 +5,8 @@
 //! it prints the item's `ariane tasks` row, its full header (custom keys
 //! included, in file order), its Markdown body and its [`Relations`]: parent,
 //! children, dependencies and dependents, each as a row, so an agent or the
-//! interface can follow them without a second command.
+//! interface can follow them without a second command. An item with children,
+//! such as an epic and its stories, also carries their [`Progress`].
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -15,6 +16,7 @@ use anyhow::{Result, bail};
 use serde::Serialize;
 
 use crate::cli::ShowArgs;
+use crate::node::Category;
 use crate::relations::{self, Relations};
 use crate::tasks::{self, Row};
 use crate::tree::{Item, NodePath, Tree, parse_reference};
@@ -29,6 +31,36 @@ pub struct Shown<'a> {
     pub header: serde_json::Value,
     pub body: &'a str,
     pub relations: Relations<'a>,
+    /// How far its children have gone; `null` without children.
+    pub progress: Option<Progress>,
+}
+
+/// How far the children of an item have gone, by status category.
+#[derive(Debug, PartialEq, Eq, Serialize)]
+pub struct Progress {
+    /// Every child.
+    pub total: usize,
+    /// The children whose status is in the `done` category.
+    pub done: usize,
+    /// The children whose status is in the `dropped` category, out of the count.
+    pub dropped: usize,
+}
+
+impl Progress {
+    /// Counts the categories of `children`; `None` when there are none.
+    fn of(children: &[Row]) -> Option<Progress> {
+        let count = |category| {
+            children
+                .iter()
+                .filter(|child| child.category == Some(category))
+                .count()
+        };
+        (!children.is_empty()).then(|| Progress {
+            total: children.len(),
+            done: count(Category::Done),
+            dropped: count(Category::Dropped),
+        })
+    }
 }
 
 /// Builds what `show` prints for `item`, dated by `dates` when given.
@@ -39,7 +71,9 @@ pub fn shown<'a>(
 ) -> Shown<'a> {
     let mut row = tasks::row(tree, item);
     row.updated = dates.and_then(|dates| dates.get(&item.relative).cloned());
+    let relations = relations::of(tree, item);
     Shown {
+        progress: Progress::of(&relations.children),
         row,
         header: item
             .document
@@ -47,7 +81,7 @@ pub fn shown<'a>(
             .and_then(|mapping| serde_json::to_value(mapping).ok())
             .unwrap_or(serde_json::Value::Null),
         body: &item.document.body,
-        relations: relations::of(tree, item),
+        relations,
     }
 }
 
@@ -129,8 +163,35 @@ fn print_text(shown: &Shown) {
     if let Some(parent) = &relations.parent {
         println!("parent:     {}", list(std::slice::from_ref(parent)));
     }
+    if !relations.children.is_empty() {
+        let children: Vec<String> = relations
+            .children
+            .iter()
+            .map(|child| {
+                let reference = child
+                    .reference
+                    .clone()
+                    .unwrap_or_else(|| child.path.clone());
+                match child.status {
+                    Some(status) => format!("{reference} ({status})"),
+                    None => reference,
+                }
+            })
+            .collect();
+        println!("children:   {}", children.join(", "));
+    }
+    if let Some(progress) = &shown.progress {
+        let dropped = match progress.dropped {
+            0 => String::new(),
+            dropped => format!(", {dropped} dropped"),
+        };
+        println!(
+            "progress:   {}/{} done{dropped}",
+            progress.done,
+            progress.total - progress.dropped
+        );
+    }
     for (label, rows) in [
-        ("children:  ", &relations.children),
         ("depends on:", &relations.depends_on),
         ("dependents:", &relations.dependents),
     ] {
@@ -189,6 +250,35 @@ mod tests {
         );
         assert!(find(&tree, "p#T9", None).is_err());
         assert!(find(&tree, "p#9", None).is_err());
+    }
+
+    #[test]
+    fn an_epic_lists_its_stories_and_how_far_they_have_gone() {
+        let repo = Repo::new();
+        repo.write(
+            "p/epics/E1-e.md",
+            "---\nariane: 1\nnode: p\nid: E1\ntitle: E\nstatus: todo\n---\n",
+        );
+        for (id, status) in [("S1", "done"), ("S2", "todo"), ("S3", "dropped")] {
+            repo.write(
+                &format!("p/stories/{id}-s.md"),
+                &format!("---\nariane: 1\nnode: p\nid: {id}\ntitle: S\nstatus: {status}\nparent: E1\n---\n"),
+            );
+        }
+        let tree = Tree::load(repo.root()).unwrap();
+        let epic = shown(&tree, find(&tree, "p#E1", None).unwrap(), None);
+        assert_eq!(epic.row.kind, crate::item::Kind::Epic);
+        assert_eq!(epic.relations.children.len(), 3);
+        assert_eq!(
+            epic.progress,
+            Some(Progress {
+                total: 3,
+                done: 1,
+                dropped: 1
+            })
+        );
+        let story = shown(&tree, find(&tree, "p#S2", None).unwrap(), None);
+        assert_eq!(story.progress, None);
     }
 
     #[test]

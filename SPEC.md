@@ -14,9 +14,11 @@ Decided in [ADR-0008](docs/adr/0008-give-every-item-a-versioned-front-matter.md)
 
 A **node** is a directory under `tree/` that has a `node.toml` (§1.5) or holds items; `tree/` itself is the home node. A node has no index file: its judgment — its role, the reasons for its priorities, its rules — lives in its items, in the item it concerns or in a ressource of the node ([ADR-0017](docs/adr/0017-keep-a-nodes-judgment-in-its-items.md)).
 
-An **item** is a Markdown file inside one of a node's item directories (`tasks/`, `stories/`, `reflexions/`, `ressources/`, `archives/` and their subdirectories). `HANDOFF.md` and `README.md` are not items, and neither is a leftover `INDEX.md`, which `doctor` reports (§1.6).
+An **item** is a Markdown file inside one of a node's item directories (`tasks/`, `epics/`, `stories/`, `reflexions/`, `ressources/`, `archives/` and their subdirectories). `HANDOFF.md` and `README.md` are not items, and neither is a leftover `INDEX.md`, which `doctor` reports (§1.6).
 
 The **kind** of an item is given by its directory. The header MUST NOT carry it.
+
+An **epic** (`epics/`) is a large piece of work that groups stories; a story groups tasks ([ADR-0019](docs/adr/0019-group-stories-into-epics.md)). A story names its epic in `parent`, and a task keeps its story for `parent`, never the epic.
 
 A backlog item is a task whose status belongs to the `backlog` category (§1.5), not a kind of its own. `backlog/` is a former item directory: an item found there MUST be moved into `tasks/` (`archives/backlog/` into `archives/tasks/`). Until it is, tools read it as a task.
 
@@ -34,10 +36,10 @@ Keys MUST be written in English, in lower case, with `_` as the word separator. 
 | `node` | string | **MUST** | The logical path of the node holding the file, e.g. `cmc/cmc-lib`. MUST equal the file's location under `tree/`; for an item of the home node, directly under `tree/`, it is the empty string `''`. |
 | `id` | string | **MUST** | Matches `^[A-Za-z][A-Za-z0-9-]*$`. Unique within the node. |
 | `title` | string | **MUST** | Non-empty. |
-| `status` | string | MUST for tasks and stories; MUST for reflexions; MUST NOT for ressources | A status id from the node's workflow (§1.5). Reflexions use `open`, `trial` (a decision applied on trial, not yet confirmed) or `settled`. |
+| `status` | string | MUST for tasks, epics and stories; MUST for reflexions; MUST NOT for ressources | A status id from the node's workflow (§1.5). Reflexions use `open`, `trial` (a decision applied on trial, not yet confirmed) or `settled`. |
 | `type` | string | MAY | A classification declared by the node (`[fields.type]` in `node.toml`); free when undeclared. |
 | `personas` | list of strings | MAY for stories; SHOULD NOT otherwise | The personas the story is written for, each an id declared under `[personas]` (§1.5), e.g. `cmc:dev`. |
-| `parent` | reference | MAY | One item reference (§1.4). |
+| `parent` | reference | MAY; MUST NOT for epics | One item reference (§1.4). Only a story may name an epic. |
 | `depends_on` | list of references | MAY | Item references (§1.4). |
 | `size` | string | MAY | `XS`, `S`, `M`, `L`, `XL`. |
 | `impact` | string | MAY | `low`, `medium`, `high`. |
@@ -63,7 +65,7 @@ The body of the item MUST NOT restate in prose a fact the header carries.
 - Inside the same node, an item is referenced by its bare id: `T022`.
 - Across nodes, an item is referenced as `<node>#<id>`: `slashome/pharmakon#T022`.
 - A file name MUST begin with the item's id followed by `-` and a slug: `T022-tirage-du-temperament.md`.
-- An id SHOULD start with the prefix of its kind followed by a number: `T` for tasks, `S` for stories, `R` for reflexions, `D` for ressources (`T038`, `S004`, `R012`, `D002`). `ariane migrate` allocates ids this way, per node and per prefix.
+- An id SHOULD start with the prefix of its kind followed by a number: `T` for tasks, `E` for epics, `S` for stories, `R` for reflexions, `D` for ressources (`T038`, `E002`, `S004`, `R012`, `D002`). `ariane migrate` allocates ids this way, per node and per prefix.
 
 ### 1.5 `node.toml`
 
@@ -136,6 +138,8 @@ name = "Responsable RH"
 | A status present on a ressource | error |
 | An item in `archives/` whose status category is neither `done` nor `dropped`, or a reflexion in `archives/` that is not `settled` | error |
 | `parent` or `depends_on` points to an item that does not exist | error |
+| `parent` on an epic | error |
+| `parent` points to an epic from an item that is not a story | error |
 | `size`, `impact`, `priority` or `created` outside its vocabulary or format | error |
 | A custom key declared in `node.toml` has a value of the wrong type | error |
 | A status in the `waiting` category without `waiting_for` | error |

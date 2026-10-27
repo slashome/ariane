@@ -29,6 +29,8 @@ pub const LEGACY_BACKLOG: &str = "backlog";
 pub enum Kind {
     /// An item in `tasks/`, or in the former `backlog/` directory (SPEC.md §1.1).
     Task,
+    /// An item in `epics/`: a large piece of work that groups stories.
+    Epic,
     /// An item in `stories/`.
     Story,
     /// An item in `reflexions/`.
@@ -48,6 +50,7 @@ impl Kind {
     pub fn from_dir(name: &str) -> Option<Kind> {
         match name {
             "tasks" | LEGACY_BACKLOG => Some(Kind::Task),
+            "epics" => Some(Kind::Epic),
             "stories" => Some(Kind::Story),
             "reflexions" => Some(Kind::Reflexion),
             "ressources" => Some(Kind::Ressource),

@@ -8,7 +8,7 @@ export const schema = {
     { id: 'todo', label: 'To do' },
     { id: 'done', label: 'Done' },
   ],
-  id_prefixes: { task: 'T', story: 'S', reflexion: 'R', ressource: 'D', unknown: 'T' },
+  id_prefixes: { task: 'T', epic: 'E', story: 'S', reflexion: 'R', ressource: 'D', unknown: 'T' },
   keys: [
     { name: 'size', type: 'enum', values: ['XS', 'S', 'M', 'L', 'XL'] },
     { name: 'impact', type: 'enum', values: ['low', 'medium', 'high'] },

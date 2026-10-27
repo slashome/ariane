@@ -21,7 +21,7 @@ const nodes: NodeSummary[] = [
 const schema: Schema = {
   version: 1,
   categories: [],
-  id_prefixes: { reflexion: 'R', ressource: 'D', story: 'S', task: 'T', unknown: 'T' },
+  id_prefixes: { epic: 'E', reflexion: 'R', ressource: 'D', story: 'S', task: 'T', unknown: 'T' },
   keys: [],
   reflexion_statuses: [],
 }

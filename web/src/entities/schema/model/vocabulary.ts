@@ -7,6 +7,7 @@ export interface VocabularyOption<T extends string = string> {
 
 const kindLabels: Record<Kind, string> = {
   task: 'Task',
+  epic: 'Epic',
   story: 'Story',
   reflexion: 'Reflexion',
   ressource: 'Ressource',

@@ -11,7 +11,8 @@
 //!    context: `node` against the file's location, `status` against the node's
 //!    workflow, custom keys against the node's `node.toml`, the file name
 //!    against `id`;
-//! 3. **across items**: ids duplicated within a node.
+//! 3. **across items**: ids duplicated within a node, and a `parent` that
+//!    points to an epic from an item that is not a story.
 
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
@@ -20,8 +21,9 @@ use yaml_serde::{Mapping, Value};
 
 use super::finding::{Check, Finding, Remedy, Severity};
 use crate::fix;
-use crate::item::{Header, SCHEMA_VERSION};
+use crate::item::{Header, Kind, SCHEMA_VERSION};
 use crate::node::{Effective, FILE as NODE_FILE, FieldDecl, FieldType};
+use crate::relations::Index;
 use crate::schema::{
     self, CORE_KEYS, CoreKey, REFLEXION_CLOSED, REFLEXION_STATUSES, Requirement, ValueType,
     is_branch, is_date, is_external, is_pull_request, is_valid_id,
@@ -41,6 +43,7 @@ pub fn findings(tree: &Tree, scope: Option<&NodePath>) -> Vec<Finding> {
         check_item(tree, item, &known, &mut found);
     }
     duplicates(tree, scope, &mut found);
+    epic_parents(tree, scope, &mut found);
     found
 }
 
@@ -806,6 +809,44 @@ fn duplicates(tree: &Tree, scope: Option<&NodePath>, found: &mut Vec<Finding>) {
                 remedy: Remedy::human(paths.iter().map(|path| format!("give {path} a new id"))),
             });
         }
+    }
+}
+
+/// Reports a `parent` that points to an epic from an item other than a story:
+/// an epic groups stories, and a task stays attached to its story (SPEC.md
+/// §1.4). An epic carrying a `parent` at all is reported by the schema, the
+/// key being forbidden for its kind.
+fn epic_parents(tree: &Tree, scope: Option<&NodePath>, found: &mut Vec<Finding>) {
+    let index = Index::new(tree);
+    for item in tree.items_within(scope) {
+        if matches!(item.kind, Kind::Story | Kind::Epic) || item.document.version().is_none() {
+            continue;
+        }
+        let Some(raw) = item.document.text("parent") else {
+            continue;
+        };
+        let Some(epic) = index
+            .resolve(raw, &item.node)
+            .filter(|parent| parent.kind == Kind::Epic)
+        else {
+            continue;
+        };
+        let kind = kind_label(item);
+        let epic = epic.reference().unwrap_or_else(|| raw.to_owned());
+        found.push(Finding {
+            check: Check::ParentKind,
+            severity: Severity::Error,
+            node: Some(item.node.clone()),
+            path: Some(relative(tree, &item.file)),
+            message: format!(
+                "a {kind} has the epic `{epic}` for `parent`: an epic only groups stories"
+            ),
+            remedy: Remedy::human([
+                format!("set `parent` to a story of `{epic}`"),
+                "move the item to `stories/` if it is a story".to_owned(),
+                "remove `parent` from the front-matter".to_owned(),
+            ]),
+        });
     }
 }
 

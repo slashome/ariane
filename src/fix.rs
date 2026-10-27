@@ -36,7 +36,7 @@ use crate::schema::is_valid_id;
 use crate::tree::{Item, NodePath, Tree};
 
 /// The prefixes of the ids `ariane migrate` allocates (SPEC.md §1.4).
-const ID_PREFIXES: [char; 4] = ['T', 'S', 'R', 'D'];
+const ID_PREFIXES: [char; 5] = ['T', 'E', 'S', 'R', 'D'];
 
 /// Whether `stem` is `<id>-` followed by a non-empty slug.
 pub fn conforms(id: &str, stem: &str) -> bool {
@@ -596,6 +596,7 @@ mod tests {
         );
         assert_eq!(target_stem("S1", "T003-login").as_deref(), Some("S1-login"));
         assert_eq!(target_stem("T1", "T10-a").as_deref(), Some("T1-a"));
+        assert_eq!(target_stem("E2", "E002-epic").as_deref(), Some("E2-epic"));
         assert_eq!(
             target_stem("T5", "3035690590-migrer").as_deref(),
             Some("T5-3035690590-migrer")

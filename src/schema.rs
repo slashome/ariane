@@ -176,6 +176,7 @@ pub const CORE_KEYS: &[CoreKey] = &[
         requirement: Requirement::May,
         by_kind: &[
             (Kind::Task, Requirement::Must),
+            (Kind::Epic, Requirement::Must),
             (Kind::Story, Requirement::Must),
             (Kind::Reflexion, Requirement::Must),
             (Kind::Ressource, Requirement::MustNot),
@@ -188,7 +189,12 @@ pub const CORE_KEYS: &[CoreKey] = &[
         requirement: Requirement::ShouldNot,
         by_kind: &[(Kind::Story, Requirement::May)],
     },
-    key("parent", ValueType::Reference, Requirement::May),
+    CoreKey {
+        name: "parent",
+        value: ValueType::Reference,
+        requirement: Requirement::May,
+        by_kind: &[(Kind::Epic, Requirement::MustNot)],
+    },
     key("depends_on", ValueType::References, Requirement::May),
     key("size", ValueType::Enum(SIZES), Requirement::May),
     key("impact", ValueType::Enum(LEVELS), Requirement::May),
@@ -210,8 +216,9 @@ pub const CORE_KEYS: &[CoreKey] = &[
 ];
 
 /// Every item kind, in the order `ariane schema --json` lists them.
-pub const KINDS: [Kind; 5] = [
+pub const KINDS: [Kind; 6] = [
     Kind::Task,
+    Kind::Epic,
     Kind::Story,
     Kind::Reflexion,
     Kind::Ressource,
@@ -236,9 +243,10 @@ pub fn keys_of_type(value: ValueType) -> impl Iterator<Item = &'static str> {
         .map(|key| key.name)
 }
 
-/// Letter that starts a new id for an item of `kind`: T task, S story, R reflexion, D ressource (SPEC.md §1.4).
+/// Letter that starts a new id for an item of `kind`: T task, E epic, S story, R reflexion, D ressource (SPEC.md §1.4).
 pub fn id_prefix(kind: Kind) -> char {
     match kind {
+        Kind::Epic => 'E',
         Kind::Story => 'S',
         Kind::Reflexion => 'R',
         Kind::Ressource => 'D',
@@ -416,6 +424,7 @@ mod tests {
     #[test]
     fn ids_take_a_prefix_by_kind() {
         assert_eq!(id_prefix(Kind::Task), 'T');
+        assert_eq!(id_prefix(Kind::Epic), 'E');
         assert_eq!(id_prefix(Kind::Story), 'S');
         assert_eq!(id_prefix(Kind::Reflexion), 'R');
         assert_eq!(id_prefix(Kind::Ressource), 'D');

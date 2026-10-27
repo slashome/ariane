@@ -20,6 +20,7 @@ export const routes = {
 
 const sections: Record<Kind, string> = {
   task: routes.tasks,
+  epic: routes.tasks,
   story: routes.stories,
   reflexion: routes.reflexions,
   ressource: routes.ressources,

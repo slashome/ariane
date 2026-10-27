@@ -117,6 +117,8 @@ pub enum Check {
     OpenInArchives,
     /// `parent` or `depends_on` points to no existing item.
     DanglingReference,
+    /// `parent` points to an epic from an item that is not a story.
+    ParentKind,
     /// A value outside its fixed vocabulary or format.
     OutOfVocabulary,
     /// A custom key declared in no applicable `node.toml`.

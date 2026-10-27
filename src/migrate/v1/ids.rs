@@ -3,7 +3,7 @@
 //! Every item needs an `id` unique within its node. In order of preference, an
 //! item keeps the `id` it already declares, takes a code prefix from its file
 //! name (`b3-…` gives `b3`, `T038-…` gives `T038`), or receives a new one: the
-//! prefix of its kind (T task or backlog, S story, R reflexion, D ressource)
+//! prefix of its kind (T task or backlog, E epic, S story, R reflexion, D ressource)
 //! followed by the next free number of that prefix in the node, zero-padded to
 //! three digits. Allocation runs over the files sorted by path, so it is the same
 //! on every run. Files are never renamed.

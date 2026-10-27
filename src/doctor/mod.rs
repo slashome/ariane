@@ -354,6 +354,32 @@ category = "done"
         );
     }
 
+    /// The text of a version-1 epic of node `p` with id `id`, plus `extra` header lines.
+    fn epic(id: &str, extra: &str) -> String {
+        format!(
+            "---\nariane: 1\nnode: p\nid: {id}\ntitle: Epic\nstatus: a-faire\nmod: M\n{extra}---\n"
+        )
+    }
+
+    #[test]
+    fn an_epic_groups_stories_and_has_no_parent() {
+        let repo = base();
+        repo.write("p/epics/E1-e.md", &epic("E1", ""))
+            .write("p/stories/S1-s.md", &task("p", "S1", "parent: E1\n"))
+            .write(
+                "p/tasks/T1-a.md",
+                &task("p", "T1", "tests: [a]\nparent: S1\n"),
+            );
+        assert_eq!(checks(&repo), vec![]);
+        repo.write("p/epics/E2-f.md", &epic("E2", "parent: E1\n"));
+        only(&repo, Check::ForbiddenKey);
+        repo.write("p/epics/E2-f.md", &epic("E2", "")).write(
+            "p/tasks/T1-a.md",
+            &task("p", "T1", "tests: [a]\nparent: E1\n"),
+        );
+        only(&repo, Check::ParentKind);
+    }
+
     #[test]
     fn waiting_keys_left_after_the_wait_are_a_warning() {
         let repo = waiting_base();

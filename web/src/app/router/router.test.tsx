@@ -15,7 +15,7 @@ const schema: Schema = {
     { id: 'done', label: 'Done' },
     { id: 'dropped', label: 'Dropped' },
   ],
-  id_prefixes: { reflexion: 'R', ressource: 'D', story: 'S', task: 'T', unknown: 'T' },
+  id_prefixes: { epic: 'E', reflexion: 'R', ressource: 'D', story: 'S', task: 'T', unknown: 'T' },
   keys: [
     { name: 'priority', type: 'enum', values: ['low', 'medium', 'high'] },
     { name: 'impact', type: 'enum', values: ['low', 'medium', 'high'] },
