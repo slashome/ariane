@@ -50,6 +50,8 @@ pub struct Row<'a> {
     pub milestone: Option<&'a str>,
     /// `parent` as `<node>#<id>`.
     pub parent: Option<String>,
+    /// The epic of a story, or of a task's story, as `<node>#<id>` (ADR-0019).
+    pub epic: Option<String>,
     /// `depends_on` as `<node>#<id>` references, in header order.
     pub depends_on: Vec<String>,
     /// Links to external trackers, as `<connector>:<id>` (ADR-0011); empty when unbound.
@@ -166,6 +168,7 @@ pub fn row<'a>(tree: &Tree, item: &'a Item) -> Row<'a> {
         release: document.text("release"),
         milestone: document.text("milestone"),
         parent: relations::parent(item),
+        epic: relations::epic(tree, item),
         depends_on: relations::depends_on(item),
         external: document.texts("external"),
         branches: document.texts("branches"),

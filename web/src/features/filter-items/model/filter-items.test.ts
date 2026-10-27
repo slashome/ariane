@@ -20,6 +20,7 @@ function item(overrides: Partial<Item>): Item {
     release: null,
     milestone: null,
     parent: null,
+    epic: null,
     depends_on: [],
     external: [],
     branches: [],
@@ -125,5 +126,20 @@ describe('filterItems with a typed query', () => {
     expect(found('status: -@ size:<=')).toEqual(['T1', 'T2', 'T3', 'T4'])
     expect(found('tasks:x')).toEqual([])
     expect(found('tasks/T001')).toEqual(['T1', 'T2', 'T3', 'T4'])
+  })
+})
+
+describe('the epic filter', () => {
+  const tasks = [
+    item({ id: 'T1', epic: 'acme/web#E1' }),
+    item({ id: 'T2', epic: 'acme/web#E2' }),
+    item({ id: 'T3' }),
+  ]
+  const kept = (query: string) => filterItems(tasks, { ...emptyFilters, query }).map((task) => task.id)
+
+  it('keeps the items of an epic named by its id or its reference, or leaves them out', () => {
+    expect(kept('epic:E1')).toEqual(['T1'])
+    expect(kept('epic:acme/web#E2,e1')).toEqual(['T1', 'T2'])
+    expect(kept('-epic:E1')).toEqual(['T2', 'T3'])
   })
 })

@@ -9,6 +9,10 @@ describe('buildVocabulary', () => {
       { value: 'andrea', label: 'Andrea Martel' },
       { value: 'keyvan', label: 'Keyvan Coen' },
     ])
+    expect(vocabulary.epic).toEqual([
+      { value: 'E1', label: 'Big' },
+      { value: 'a#E1', label: 'Big' },
+    ])
     expect(rankOrders(vocabulary)).toEqual({ size: ['XS', 'S', 'M', 'L', 'XL'], impact: ['low', 'medium', 'high'], priority: ['low', 'medium', 'high'] })
   })
 })
@@ -17,7 +21,7 @@ describe('checkQuery', () => {
   const messages = (text: string) => checkQuery(parseQuery(text), vocabulary).map((issue) => [issue.start, issue.severity, issue.message])
 
   it('accepts known keys and values, whatever their case and accents', () => {
-    expect(messages('status:A-FAIRE category:todo is:Closed size:<=m @Keyvan free text')).toEqual([])
+    expect(messages('status:A-FAIRE category:todo is:Closed size:<=m epic:e1 @Keyvan free text')).toEqual([])
   })
 
   it('reports an unknown key, an unknown value, a missing value and a forbidden comparison', () => {

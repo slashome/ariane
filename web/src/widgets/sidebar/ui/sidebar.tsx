@@ -7,6 +7,7 @@ import {
   HeartPulse,
   Home,
   Inbox,
+  Layers,
   LayoutDashboard,
   Library,
   Lightbulb,
@@ -217,6 +218,7 @@ export function Sidebar() {
           <Entry to={routes.matrix} label="Size × impact" icon={Grid2x2} count={counts.toEstimate} search={scope} nested />
           <Entry to={routes.backlog} label="Backlog" icon={Inbox} count={counts.backlog} search={scope} nested />
         </Section>
+        <Entry to={routes.epics} label="Epics" icon={Layers} count={counts.epics} search={scope} />
         <Entry to={routes.stories} label="Stories" icon={BookOpen} count={counts.stories} search={scope} />
         <Section id="reflexions" label="Reflexions" icon={Lightbulb} collapsed={collapsed.has('reflexions')} onToggle={() => toggle('reflexions')}>
           <Entry to={routes.reflexions} end label="Board" icon={Columns3} count={counts.reflexions} search={scope} nested />

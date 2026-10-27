@@ -22,6 +22,8 @@ export interface Item {
   release: string | null
   milestone: string | null
   parent: string | null
+  // The epic of a story, or of a task's story, as `<node>#<id>`.
+  epic: string | null
   depends_on: string[]
   external: string[]
   branches: string[]

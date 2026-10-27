@@ -7,6 +7,7 @@ export const routes = {
   kanban: '/tasks/kanban',
   matrix: '/tasks/matrix',
   backlog: '/tasks/backlog',
+  epics: '/epics',
   stories: '/stories',
   reflexions: '/reflexions',
   journal: '/reflexions/journal',
@@ -20,7 +21,7 @@ export const routes = {
 
 const sections: Record<Kind, string> = {
   task: routes.tasks,
-  epic: routes.tasks,
+  epic: routes.epics,
   story: routes.stories,
   reflexion: routes.reflexions,
   ressource: routes.ressources,

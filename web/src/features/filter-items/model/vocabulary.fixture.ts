@@ -1,4 +1,4 @@
-import type { NodeSummary, Schema } from '@/shared/api'
+import { makeItem, type NodeSummary, type Schema } from '@/shared/api'
 import { buildVocabulary } from './vocabulary'
 
 // A schema, two nodes and the vocabulary they give, for the tests of the search field.
@@ -22,4 +22,4 @@ export const nodes: NodeSummary[] = [
   { path: 'b', items: 1, workflow: [{ id: 'a-faire', label: 'Todo', category: 'todo' }, { id: 'fait', label: 'Fait', category: 'done' }], people: { andrea: { name: 'Andrea Martel' } } },
 ]
 
-export const vocabulary = buildVocabulary(nodes, schema)
+export const vocabulary = buildVocabulary(nodes, schema, [makeItem({ node: 'a', id: 'E1', kind: 'epic', title: 'Big' })])

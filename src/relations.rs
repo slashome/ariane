@@ -11,6 +11,7 @@ use std::collections::HashMap;
 
 use serde::Serialize;
 
+use crate::item::Kind;
 use crate::tasks::{self, Row};
 use crate::tree::{Item, NodePath, Tree, full_reference, parse_reference};
 
@@ -53,6 +54,27 @@ pub fn depends_on(item: &Item) -> Vec<String> {
         .into_iter()
         .map(|raw| canonical(raw, &item.node))
         .collect()
+}
+
+/// The epic `item` belongs to, as `<node>#<id>`: its `parent` for a story,
+/// its story's `parent` for a task (ADR-0019); `None` for an epic itself, or
+/// when no ancestor within two levels is an epic.
+pub fn epic(tree: &Tree, item: &Item) -> Option<String> {
+    let resolve = |child: &Item| {
+        let (node, id) = parse_reference(child.document.text("parent")?, &child.node)?;
+        tree.items
+            .iter()
+            .find(|candidate| candidate.node == node && candidate.id() == Some(id.as_str()))
+    };
+    let mut current = item;
+    for _ in 0..2 {
+        let parent = resolve(current)?;
+        if parent.kind == Kind::Epic {
+            return parent.reference();
+        }
+        current = parent;
+    }
+    None
 }
 
 /// `raw` as `<node>#<id>` when it parses, unchanged otherwise.
@@ -181,6 +203,33 @@ mod tests {
         let task = find(&tree, "p#T2");
         assert_eq!(parent(task).as_deref(), Some("p#S1"));
         assert_eq!(depends_on(task), ["p#T1", "q#T9", "p#T404"]);
+    }
+
+    #[test]
+    fn a_story_and_its_tasks_belong_to_the_epic_of_the_story() {
+        let repo = Repo::new();
+        repo.write(
+            "p/epics/E1-e.md",
+            "---\nariane: 1\nnode: p\nid: E1\ntitle: E\nstatus: todo\n---\n",
+        )
+        .write(
+            "p/stories/S1-s.md",
+            "---\nariane: 1\nnode: p\nid: S1\ntitle: S\nstatus: todo\nparent: E1\n---\n",
+        )
+        .write(
+            "p/tasks/T1-a.md",
+            "---\nariane: 1\nnode: p\nid: T1\ntitle: A\nstatus: todo\nparent: S1\n---\n",
+        )
+        .write(
+            "p/tasks/T2-b.md",
+            "---\nariane: 1\nnode: p\nid: T2\ntitle: B\nstatus: todo\n---\n",
+        );
+        let tree = Tree::load(repo.root()).unwrap();
+        let epic_of = |reference| epic(&tree, find(&tree, reference));
+        assert_eq!(epic_of("p#S1").as_deref(), Some("p#E1"));
+        assert_eq!(epic_of("p#T1").as_deref(), Some("p#E1"));
+        assert_eq!(epic_of("p#T2"), None);
+        assert_eq!(epic_of("p#E1"), None);
     }
 
     #[test]

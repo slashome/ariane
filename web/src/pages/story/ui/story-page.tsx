@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { useParams } from 'react-router'
-import { progressOf, ProgressMeter, useItems } from '@/entities/item'
+import { ItemLink, progressOf, ProgressMeter, useItems } from '@/entities/item'
 import { personasOf, useNodes } from '@/entities/node'
 import { useSchema } from '@/entities/schema'
 import { QueryField, scopeItems, useFilteredItems, useItemFilters } from '@/features/filter-items'
@@ -28,6 +28,20 @@ function StoryPersonas({ detail }: { detail: ItemDetail }) {
   )
 }
 
+function StoryEpic({ detail }: { detail: ItemDetail }) {
+  const epic = detail.relations.parent
+  if (epic?.kind !== 'epic') {
+    return null
+  }
+  return (
+    <section className="flex flex-wrap items-baseline gap-2 text-sm" aria-label="Epic">
+      <h2 className="font-semibold">Part of</h2>
+      <span className="font-mono text-xs text-muted-foreground">{epic.id}</span>
+      <ItemLink item={epic}>{epic.title ?? epic.path}</ItemLink>
+    </section>
+  )
+}
+
 function StoryProgress({ detail }: { detail: ItemDetail }) {
   const { data: items = [] } = useItems()
   const { data: schema } = useSchema()
@@ -43,6 +57,7 @@ function StoryProgress({ detail }: { detail: ItemDetail }) {
   const ready = rows.filter((row) => row.ready).length
   return (
     <section className="space-y-4">
+      <StoryEpic detail={detail} />
       <StoryPersonas detail={detail} />
       <div className="space-y-2 rounded-lg border border-border p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">

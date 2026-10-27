@@ -30,6 +30,11 @@ describe('groupStories', () => {
     expect(first?.progress.ratio).toBe(0.5)
   })
 
+  it('groups by epic, stories without one last', () => {
+    const groups = groupStories([story('S5', { epic: 'p#E1' }), story('S6')], [], 'epic', (key) => `epic ${key}`)
+    expect(groups.map((group) => group.label)).toEqual(['epic p#E1', 'No epic'])
+  })
+
   it('groups by status in workflow order', () => {
     const groups = groupStories(stories, tasks, 'status')
     expect(groups.map((group) => group.key)).toEqual(['todo', 'in_progress', 'done'])

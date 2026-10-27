@@ -13,7 +13,7 @@ const labels = (text: string, cursor = text.length) => suggest(text, cursor, voc
 
 describe('suggest', () => {
   it('proposes the keys first, and nothing for free words', () => {
-    expect(labels('')).toEqual(['status:', 'category:', 'is:', 'size:', 'impact:', 'priority:', '@person'])
+    expect(labels('')).toEqual(['status:', 'category:', 'is:', 'size:', 'impact:', 'priority:', 'epic:', '@person'])
     expect(labels('fix s')).toEqual(['status:', 'size:'])
     expect(labels('lang')).toEqual([])
     expect(labels('"s')).toEqual([])
