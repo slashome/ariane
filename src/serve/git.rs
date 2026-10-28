@@ -52,9 +52,7 @@ pub struct Status {
 ///
 /// Fails when git cannot be run or exits with an error.
 pub fn status(root: &Path) -> Result<Status> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(root)
+    let output = git(root)
         .args(["status", "--porcelain=v1", "-z", "--branch"])
         .output()
         .context("running git status")?;
@@ -70,9 +68,7 @@ pub fn status(root: &Path) -> Result<Status> {
 /// The date (`YYYY-MM-DD`) of the latest commit that touched `relative`, a
 /// path under the repository root; `None` when git fails or no commit touched it.
 pub fn last_change(root: &Path, relative: &Path) -> Option<String> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(root)
+    let output = git(root)
         .args(["log", "-1", "--format=%cs", "--"])
         .arg(relative)
         .output()
@@ -116,9 +112,7 @@ pub fn commit(root: &Path, message: &str) -> Result<Committed> {
     let mut args = vec!["add", "-A", "--"];
     args.extend(paths);
     run(root, &args)?;
-    let staged = Command::new("git")
-        .arg("-C")
-        .arg(root)
+    let staged = git(root)
         .args(["diff", "--cached", "--quiet"])
         .status()
         .context("running git diff")?;
@@ -177,9 +171,7 @@ pub fn pull(root: &Path) -> Result<Pulled> {
 ///
 /// Fails when git cannot be started, or exits with an error, carrying its stderr.
 fn run(root: &Path, args: &[&str]) -> Result<String> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(root)
+    let output = git(root)
         .args(args)
         .output()
         .with_context(|| format!("running git {}", args[0]))?;
@@ -368,10 +360,22 @@ fn diff_with(root: &Path, args: &[&str], path: &Path, no_index: bool) -> Result<
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
+/// A `git -C root` command, to which arguments are added.
+///
+/// It runs with `GIT_OPTIONAL_LOCKS=0`: otherwise a read such as `git status`
+/// may rewrite `.git/index` to refresh its stat cache, which the watcher sees
+/// as a change, reloads the tree and sends the interface refetching `repo`,
+/// hence `git status` again — a reload loop.
+fn git(root: &Path) -> Command {
+    let mut command = Command::new("git");
+    command.env("GIT_OPTIONAL_LOCKS", "0").arg("-C").arg(root);
+    command
+}
+
 /// A `git -C root --literal-pathspecs` command, to which arguments are added.
 fn git_literal(root: &Path) -> Command {
-    let mut command = Command::new("git");
-    command.arg("-C").arg(root).arg("--literal-pathspecs");
+    let mut command = git(root);
+    command.arg("--literal-pathspecs");
     command
 }
 
@@ -527,6 +531,21 @@ mod tests {
             .status()
             .unwrap();
         assert!(status.success());
+    }
+
+    #[test]
+    fn reading_the_status_leaves_the_index_untouched() {
+        let dir = repository();
+        let file = std::fs::File::options()
+            .write(true)
+            .open(dir.path().join("tree/a.md"))
+            .unwrap();
+        let later = std::time::SystemTime::now() + std::time::Duration::from_secs(60);
+        file.set_modified(later).unwrap();
+        let index = dir.path().join(".git/index");
+        let before = std::fs::read(&index).unwrap();
+        status(dir.path()).unwrap();
+        assert_eq!(std::fs::read(&index).unwrap(), before);
     }
 
     #[test]
