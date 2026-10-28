@@ -53,6 +53,7 @@ A closing *Revisit if* section names the conditions under which the decision wou
 | [0017](0017-keep-a-nodes-judgment-in-its-items.md) | Keep a node's judgment in its items, drop `INDEX.md` | Accepted | 2026-10-23 |
 | [0018](0018-name-the-personas-a-story-is-written-for.md) | Name the personas a story is written for | Accepted | 2026-10-23 |
 | [0019](0019-group-stories-into-epics.md) | Group stories into epics | Accepted | 2026-10-27 |
+| [0020](0020-ship-a-method-skillset-under-arianes-authority.md) | Ship a method skillset under Ariane's authority | Proposed | 2026-10-28 |
 
 ## Archived
 
