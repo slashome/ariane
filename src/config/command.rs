@@ -17,17 +17,27 @@ use crate::cli::{ConfigArgs, ConfigCommand};
 
 /// Runs `ariane config <subcommand>` against the owner's configuration file.
 ///
+/// `repo` is the global `--repo` (or `ARIANE_REPO`), which `init` writes as
+/// the `repo` key.
+///
 /// # Errors
 ///
-/// Fails when the file cannot be read, written or validated, or when the
-/// subcommand's own checks refuse the change.
-pub fn run(args: &ConfigArgs) -> Result<ExitCode> {
+/// Fails when the file cannot be read, written or validated, when `repo` is
+/// not valid UTF-8, which a TOML string cannot hold, or when the subcommand's
+/// own checks refuse the change.
+pub fn run(args: &ConfigArgs, repo: Option<&Path>) -> Result<ExitCode> {
     let file = super::file();
     match &args.command {
         ConfigCommand::Path => println!("{}", file.display()),
         ConfigCommand::Example => print!("{}", example(None)),
-        ConfigCommand::Init { force, repo } => {
-            init(&file, *force, repo.as_deref())?;
+        ConfigCommand::Init { force } => {
+            let repo = repo
+                .map(|path| {
+                    path.to_str()
+                        .with_context(|| format!("{} is not valid UTF-8", path.display()))
+                })
+                .transpose()?;
+            init(&file, *force, repo)?;
             println!("created {}", file.display());
         }
         ConfigCommand::Get { key } => {

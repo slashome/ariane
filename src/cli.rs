@@ -493,18 +493,19 @@ pub struct ConfigArgs {
 }
 
 /// The subcommands of `ariane config`. `Init` takes `force` to overwrite an
-/// existing file and an optional `repo` to set; `Get` and `Set` take a dotted
+/// existing file, and sets `repo` from the global `--repo`: an option of its
+/// own under the same name would clash with it; `Get` and `Set` take a dotted
 /// key such as `server.port`.
 #[derive(Subcommand)]
 pub enum ConfigCommand {
     #[command(about = "Print the path of the configuration file")]
     Path,
-    #[command(about = "Create the configuration file with its defaults")]
+    #[command(
+        about = "Create the configuration file with its defaults, and `repo` set from --repo or ARIANE_REPO"
+    )]
     Init {
         #[arg(long, help = "Overwrite an existing file")]
         force: bool,
-        #[arg(long, help = "The content repository to set")]
-        repo: Option<String>,
     },
     #[command(about = "Print the value of a key, such as server.port")]
     Get {
