@@ -1,15 +1,15 @@
 import { ArrowRightToLine, Inbox } from 'lucide-react'
 import { useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router'
-import { changesFor, itemHref, ItemLink, useItems, useUpdateItem } from '@/entities/item'
+import { changesFor, idColumn, itemHref, titleColumn, useItems, useUpdateItem } from '@/entities/item'
 import { firstStatusOf, workflowOf, useNodes } from '@/entities/node'
 import { enumValues, useSchema } from '@/entities/schema'
 import { QueryField, useFilteredItems, useItemFilters } from '@/features/filter-items'
 import type { Item } from '@/shared/api'
 import { scopeSearch } from '@/shared/config'
-import { cn, displayNode } from '@/shared/lib'
-import { Button, EmptyState, ErrorState, Highlight, Kbd, LoadingState, NativeSelect, PageHeader, Segmented, toast } from '@/shared/ui'
-import { cycle, missingFields, sortBacklog, sorts, type BacklogSort, type TriageField } from '../model/triage'
+import { displayNode } from '@/shared/lib'
+import { Button, DataTable, EmptyState, ErrorState, Kbd, LoadingState, PageHeader, Segmented, toast, type Column } from '@/shared/ui'
+import { cycle, level, missingFields, triageFields, triageOrder, type TriageField } from '../model/triage'
 
 const fieldKeys: Record<string, TriageField> = { p: 'priority', i: 'impact', s: 'size' }
 
@@ -21,9 +21,8 @@ export function BacklogPage() {
   const update = useUpdateItem()
   const navigate = useNavigate()
   const { search } = useLocation()
-  const [sort, setSort] = useState<BacklogSort>('triage')
   const [focused, setFocused] = useState(0)
-  const rows = useRef<(HTMLLIElement | null)[]>([])
+  const rows = useRef<(HTMLTableRowElement | null)[]>([])
 
   const vocabulary = useMemo<Record<TriageField, string[]>>(
     () => ({ priority: enumValues(schema, 'priority'), impact: enumValues(schema, 'impact'), size: enumValues(schema, 'size') }),
@@ -31,7 +30,7 @@ export function BacklogPage() {
   )
 
   const { items: tasks, total } = useFilteredItems(items, { kinds: ['task'], categories: ['backlog'] })
-  const backlog = useMemo(() => sortBacklog(tasks, sort, vocabulary.priority, vocabulary.size), [tasks, sort, vocabulary])
+  const backlog = useMemo(() => triageOrder(tasks, vocabulary.priority, vocabulary.size), [tasks, vocabulary])
   const untriaged = backlog.filter((item) => missingFields(item).length > 0).length
 
   const set = (item: Item, field: TriageField, value: string | null) =>
@@ -53,7 +52,7 @@ export function BacklogPage() {
     rows.current[next]?.focus()
   }
 
-  const onKeyDown = (event: KeyboardEvent<HTMLLIElement>, item: Item, index: number) => {
+  const onKeyDown = (event: KeyboardEvent<HTMLTableRowElement>, item: Item, index: number) => {
     if (event.metaKey || event.ctrlKey || event.altKey) {
       return
     }
@@ -78,6 +77,57 @@ export function BacklogPage() {
     }
   }
 
+  const itself = (item: Item) => item
+  const fieldColumn = (field: TriageField): Column<Item> => ({
+    id: field,
+    header: field.charAt(0).toUpperCase() + field.slice(1),
+    sortValue: (item) => (item[field] === null ? null : level(vocabulary[field], item[field])),
+    className: 'align-middle',
+    cell: (item) => (
+      <Segmented
+        label={`${field} of ${item.id ?? item.path}`}
+        values={vocabulary[field]}
+        value={item[field]}
+        onChange={(value) => set(item, field, value)}
+        focusable={false}
+      />
+    ),
+  })
+  const columns: Column<Item>[] = [
+    idColumn(itself),
+    titleColumn(itself, {
+      header: 'Task',
+      details: (item) => {
+        const missing = missingFields(item)
+        return (
+          <>
+            {item.node !== filters.node && <span className="font-mono">{displayNode(item.node)}</span>}
+            {missing.length > 0 && <span className="text-amber-700 dark:text-amber-300">to estimate: {missing.join(', ')}</span>}
+          </>
+        )
+      },
+    }),
+    ...triageFields.map(fieldColumn),
+    {
+      id: 'created',
+      header: 'Created',
+      sortValue: (item) => item.created,
+      className: 'font-mono text-xs whitespace-nowrap text-muted-foreground',
+      cell: (item) => item.created ?? '—',
+    },
+    {
+      id: 'plan',
+      header: '',
+      className: 'align-middle',
+      cell: (item) => (
+        <Button size="sm" variant="outline" tabIndex={-1} onClick={() => plan(item)} title="Move it to the first todo status of its workflow">
+          <ArrowRightToLine className="size-3.5" aria-hidden />
+          Plan
+        </Button>
+      ),
+    },
+  ]
+
   return (
     <div className="flex flex-col gap-4 p-6">
       <PageHeader
@@ -87,21 +137,7 @@ export function BacklogPage() {
             ? 'Loading…'
             : `${backlog.length} ${backlog.length === 1 ? 'task' : 'tasks'} waiting in a backlog status · ${untriaged} still to estimate`
         }
-        actions={
-          <>
-          <QueryField count={backlog.length} total={total} />
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
-            Sort
-            <NativeSelect aria-label="Sort the backlog" value={sort} onChange={(event) => setSort(event.target.value as BacklogSort)}>
-              {sorts.map((entry) => (
-                <option key={entry.value} value={entry.value}>
-                  {entry.label}
-                </option>
-              ))}
-            </NativeSelect>
-          </label>
-          </>
-        }
+        actions={<QueryField count={backlog.length} total={total} />}
       />
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <span>
@@ -128,54 +164,23 @@ export function BacklogPage() {
             : `${total} backlog tasks in scope; the search field keeps none of them.`}
         </EmptyState>
       ) : (
-        <ul aria-label="Backlog tasks" className="divide-y divide-border rounded-lg border border-border">
-          {backlog.map((item, index) => {
-            const missing = missingFields(item)
-            return (
-              <li
-                key={item.path}
-                ref={(element) => {
-                  rows.current[index] = element
-                }}
-                tabIndex={index === focused ? 0 : -1}
-                onFocus={() => setFocused(index)}
-                onKeyDown={(event) => onKeyDown(event, item, index)}
-                aria-label={`${item.id ?? ''} ${item.title ?? item.path}`}
-                className="grid items-center gap-x-4 gap-y-2 px-3 py-2.5 outline-none focus-visible:bg-primary/5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset lg:grid-cols-[minmax(0,1fr)_auto]"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-baseline gap-2">
-                    <span className="shrink-0 font-mono text-xs text-muted-foreground">
-                      <Highlight text={item.id ?? ''} />
-                    </span>
-                    <ItemLink item={item} className="truncate">
-                      <Highlight text={item.title ?? item.path} />
-                    </ItemLink>
-                  </div>
-                  <p className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
-                    {item.node !== filters.node && <span className="font-mono">{displayNode(item.node)}</span>}
-                    {item.created && <span>since {item.created}</span>}
-                    {missing.length > 0 && <span className="text-amber-700 dark:text-amber-300">to estimate: {missing.join(', ')}</span>}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  {(['priority', 'impact', 'size'] as const).map((field) => (
-                    <div key={field} className="flex items-center gap-1.5">
-                      <span className={cn('w-12 text-right text-[11px] text-muted-foreground', item[field] === null && 'text-amber-700 dark:text-amber-300')}>
-                        {field}
-                      </span>
-                      <Segmented label={`${field} of ${item.id ?? item.path}`} values={vocabulary[field]} value={item[field]} onChange={(value) => set(item, field, value)} focusable={false} />
-                    </div>
-                  ))}
-                  <Button size="sm" variant="outline" tabIndex={-1} onClick={() => plan(item)} title="Move it to the first todo status of its workflow">
-                    <ArrowRightToLine className="size-3.5" aria-hidden />
-                    Plan
-                  </Button>
-                </div>
-              </li>
-            )
+        <DataTable
+          rows={backlog}
+          columns={columns}
+          rowKey={(item) => item.path}
+          storageKey="backlog"
+          label="Backlog tasks"
+          rowProps={(item, index) => ({
+            ref: (element: HTMLTableRowElement | null) => {
+              rows.current[index] = element
+            },
+            tabIndex: index === focused ? 0 : -1,
+            onFocus: () => setFocused(index),
+            onKeyDown: (event) => onKeyDown(event, item, index),
+            'aria-label': `${item.id ?? ''} ${item.title ?? item.path}`,
+            className: 'outline-none focus-visible:bg-primary/5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
           })}
-        </ul>
+        />
       )}
     </div>
   )

@@ -6,3 +6,7 @@ if (typeof Element !== 'undefined') {
   Element.prototype.releasePointerCapture ??= () => undefined
   Element.prototype.scrollIntoView ??= () => undefined
 }
+
+afterEach(() => {
+  localStorage.clear()
+})

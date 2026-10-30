@@ -3,8 +3,8 @@ import { useState } from 'react'
 import { useRemovePersona } from '../api/use-personas'
 import { ApiError, type PersonaDirectory, type PersonaEntry } from '@/shared/api'
 import { displayNode } from '@/shared/lib'
-import { Button, ConfirmDialog, EmptyState, Highlight } from '@/shared/ui'
-import { ItemReference } from './item-reference'
+import { Button, ConfirmDialog, DataTable, EmptyState, Highlight, type Column } from '@/shared/ui'
+import { References } from './item-reference'
 import { PersonaDialog } from './persona-dialog'
 
 type Editing = { node: string; persona: PersonaEntry | null }
@@ -34,6 +34,49 @@ export function PersonasList({ directories, searching }: { directories: PersonaD
     )
   }
 
+  const columnsFor = (node: string): Column<PersonaEntry>[] => [
+    {
+      id: 'name',
+      header: 'Name',
+      sortValue: (persona) => persona.name,
+      className: 'font-medium',
+      cell: (persona) => <Highlight text={persona.name} />,
+    },
+    {
+      id: 'id',
+      header: 'Id',
+      sortValue: (persona) => persona.id,
+      className: 'font-mono text-xs',
+      cell: (persona) => <Highlight text={persona.id} />,
+    },
+    {
+      id: 'stories',
+      header: 'Stories',
+      sortValue: (persona) => persona.used_by.length || null,
+      cell: (persona) => <References references={persona.used_by} />,
+    },
+    {
+      id: 'actions',
+      header: '',
+      headerClassName: 'w-20',
+      cell: (persona) => (
+        <div className="flex justify-end gap-1">
+          <button type="button" className="icon-button size-7" aria-label={`Edit ${persona.name}`} onClick={() => setEditing({ node, persona })}>
+            <Pencil className="size-3.5" aria-hidden />
+          </button>
+          <button
+            type="button"
+            className="icon-button size-7 hover:text-red-600"
+            aria-label={`Remove ${persona.name}`}
+            onClick={() => setRemoving({ node, persona })}
+          >
+            <Trash2 className="size-3.5" aria-hidden />
+          </button>
+        </div>
+      ),
+    },
+  ]
+
   if (directories.length === 0) {
     return (
       <EmptyState icon={UserRound} title="No tracker here">
@@ -60,61 +103,13 @@ export function PersonasList({ directories, searching }: { directories: PersonaD
               {searching ? 'No persona here of a story the search finds.' : 'No persona yet.'}
             </p>
           ) : (
-            <table className="w-full overflow-hidden rounded-lg border border-border text-sm">
-              <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Name</th>
-                  <th className="px-3 py-2 font-medium">Id</th>
-                  <th className="px-3 py-2 font-medium">Stories</th>
-                  <th className="w-20 px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {directory.personas.map((persona) => (
-                  <tr key={persona.id} className="border-t border-border align-top">
-                    <td className="px-3 py-2 font-medium">
-                      <Highlight text={persona.name} />
-                    </td>
-                    <td className="px-3 py-2 font-mono text-xs">
-                      <Highlight text={persona.id} />
-                    </td>
-                    <td className="px-3 py-2">
-                      {persona.used_by.length === 0 ? (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      ) : (
-                        <ul className="flex flex-wrap gap-1">
-                          {persona.used_by.map((reference) => (
-                            <li key={reference}>
-                              <ItemReference reference={reference} />
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex justify-end gap-1">
-                        <button
-                          type="button"
-                          className="icon-button size-7"
-                          aria-label={`Edit ${persona.name}`}
-                          onClick={() => setEditing({ node: directory.node, persona })}
-                        >
-                          <Pencil className="size-3.5" aria-hidden />
-                        </button>
-                        <button
-                          type="button"
-                          className="icon-button size-7 hover:text-red-600"
-                          aria-label={`Remove ${persona.name}`}
-                          onClick={() => setRemoving({ node: directory.node, persona })}
-                        >
-                          <Trash2 className="size-3.5" aria-hidden />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable
+              rows={directory.personas}
+              columns={columnsFor(directory.node)}
+              rowKey={(persona) => persona.id}
+              storageKey="personas"
+              label={`Personas of ${displayNode(directory.node)}`}
+            />
           )}
         </section>
       ))}

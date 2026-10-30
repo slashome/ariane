@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { brokenChecks, routeOwner, useProxy } from '@/entities/proxy'
 import type { ProxyRoute } from '@/shared/api'
 import { cn } from '@/shared/lib'
-import { Button, ConfirmDialog, ErrorState, LoadingState, PageHeader, toast } from '@/shared/ui'
+import { Button, ConfirmDialog, DataTable, ErrorState, LoadingState, PageHeader, toast, type Column } from '@/shared/ui'
 import { useRemoveRoute } from '../api/use-route-edits'
 import { Fold } from './fold'
 import { RouteDialog } from './route-dialog'
@@ -54,6 +54,65 @@ export function ProxyPage() {
   const broken = report ? brokenChecks(report) : 0
   const needsRoot = report ? !report.ok || reminder !== null || report.routes.some((route) => !route.declared) : false
 
+  const routeColumns: Column<ProxyRoute>[] = [
+    {
+      id: 'host',
+      header: 'Host',
+      sortValue: (route) => route.host,
+      cell: (route) => (
+        <a
+          href={`http://${route.host}`}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 font-mono text-xs text-accent hover:underline"
+          aria-label={`Open http://${route.host} in a new tab`}
+        >
+          {route.host}
+          <ExternalLink className="size-3" aria-hidden />
+        </a>
+      ),
+    },
+    { id: 'port', header: 'Port', sortValue: (route) => route.port, className: 'font-mono text-xs tabular-nums', cell: (route) => route.port },
+    {
+      id: 'owner',
+      header: 'Owner',
+      sortValue: (route) => routeOwner(route),
+      cell: (route) => <span className={cn('text-xs', route.node === null ? 'text-muted-foreground' : 'font-mono')}>{routeOwner(route)}</span>,
+    },
+    {
+      id: 'declared',
+      header: '/etc/hosts',
+      sortValue: (route) => route.declared,
+      cell: (route) => <Verdict ok={route.declared} label={route.declared ? 'declared' : 'missing'} />,
+    },
+    {
+      id: 'listening',
+      header: 'Upstream',
+      sortValue: (route) => route.listening,
+      cell: (route) => <Verdict ok={route.listening} label={route.listening ? 'listening' : 'not listening'} />,
+    },
+    {
+      id: 'actions',
+      header: '',
+      headerClassName: 'w-20',
+      cell: (route) =>
+        route.node === null ? (
+          <span className="flex justify-end" title="From config.toml: ariane config set server.host <name>">
+            <Lock className="size-3.5 text-muted-foreground" aria-label="Read-only: from config.toml" />
+          </span>
+        ) : (
+          <div className="flex justify-end gap-1">
+            <button type="button" className="icon-button size-7" aria-label={`Edit ${route.host}`} onClick={() => setEditing({ route })}>
+              <Pencil className="size-3.5" aria-hidden />
+            </button>
+            <button type="button" className="icon-button size-7 hover:text-red-600" aria-label={`Remove ${route.host}`} onClick={() => setRemoving(route)}>
+              <Trash2 className="size-3.5" aria-hidden />
+            </button>
+          </div>
+        ),
+    },
+  ]
+
   return (
     <div className="flex flex-col gap-6 p-6">
       <PageHeader
@@ -97,67 +156,7 @@ export function ProxyPage() {
             <h2 id="proxy-routes" className="text-sm font-semibold">
               Routes <span className="font-normal text-muted-foreground">({report.routes.length})</span>
             </h2>
-            <table className="w-full overflow-hidden rounded-lg border border-border text-sm">
-              <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Host</th>
-                  <th className="px-3 py-2 font-medium">Port</th>
-                  <th className="px-3 py-2 font-medium">Owner</th>
-                  <th className="px-3 py-2 font-medium">/etc/hosts</th>
-                  <th className="px-3 py-2 font-medium">Upstream</th>
-                  <th className="w-20 px-3 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {report.routes.map((route) => (
-                  <tr key={route.host} className="border-t border-border align-top">
-                    <td className="px-3 py-2">
-                      <a
-                        href={`http://${route.host}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 font-mono text-xs text-accent hover:underline"
-                        aria-label={`Open http://${route.host} in a new tab`}
-                      >
-                        {route.host}
-                        <ExternalLink className="size-3" aria-hidden />
-                      </a>
-                    </td>
-                    <td className="px-3 py-2 font-mono text-xs tabular-nums">{route.port}</td>
-                    <td className="px-3 py-2">
-                      <span className={cn('text-xs', route.node === null ? 'text-muted-foreground' : 'font-mono')}>{routeOwner(route)}</span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <Verdict ok={route.declared} label={route.declared ? 'declared' : 'missing'} />
-                    </td>
-                    <td className="px-3 py-2">
-                      <Verdict ok={route.listening} label={route.listening ? 'listening' : 'not listening'} />
-                    </td>
-                    <td className="px-3 py-2">
-                      {route.node === null ? (
-                        <span className="flex justify-end" title="From config.toml: ariane config set server.host <name>">
-                          <Lock className="size-3.5 text-muted-foreground" aria-label="Read-only: from config.toml" />
-                        </span>
-                      ) : (
-                        <div className="flex justify-end gap-1">
-                          <button type="button" className="icon-button size-7" aria-label={`Edit ${route.host}`} onClick={() => setEditing({ route })}>
-                            <Pencil className="size-3.5" aria-hidden />
-                          </button>
-                          <button
-                            type="button"
-                            className="icon-button size-7 hover:text-red-600"
-                            aria-label={`Remove ${route.host}`}
-                            onClick={() => setRemoving(route)}
-                          >
-                            <Trash2 className="size-3.5" aria-hidden />
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable rows={report.routes} columns={routeColumns} rowKey={(route) => route.host} storageKey="proxy-routes" label="Routes" />
             <p className="text-xs text-muted-foreground">
               The interface's own route comes from <code>server.host</code> in config.toml and is changed with <code>ariane config set server.host &lt;name&gt;</code>.
               The others are the <code>[proxy]</code> table of each node's node.toml.

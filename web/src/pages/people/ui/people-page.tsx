@@ -7,8 +7,8 @@ import { useItems } from '@/entities/item'
 import { QueryField, useFilteredItems, useItemFilters } from '@/features/filter-items'
 import { ApiError, type Directory, type PersonEntry } from '@/shared/api'
 import { cn, displayNode, isWithinNode } from '@/shared/lib'
-import { Button, ConfirmDialog, EmptyState, ErrorState, Highlight, LoadingState, PageHeader } from '@/shared/ui'
-import { ItemReference } from './item-reference'
+import { Button, ConfirmDialog, DataTable, EmptyState, ErrorState, Highlight, LoadingState, PageHeader, type Column } from '@/shared/ui'
+import { References } from './item-reference'
 import { PersonasList } from './personas-list'
 import { PersonDialog } from './person-dialog'
 
@@ -100,6 +100,56 @@ export function PeoplePage() {
     )
   }
 
+  const columnsFor = (directory: Directory): Column<PersonEntry>[] => [
+    {
+      id: 'name',
+      header: 'Name',
+      sortValue: (person) => person.name,
+      className: 'font-medium',
+      cell: (person) => <Highlight text={person.name} />,
+    },
+    {
+      id: 'handle',
+      header: 'Handle',
+      sortValue: (person) => person.handle,
+      className: 'font-mono text-xs',
+      cell: (person) => <Highlight text={person.handle} />,
+    },
+    {
+      id: 'monday',
+      header: 'monday',
+      sortValue: (person) => person.monday,
+      className: 'font-mono text-xs text-muted-foreground',
+      cell: (person) => person.monday ?? '—',
+    },
+    {
+      id: 'awaited',
+      header: 'Awaited by',
+      sortValue: (person) => person.awaited_by.length || null,
+      cell: (person) => <References references={person.awaited_by} />,
+    },
+    {
+      id: 'actions',
+      header: '',
+      headerClassName: 'w-20',
+      cell: (person) => (
+        <div className="flex justify-end gap-1">
+          <button type="button" className="icon-button size-7" aria-label={`Edit ${person.name}`} onClick={() => setEditing({ directory, person })}>
+            <Pencil className="size-3.5" aria-hidden />
+          </button>
+          <button
+            type="button"
+            className="icon-button size-7 hover:text-red-600"
+            aria-label={`Remove ${person.name}`}
+            onClick={() => setRemoving({ directory, person })}
+          >
+            <Trash2 className="size-3.5" aria-hidden />
+          </button>
+        </div>
+      ),
+    },
+  ]
+
   return (
     <div className="flex flex-col gap-6 p-6">
       <PageHeader
@@ -168,58 +218,13 @@ export function PeoplePage() {
                 {searching ? 'No one here waited on by an item the search finds.' : 'No one yet.'}
               </p>
             ) : (
-              <table className="w-full overflow-hidden rounded-lg border border-border text-sm">
-                <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">Name</th>
-                    <th className="px-3 py-2 font-medium">Handle</th>
-                    <th className="px-3 py-2 font-medium">monday</th>
-                    <th className="px-3 py-2 font-medium">Awaited by</th>
-                    <th className="w-20 px-3 py-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {directory.people.map((person) => (
-                    <tr key={person.handle} className="border-t border-border align-top">
-                      <td className="px-3 py-2 font-medium">
-                        <Highlight text={person.name} />
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs">
-                        <Highlight text={person.handle} />
-                      </td>
-                      <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{person.monday ?? '—'}</td>
-                      <td className="px-3 py-2">
-                        {person.awaited_by.length === 0 ? (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        ) : (
-                          <ul className="flex flex-wrap gap-1">
-                            {person.awaited_by.map((reference) => (
-                              <li key={reference}>
-                                <ItemReference reference={reference} />
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex justify-end gap-1">
-                          <button type="button" className="icon-button size-7" aria-label={`Edit ${person.name}`} onClick={() => setEditing({ directory, person })}>
-                            <Pencil className="size-3.5" aria-hidden />
-                          </button>
-                          <button
-                            type="button"
-                            className="icon-button size-7 hover:text-red-600"
-                            aria-label={`Remove ${person.name}`}
-                            onClick={() => setRemoving({ directory, person })}
-                          >
-                            <Trash2 className="size-3.5" aria-hidden />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <DataTable
+                rows={directory.people}
+                columns={columnsFor(directory)}
+                rowKey={(person) => person.handle}
+                storageKey="people"
+                label={`People of ${displayNode(directory.node)}`}
+              />
             )}
           </section>
         ))

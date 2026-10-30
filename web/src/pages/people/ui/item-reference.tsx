@@ -18,3 +18,18 @@ export function ItemReference({ reference }: { reference: string }) {
     label
   )
 }
+
+export function References({ references }: { references: string[] }) {
+  if (references.length === 0) {
+    return <span className="text-xs text-muted-foreground">—</span>
+  }
+  return (
+    <ul className="flex flex-wrap gap-1">
+      {references.map((reference) => (
+        <li key={reference}>
+          <ItemReference reference={reference} />
+        </li>
+      ))}
+    </ul>
+  )
+}

@@ -1,13 +1,13 @@
 import { Layers } from 'lucide-react'
 import { useMemo } from 'react'
-import { isClosed, ItemLink, ProgressMeter, StatusBadge, useItems } from '@/entities/item'
+import { idColumn, isClosed, progressColumn, statusColumn, titleColumn, useItems } from '@/entities/item'
 import { statusLabel, useNodes } from '@/entities/node'
 import { useSchema } from '@/entities/schema'
 import { QueryField, scopeItems, useFilteredItems, useItemFilters } from '@/features/filter-items'
 import type { Category } from '@/shared/api'
 import { cn, displayNode } from '@/shared/lib'
-import { EmptyState, ErrorState, Highlight, LoadingState, PageHeader } from '@/shared/ui'
-import { epicRows } from '../model/epic-rows'
+import { DataTable, EmptyState, ErrorState, LoadingState, PageHeader, type Column } from '@/shared/ui'
+import { epicRows, type EpicRow } from '../model/epic-rows'
 
 export function EpicsPage() {
   const { data: items = [], isPending, error } = useItems()
@@ -21,6 +21,25 @@ export function EpicsPage() {
     const children = scopeItems(items, { node: null, includeArchived: filters.includeArchived, includeDescendants: false })
     return epicRows(epics, children)
   }, [items, epics, filters.includeArchived])
+
+  const epicOf = (row: EpicRow) => row.epic
+  const columns: Column<EpicRow>[] = [
+    idColumn(epicOf),
+    titleColumn(epicOf, {
+      header: 'Epic',
+      details: ({ epic, stories, tasks }) => (
+        <>
+          {epic.node !== filters.node && <span className="font-mono">{displayNode(epic.node)}</span>}
+          <span>
+            {stories.length} {stories.length === 1 ? 'story' : 'stories'} · {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}
+          </span>
+        </>
+      ),
+    }),
+    statusColumn(epicOf, (epic) => statusLabel(nodes, epic.node, epic.status)),
+    progressColumn('stories', 'Stories', (row) => row.storyProgress, labels, 'no story'),
+    progressColumn('tasks', 'Tasks of its stories', (row) => row.taskProgress, labels),
+  ]
 
   return (
     <div className="flex flex-col gap-5 p-6">
@@ -48,45 +67,7 @@ export function EpicsPage() {
           )}
         </EmptyState>
       ) : (
-        <ul className="divide-y divide-border">
-          <li aria-hidden className="hidden gap-x-4 pb-2 text-xs text-muted-foreground md:grid md:grid-cols-[minmax(0,1fr)_9rem_16rem_16rem]">
-            <span>Epic</span>
-            <span>Status</span>
-            <span>Stories</span>
-            <span>Tasks of its stories</span>
-          </li>
-          {rows.map(({ epic, stories, tasks, storyProgress, taskProgress }) => (
-            <li
-              key={epic.path}
-              className={cn(
-                'grid items-center gap-x-4 gap-y-1 py-2.5 md:grid-cols-[minmax(0,1fr)_9rem_16rem_16rem]',
-                isClosed(epic.category) && 'opacity-70',
-              )}
-            >
-              <div className="min-w-0">
-                <div className="flex items-baseline gap-2">
-                  <span className="shrink-0 font-mono text-xs text-muted-foreground">
-                    <Highlight text={epic.id ?? ''} />
-                  </span>
-                  <ItemLink item={epic} className="truncate font-medium">
-                    <Highlight text={epic.title ?? epic.path} />
-                  </ItemLink>
-                </div>
-                <p className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
-                  {epic.node !== filters.node && <span className="font-mono">{displayNode(epic.node)}</span>}
-                  <span>
-                    {stories.length} {stories.length === 1 ? 'story' : 'stories'} · {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}
-                  </span>
-                </p>
-              </div>
-              <div>
-                <StatusBadge status={epic.status} category={epic.category} label={statusLabel(nodes, epic.node, epic.status)} />
-              </div>
-              <ProgressMeter progress={storyProgress} labels={labels} empty="no story" />
-              <ProgressMeter progress={taskProgress} labels={labels} />
-            </li>
-          ))}
-        </ul>
+        <DataTable rows={rows} columns={columns} rowKey={(row) => row.epic.path} storageKey="epics" label="Epics" rowProps={(row) => ({ className: cn('align-middle', isClosed(row.epic.category) && 'opacity-70') })} />
       )}
     </div>
   )

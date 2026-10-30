@@ -1,14 +1,14 @@
 import { BookOpen } from 'lucide-react'
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router'
-import { isClosed, ItemLink, ProgressMeter, StatusBadge, useItems } from '@/entities/item'
+import { idColumn, isClosed, progressColumn, ProgressMeter, statusColumn, titleColumn, useItems } from '@/entities/item'
 import { statusLabel, useNodes } from '@/entities/node'
 import { useSchema } from '@/entities/schema'
 import { QueryField, scopeItems, useFilteredItems, useItemFilters } from '@/features/filter-items'
 import type { Category } from '@/shared/api'
 import { cn, displayNode } from '@/shared/lib'
-import { EmptyState, ErrorState, Highlight, LoadingState, NativeSelect, PageHeader } from '@/shared/ui'
-import { groupings, groupStories, type StoryGrouping } from '../model/story-groups'
+import { DataTable, EmptyState, ErrorState, LoadingState, NativeSelect, PageHeader, type Column } from '@/shared/ui'
+import { groupings, groupStories, type StoryGrouping, type StoryRow } from '../model/story-groups'
 
 const groupParam = 'group'
 
@@ -33,6 +33,26 @@ export function StoriesPage() {
     return groupStories(stories, tasks, grouping, label)
   }, [items, stories, filters.includeArchived, grouping, schema])
   const count = groups.reduce((sum, group) => sum + group.items.length, 0)
+
+  const storyOf = (row: StoryRow) => row.story
+  const columns: Column<StoryRow>[] = [
+    idColumn(storyOf),
+    titleColumn(storyOf, {
+      header: 'Story',
+      details: ({ story, tasks }) => (
+        <>
+          {story.node !== filters.node && <span className="font-mono">{displayNode(story.node)}</span>}
+          {grouping !== 'milestone' && story.milestone && <span>milestone {story.milestone}</span>}
+          {grouping !== 'milestone' && grouping !== 'release' && story.release && <span>release {story.release}</span>}
+          <span>
+            {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}
+          </span>
+        </>
+      ),
+    }),
+    statusColumn(storyOf, (story) => statusLabel(nodes, story.node, story.status)),
+    progressColumn('progress', 'Tasks', (row) => row.progress, labels),
+  ]
 
   const setGrouping = (value: string) =>
     setParams(
@@ -88,34 +108,14 @@ export function StoriesPage() {
               </h2>
               <ProgressMeter progress={group.progress} labels={labels} className="w-72 max-w-full" />
             </div>
-            <ul className="divide-y divide-border">
-              {group.items.map(({ story, tasks, progress }) => (
-                <li key={story.path} className={cn('grid items-center gap-x-4 gap-y-1 py-2.5 md:grid-cols-[minmax(0,1fr)_9rem_18rem]', isClosed(story.category) && 'opacity-70')}>
-                  <div className="min-w-0">
-                    <div className="flex items-baseline gap-2">
-                      <span className="shrink-0 font-mono text-xs text-muted-foreground">
-                        <Highlight text={story.id ?? ''} />
-                      </span>
-                      <ItemLink item={story} className="truncate font-medium">
-                        <Highlight text={story.title ?? story.path} />
-                      </ItemLink>
-                    </div>
-                    <p className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
-                      {story.node !== filters.node && <span className="font-mono">{displayNode(story.node)}</span>}
-                      {grouping !== 'milestone' && story.milestone && <span>milestone {story.milestone}</span>}
-                      {grouping !== 'milestone' && grouping !== 'release' && story.release && <span>release {story.release}</span>}
-                      <span>
-                        {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}
-                      </span>
-                    </p>
-                  </div>
-                  <div>
-                    <StatusBadge status={story.status} category={story.category} label={statusLabel(nodes, story.node, story.status)} />
-                  </div>
-                  <ProgressMeter progress={progress} labels={labels} />
-                </li>
-              ))}
-            </ul>
+            <DataTable
+              rows={group.items}
+              columns={columns}
+              rowKey={(row) => row.story.path}
+              storageKey="stories"
+              label={group.label}
+              rowProps={(row) => ({ className: cn('align-middle', isClosed(row.story.category) && 'opacity-70') })}
+            />
           </section>
         ))
       )}
