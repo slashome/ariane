@@ -113,7 +113,7 @@ fn run() -> Result<ExitCode> {
     let cli = parse();
     match &cli.command {
         cli::Command::Schema(args) => return schema_command(args),
-        cli::Command::Config(args) => return config::command::run(args),
+        cli::Command::Config(args) => return config::command::run(args, cli.repo.as_deref()),
         cli::Command::Service(args) => return service::run(args),
         cli::Command::Pull => return pull_command(&repo::discover(cli.repo.as_deref())?.root),
         cli::Command::Proxy(cli::ProxyArgs {
@@ -190,7 +190,7 @@ fn run() -> Result<ExitCode> {
         cli::Command::Schema(args) => schema_command(&args),
         cli::Command::Serve(args) => serve::run(location.root, tree, &args),
         cli::Command::Proxy(args) => proxy::run(&tree, &args),
-        cli::Command::Config(args) => config::command::run(&args),
+        cli::Command::Config(args) => config::command::run(&args, cli.repo.as_deref()),
         cli::Command::Service(args) => service::run(&args),
     }
 }
@@ -277,6 +277,25 @@ fn scope(node: Option<&str>, all: bool, here: Option<&tree::NodePath>) -> Option
 mod tests {
     use super::*;
     use crate::tree::NodePath;
+    use clap::Parser;
+
+    #[test]
+    fn the_command_line_definition_is_consistent() {
+        cli::Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn config_init_takes_the_repository_from_the_global_option() {
+        let cli =
+            cli::Cli::try_parse_from(["ariane", "config", "init", "--repo", "/content"]).unwrap();
+        assert_eq!(cli.repo.as_deref(), Some(std::path::Path::new("/content")));
+        assert!(matches!(
+            cli.command,
+            cli::Command::Config(cli::ConfigArgs {
+                command: cli::ConfigCommand::Init { force: false }
+            })
+        ));
+    }
 
     #[test]
     fn an_explicit_node_wins_over_the_current_directory() {

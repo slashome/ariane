@@ -44,8 +44,7 @@ cd ~/_ariane && git init
 Tell Ariane where it lives, so that every command finds it from any directory:
 
 ```sh
-ariane config init
-ariane config set repo ~/_ariane
+ariane config init --repo ~/_ariane
 ```
 
 ### 3. Write a first item
