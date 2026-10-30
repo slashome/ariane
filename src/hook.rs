@@ -281,11 +281,22 @@ fn pull_request_urls(response: &serde_json::Value) -> Vec<String> {
     let text = response.to_string().replace("\\n", " ");
     let mut urls: Vec<String> = text
         .split(|c: char| c.is_whitespace() || c == '"' || c == '\\')
-        .filter(|word| word.starts_with("https://") && word.contains("/pull/"))
-        .map(|word| word.trim_end_matches(['.', ',', ')']).to_owned())
+        .map(|word| word.trim_end_matches(['.', ',', ')']))
+        .filter(|word| is_pull_request_url(word))
+        .map(str::to_owned)
         .collect();
     urls.dedup();
     urls
+}
+
+/// A pull request's own address ends in `/pull/<number>`: the
+/// `/pull/new/<branch>` that `git push` suggests on a branch's first push is
+/// not one.
+fn is_pull_request_url(word: &str) -> bool {
+    word.starts_with("https://")
+        && word.rsplit_once("/pull/").is_some_and(|(_, number)| {
+            !number.is_empty() && number.bytes().all(|b| b.is_ascii_digit())
+        })
 }
 
 /// Unit tests of command reading and of the whole hook on a fixture.
@@ -346,6 +357,14 @@ mod tests {
             ["https://github.com/o/r/pull/12"]
         );
         assert!(pull_request_urls(&json!({ "stdout": "nothing" })).is_empty());
+    }
+
+    #[test]
+    fn the_link_a_first_push_suggests_is_no_pull_request() {
+        let response = json!({ "stdout": "", "stderr": "remote: Create a pull request for 'feat/x' on GitHub by visiting:\nremote:      https://github.com/o/r/pull/new/feat/x\nremote:\n" });
+        assert!(pull_request_urls(&response).is_empty());
+        let response = json!({ "stdout": "See https://github.com/o/r/pull/12/files." });
+        assert!(pull_request_urls(&response).is_empty());
     }
 
     /// A content repository with one task, and a host repository next to it
