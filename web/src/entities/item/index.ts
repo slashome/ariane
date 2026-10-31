@@ -8,7 +8,7 @@ export { categoryOrder, changesFor, isClosed, isWorkItem } from './model/categor
 export { categoryFill, categoryTone } from './model/category-tone'
 export { epicProgress, type EpicProgress } from './model/epic-progress'
 export { excerpt } from './model/excerpt'
-export { compareManualOrder } from './model/manual-order'
+export { compareManualOrder, sortByManualOrder } from './model/manual-order'
 export { compareNatural, groupBy, type Group } from './model/groups'
 export { blockersOf, childrenOf, dependencyOrder, indexByReference, progressOf, type Blockers, type Progress } from './model/progress'
 export { syncMessage, type SyncMessage } from './model/sync-message'
