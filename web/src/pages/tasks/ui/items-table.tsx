@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
-import { idColumn, statusColumn, titleColumn } from '@/entities/item'
+import { idColumn, statusColumn, titleColumn, useRankItem } from '@/entities/item'
 import { statusLabel, useNodes } from '@/entities/node'
 import { enumValues, kindLabel, useSchema } from '@/entities/schema'
 import type { Item, NodeSummary, Schema } from '@/shared/api'
 import { displayNode } from '@/shared/lib'
-import { DataTable, type Column } from '@/shared/ui'
+import { DataTable, toast, type Column, type Reorder } from '@/shared/ui'
 import { ItemDetails } from '@/widgets/item-details'
 
 type RankedKey = 'priority' | 'size' | 'impact'
@@ -14,7 +14,19 @@ function rank(schema: Schema | undefined, key: RankedKey, value: string | null):
   return index < 0 ? null : index
 }
 
-function buildColumns(schema: Schema | undefined, nodes: NodeSummary[]): Column<Item>[] {
+function positions(items: Item[]): Map<string, number> {
+  const counts = new Map<string, number>()
+  return new Map(
+    items.map((item) => {
+      const group = `${item.node}#${item.kind}`
+      const position = (counts.get(group) ?? 0) + 1
+      counts.set(group, position)
+      return [item.path, position]
+    }),
+  )
+}
+
+function buildColumns(schema: Schema | undefined, nodes: NodeSummary[], order: Map<string, number>, index: Map<string, number>): Column<Item>[] {
   const itself = (item: Item) => item
   const ranked = (key: RankedKey, header: string): Column<Item> => ({
     id: key,
@@ -23,6 +35,13 @@ function buildColumns(schema: Schema | undefined, nodes: NodeSummary[]): Column<
     cell: (item) => item[key] ?? <span className="text-muted-foreground">—</span>,
   })
   return [
+    {
+      id: 'order',
+      header: 'Order',
+      sortValue: (item) => index.get(item.path),
+      className: 'font-mono text-xs text-muted-foreground',
+      cell: (item) => order.get(item.path),
+    },
     {
       id: 'node',
       header: 'Node',
@@ -50,8 +69,21 @@ function buildColumns(schema: Schema | undefined, nodes: NodeSummary[]): Column<
 export function ItemsTable({ items }: { items: Item[] }) {
   const { data: schema } = useSchema()
   const { data: nodes = [] } = useNodes()
-  const columns = useMemo(() => buildColumns(schema, nodes), [schema, nodes])
+  const order = useMemo(() => positions(items), [items])
+  const index = useMemo(() => new Map(items.map((item, position) => [item.path, position])), [items])
+  const columns = useMemo(() => buildColumns(schema, nodes, order, index), [schema, nodes, order, index])
   const [selected, setSelected] = useState<Item | null>(null)
+  const rank = useRankItem()
+  const reorder: Reorder<Item> = {
+    column: 'order',
+    onMove: (item, over, place) => {
+      if (item.node !== over.node || item.kind !== over.kind) {
+        toast.info('The order is per node and kind: drop it next to an item of its own node and kind')
+        return
+      }
+      rank.mutate({ item, place, other: over })
+    },
+  }
 
   return (
     <>
@@ -60,6 +92,7 @@ export function ItemsTable({ items }: { items: Item[] }) {
         columns={columns}
         rowKey={(item) => item.path}
         storageKey="tasks"
+        reorder={reorder}
         label="Tasks"
         empty="No item matches."
         rowProps={(item) => ({

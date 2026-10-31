@@ -1,1 +1,1 @@
-export { DataTable, type Column } from './data-table'
+export { DataTable, type Column, type Reorder } from './data-table'

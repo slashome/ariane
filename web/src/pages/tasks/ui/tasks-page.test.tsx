@@ -74,11 +74,15 @@ function renderPage(url: string) {
   )
 }
 
-const titles = () =>
-  screen
-    .getAllByRole('row')
-    .slice(1)
-    .map((row) => within(row).getAllByRole('cell')[2]?.textContent)
+const column = (name: string) => {
+  const [header, ...rows] = screen.getAllByRole('row')
+  const index = within(header as HTMLElement)
+    .getAllByRole('columnheader')
+    .findIndex((cell) => cell.textContent === name)
+  return rows.map((row) => within(row).getAllByRole('cell')[index]?.textContent)
+}
+
+const titles = () => column('Title')
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -98,6 +102,13 @@ describe('TasksPage', () => {
     await screen.findByText('Paint the fence')
     await userEvent.click(screen.getByRole('button', { name: /size/i }))
     expect(titles()).toEqual(['Fix the gate', 'Paint the fence'])
+  })
+
+  it('numbers each item in the order of its node and kind, with a handle to move it', async () => {
+    renderPage('/tasks')
+    await screen.findByText('Paint the fence')
+    expect(column('Order')).toEqual(['1', '2'])
+    expect(screen.getAllByRole('button', { name: /^Move / })).toHaveLength(2)
   })
 
   it('applies the filters carried by the URL', async () => {

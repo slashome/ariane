@@ -204,6 +204,64 @@ pub fn set_key(header: &mut Mapping, key: &str, wanted: Option<Value>) {
     *header = rebuilt;
 }
 
+/// Rewrites the top-level scalar `key` of a file's front-matter as one line,
+/// leaving every other byte of the file as it was, or removes it when `value`
+/// is `None`.
+///
+/// A new key is inserted after the last core key that precedes it in the
+/// canonical order (SPEC §1.3), after that key's indented lines if it holds a
+/// list. Returns `None` when the file has no front-matter opened and closed by
+/// a plain `---\n` line; the caller then rewrites the whole header.
+pub fn set_scalar_line(text: &str, key: &str, value: Option<&str>) -> Option<String> {
+    let rest = text.strip_prefix("---\n")?;
+    let close = rest
+        .find("\n---\n")
+        .map(|index| index + 1)
+        .or_else(|| rest.starts_with("---\n").then_some(0))?;
+    let (front, tail) = rest.split_at(close);
+    let lines: Vec<&str> = front.split_inclusive('\n').collect();
+    let written = value.map(|value| format!("{key}: {value}\n"));
+    let mut output: Vec<String> = lines.iter().map(|line| (*line).to_owned()).collect();
+    if let Some(index) = lines.iter().position(|line| key_of(line) == Some(key)) {
+        match written {
+            Some(line) => output[index] = line,
+            None => {
+                output.remove(index);
+            }
+        }
+    } else if let Some(line) = written {
+        let own = crate::schema::CORE_KEYS
+            .iter()
+            .position(|core| core.name == key);
+        let before = |name: &str| {
+            let position = crate::schema::CORE_KEYS
+                .iter()
+                .position(|core| core.name == name);
+            matches!((position, own), (Some(position), Some(own)) if position < own)
+        };
+        let last = lines
+            .iter()
+            .rposition(|line| key_of(line).is_some_and(before));
+        let at = last.map_or(0, |last| {
+            (last + 1..lines.len())
+                .find(|&index| key_of(lines[index]).is_some())
+                .unwrap_or(lines.len())
+        });
+        output.insert(at, line);
+    }
+    Some(format!("---\n{}{tail}", output.concat()))
+}
+
+/// The key a front-matter line opens at the top level, `None` for an indented,
+/// list or comment line.
+fn key_of(line: &str) -> Option<&str> {
+    let first = line.chars().next()?;
+    if first.is_whitespace() || first == '-' || first == '#' {
+        return None;
+    }
+    line.split_once(':').map(|(name, _)| name.trim())
+}
+
 /// Cuts a file into its front-matter text and its body, without parsing either.
 ///
 /// The front-matter must open on the very first line (after an optional byte
@@ -270,5 +328,25 @@ mod tests {
         let document = Document::parse(text);
         let rendered = render(document.mapping().unwrap(), &document.body).unwrap();
         assert_eq!(rendered, text);
+    }
+
+    #[test]
+    fn a_scalar_line_is_set_in_place_keeping_every_other_byte() {
+        let text = "---\nariane: 1\nid: T1\ntitle: 'Quoted title'\npriority: high\nexternal:\n- monday:1\ncreated: 2026-10-31\nowner: me\n---\n# Body\n";
+        let inserted = set_scalar_line(text, "rank", Some("1000")).unwrap();
+        assert_eq!(
+            inserted,
+            "---\nariane: 1\nid: T1\ntitle: 'Quoted title'\npriority: high\nrank: 1000\nexternal:\n- monday:1\ncreated: 2026-10-31\nowner: me\n---\n# Body\n"
+        );
+        let replaced = set_scalar_line(&inserted, "rank", Some("-500")).unwrap();
+        assert!(replaced.contains("priority: high\nrank: -500\nexternal:"));
+        assert_eq!(set_scalar_line(&replaced, "rank", None).unwrap(), text);
+        let after_list =
+            set_scalar_line("---\nid: T1\nrefs:\n  - ADR-0001\n---\n", "rank", Some("5"));
+        assert_eq!(
+            after_list.unwrap(),
+            "---\nid: T1\nrank: 5\nrefs:\n  - ADR-0001\n---\n"
+        );
+        assert!(set_scalar_line("# no header\n", "rank", Some("5")).is_none());
     }
 }

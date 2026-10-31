@@ -319,7 +319,8 @@ fn respace(ranks: &mut [Option<i64>], position: usize, end: usize) {
     }
 }
 
-/// Writes each change into its item's header, the key at its canonical place.
+/// Writes each change into its item's header, the key at its canonical place:
+/// only the `rank:` line changes, every other byte of the file is kept.
 ///
 /// # Errors
 ///
@@ -329,13 +330,22 @@ pub fn write(changes: &[Change]) -> Result<()> {
         let file = &change.item.file;
         let text =
             std::fs::read_to_string(file).with_context(|| format!("reading {}", file.display()))?;
-        let document = Document::parse(&text);
-        let Header::Present(mut header) = document.header else {
-            bail!("{} has no readable front-matter", file.display());
+        let rewritten = match item::set_scalar_line(
+            &text,
+            "rank",
+            change.to.map(|rank| rank.to_string()).as_deref(),
+        ) {
+            Some(rewritten) => rewritten,
+            None => {
+                let document = Document::parse(&text);
+                let Header::Present(mut header) = document.header else {
+                    bail!("{} has no readable front-matter", file.display());
+                };
+                item::set_key(&mut header, "rank", change.to.map(Value::from));
+                render(&header, &document.body)?
+            }
         };
-        item::set_key(&mut header, "rank", change.to.map(Value::from));
-        std::fs::write(file, render(&header, &document.body)?)
-            .with_context(|| format!("writing {}", file.display()))?;
+        std::fs::write(file, rewritten).with_context(|| format!("writing {}", file.display()))?;
     }
     Ok(())
 }
