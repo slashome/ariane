@@ -6,6 +6,7 @@ import type { Item, NodeSummary, Schema } from '@/shared/api'
 import { displayNode } from '@/shared/lib'
 import { DataTable, type Column } from '@/shared/ui'
 import { ItemDetails } from '@/widgets/item-details'
+import './tasks.css'
 
 type RankedKey = 'priority' | 'size' | 'impact'
 
@@ -20,14 +21,14 @@ function buildColumns(schema: Schema | undefined, nodes: NodeSummary[]): Column<
     id: key,
     header,
     sortValue: (item) => rank(schema, key, item[key]),
-    cell: (item) => item[key] ?? <span className="text-muted-foreground">—</span>,
+    cell: (item) => item[key] ?? <span className="items-table__none">—</span>,
   })
   return [
     {
       id: 'node',
       header: 'Node',
       sortValue: (item) => item.node,
-      className: 'font-mono text-xs',
+      className: 'items-table__node',
       cell: (item) => displayNode(item.node),
     },
     idColumn(itself),
@@ -41,7 +42,7 @@ function buildColumns(schema: Schema | undefined, nodes: NodeSummary[]): Column<
       id: 'created',
       header: 'Created',
       sortValue: (item) => item.created,
-      className: 'font-mono text-xs whitespace-nowrap',
+      className: 'items-table__created',
       cell: (item) => item.created ?? '—',
     },
   ]
@@ -70,7 +71,7 @@ export function ItemsTable({ items }: { items: Item[] }) {
               setSelected(item)
             }
           },
-          className: 'cursor-pointer hover:bg-muted/50 focus-visible:bg-muted focus-visible:outline-none',
+          className: 'items-table__row',
         })}
       />
       <ItemDetails item={selected} onClose={() => setSelected(null)} />

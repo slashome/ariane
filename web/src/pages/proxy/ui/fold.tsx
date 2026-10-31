@@ -1,6 +1,7 @@
-import { ChevronDown } from 'lucide-react'
 import { useId, useState, type ReactNode } from 'react'
 import { cn } from '@/shared/lib'
+import { Icon } from '@/shared/ui'
+import './proxy.css'
 
 type Override = { when: boolean; open: boolean }
 
@@ -19,22 +20,22 @@ export function Fold({
   const open = override !== null && override.when === openWhen ? override.open : openWhen
   const body = useId()
   return (
-    <section className="space-y-2" aria-label={title}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <section className="proxy-fold" aria-label={title}>
+      <div className="proxy-fold__header">
         <button
           type="button"
           aria-expanded={open}
           aria-controls={body}
           onClick={() => setOverride({ when: openWhen, open: !open })}
-          className="inline-flex items-center gap-1.5 text-sm font-semibold hover:text-foreground"
+          className="proxy-fold__toggle"
         >
-          <ChevronDown className={cn('size-4 shrink-0 transition-transform', !open && '-rotate-90')} aria-hidden />
+          <Icon name="chevron-down" className={cn('proxy-fold__chevron', !open && 'proxy-fold__chevron--folded')} />
           {title}
         </button>
         {summary}
       </div>
       {open && (
-        <div id={body} className="space-y-2">
+        <div id={body} className="proxy-fold__body">
           {children}
         </div>
       )}

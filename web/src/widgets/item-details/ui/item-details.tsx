@@ -1,4 +1,3 @@
-import { ChevronLeft, ChevronRight, ExternalLink, Maximize2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { ItemLink, waitingSummary } from '@/entities/item'
 import { ItemEditors } from '@/features/edit-item'
@@ -7,28 +6,29 @@ import { externalUrl, peopleOf, trackerOf, useNodes } from '@/entities/node'
 import { kindLabel } from '@/entities/schema'
 import type { Item, Tracker } from '@/shared/api'
 import { displayNode } from '@/shared/lib'
-import { Sheet } from '@/shared/ui'
+import { Icon, Sheet } from '@/shared/ui'
+import './item-details.css'
 
 function Field({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="grid grid-cols-[7rem_1fr] gap-2 text-sm">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 break-words">{value ?? <span className="text-muted-foreground">—</span>}</dd>
+    <div className="item-details__field">
+      <dt className="item-details__label">{label}</dt>
+      <dd className="item-details__value">{value ?? <span className="item-details__none">—</span>}</dd>
     </div>
   )
 }
 
 function ExternalLinks({ entries, tracker }: { entries: string[]; tracker: Tracker | null }) {
   return (
-    <ul className="space-y-0.5">
+    <ul className="item-details__externals">
       {entries.map((entry) => {
         const url = externalUrl(tracker, entry)
         return (
-          <li key={entry} className="font-mono text-xs">
+          <li key={entry} className="item-details__external">
             {url ? (
-              <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline">
+              <a href={url} target="_blank" rel="noreferrer" className="item-details__external-link">
                 {entry}
-                <ExternalLink className="size-3" aria-hidden />
+                <Icon name="external-link" className="item-details__external-icon" />
               </a>
             ) : (
               entry
@@ -58,8 +58,8 @@ export function ItemDetails({ item, onClose, stepper }: { item: Item | null; onC
       description={item ? `${displayNode(item.node)} · ${item.id ?? 'no id'}` : undefined}
     >
       {item && item.id !== null && (
-        <ItemLink item={item} className="inline-flex w-fit items-center gap-1.5 text-sm text-primary">
-          <Maximize2 className="size-3.5" aria-hidden />
+        <ItemLink item={item} className="item-details__open">
+          <Icon name="maximize" className="item-details__icon" />
           Open the page: body, parent, children, dependencies
         </ItemLink>
       )}
@@ -70,7 +70,7 @@ export function ItemDetails({ item, onClose, stepper }: { item: Item | null; onC
         </div>
       )}
       {item && (
-        <dl className="space-y-2 border-t border-border pt-3">
+        <dl className="item-details__fields">
           <Field label="Kind" value={kindLabel(item.kind)} />
           <Field label="Archived" value={item.archived ? 'yes' : 'no'} />
           {item.waiting_for.length > 0 && (
@@ -87,19 +87,19 @@ export function ItemDetails({ item, onClose, stepper }: { item: Item | null; onC
             }
           />
           <Field label="Schema" value={item.version === null ? 'not versioned' : `version ${item.version}`} />
-          <Field label="Path" value={<code className="font-mono text-xs">{item.path}</code>} />
+          <Field label="Path" value={<code className="item-details__path">{item.path}</code>} />
         </dl>
       )}
       {item && stepper && (
-        <nav aria-label="Step through the items" className="mt-auto flex items-center justify-between border-t border-border pt-3">
-          <button type="button" className="lu-icon-button size-8" aria-label="Previous item" disabled={!stepper.onPrevious} onClick={stepper.onPrevious}>
-            <ChevronLeft className="size-5" aria-hidden />
+        <nav aria-label="Step through the items" className="item-details__stepper">
+          <button type="button" className="lu-icon-button item-details__step" aria-label="Previous item" disabled={!stepper.onPrevious} onClick={stepper.onPrevious}>
+            <Icon name="chevron-left" className="item-details__step-icon" />
           </button>
-          <span className="text-xs text-muted-foreground tabular-nums">
+          <span className="item-details__position">
             {stepper.position} / {stepper.count}
           </span>
-          <button type="button" className="lu-icon-button size-8" aria-label="Next item" disabled={!stepper.onNext} onClick={stepper.onNext}>
-            <ChevronRight className="size-5" aria-hidden />
+          <button type="button" className="lu-icon-button item-details__step" aria-label="Next item" disabled={!stepper.onNext} onClick={stepper.onNext}>
+            <Icon name="chevron-right" className="item-details__step-icon" />
           </button>
         </nav>
       )}

@@ -1,11 +1,11 @@
-import { Hourglass } from 'lucide-react'
 import type { HTMLAttributes, ReactNode } from 'react'
 import type { Item } from '@/shared/api'
 import { cn, displayNode } from '@/shared/lib'
-import { Highlight } from '@/shared/ui'
+import { Highlight, Icon } from '@/shared/ui'
+import './item.css'
 
 function Chip({ children }: { children: ReactNode }) {
-  return <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">{children}</span>
+  return <span className="item-card__chip">{children}</span>
 }
 
 export function ItemCard({
@@ -35,36 +35,36 @@ export function ItemCard({
   return (
     <div
       className={cn(
-        'rounded-md border border-border bg-background p-2.5 text-sm shadow-xs',
-        selected && 'border-accent ring-2 ring-accent/40',
+        'item-card',
+        selected && 'item-card--selected',
         className,
       )}
       {...props}
     >
-      <div className="flex items-start justify-between gap-2">
-        <p className="line-clamp-3 min-w-0 leading-snug">
+      <div className="item-card__head">
+        <p className="lu-line-clamp item-card__title">
           <Highlight text={item.title ?? item.path} />
         </p>
         {aside}
       </div>
       {waiting && (
-        <p className="mt-1.5 inline-flex items-center gap-1 rounded bg-violet-500/15 px-1.5 py-0.5 text-[11px] text-violet-700 dark:text-violet-300">
-          <Hourglass className="size-3" aria-hidden />
+        <p className="item-card__waiting">
+          <Icon name="waiting" className="item-card__waiting-icon" />
           {waiting}
         </p>
       )}
-      <div className="mt-2 flex flex-wrap items-center gap-1">
-        <span className="font-mono text-[10px] text-muted-foreground">
+      <div className="item-card__meta">
+        <span className="item-card__id">
           <Highlight text={item.id ?? '—'} />
         </span>
-        {showNode && <span className="truncate font-mono text-[10px] text-muted-foreground">{displayNode(item.node)}</span>}
+        {showNode && <span className="lu-truncate item-card__node">{displayNode(item.node)}</span>}
         {chips.map((chip) => (
           <Chip key={chip}>{chip}</Chip>
         ))}
         {item.external.map((link) => (
           <Chip key={link}>{link}</Chip>
         ))}
-        {action && <span className="ml-auto">{action}</span>}
+        {action && <span className="item-card__action">{action}</span>}
       </div>
     </div>
   )

@@ -1,16 +1,16 @@
-import { categoryTone } from './category-tone'
+import { categoryFill, categoryTone } from './category-tone'
 
 describe('categoryTone', () => {
-  it('gives each category its own colour', () => {
-    expect(categoryTone('todo')).toContain('blue')
-    expect(categoryTone('in_progress')).toContain('amber')
-    expect(categoryTone('blocked')).toContain('red')
-    expect(categoryTone('done')).toContain('green')
-    expect(categoryTone('backlog')).toContain('slate')
-    expect(categoryTone('dropped')).toContain('line-through')
+  it('gives each category its own modifier', () => {
+    expect(categoryTone('todo')).toBe('category-tone category-tone--todo')
+    expect(categoryTone('dropped')).toBe('category-tone category-tone--dropped')
   })
 
   it('marks an item without category as such', () => {
-    expect(categoryTone(null)).toContain('border-dashed')
+    expect(categoryTone(null)).toBe('category-tone category-tone--none')
+  })
+
+  it('fills a bar segment by category', () => {
+    expect(categoryFill('blocked')).toBe('category-fill category-fill--blocked')
   })
 })

@@ -1,0 +1,68 @@
+.app-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--lu-space-3);
+  block-size: 3.5rem;
+  padding-inline: var(--lu-space-4);
+  border-block-end: 1px solid var(--lu-color-border);
+}
+
+.app-header__repo {
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+}
+
+.app-header__icon {
+  --lu-icon-size: 1rem;
+}
+
+.app-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--lu-space-3);
+  margin-inline-start: auto;
+}
+
+.node-switcher {
+  display: flex;
+  align-items: center;
+  gap: var(--lu-space-3);
+}
+
+.node-switcher__select {
+  inline-size: 18rem;
+}
+
+.node-switcher__option {
+  font-family: var(--lu-font-family-mono);
+  font-size: var(--lu-font-size-xs);
+}
+
+.node-switcher__option--tree {
+  white-space: pre;
+}
+
+.node-switcher__count {
+  color: var(--lu-color-muted-foreground);
+}
+
+.node-switcher__prefix {
+  color: color-mix(in oklab, var(--lu-color-muted-foreground) 60%, transparent);
+}
+
+.node-switcher__empty {
+  padding-block: var(--lu-space-1-5);
+  padding-inline: var(--lu-space-2);
+  font-size: var(--lu-font-size-xs);
+  color: var(--lu-color-muted-foreground);
+}
+
+.node-switcher__descendants {
+  display: flex;
+  align-items: center;
+  gap: var(--lu-space-2);
+  font-size: var(--lu-font-size-sm);
+  white-space: nowrap;
+  color: var(--lu-color-muted-foreground);
+}

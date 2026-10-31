@@ -1,4 +1,3 @@
-import { ChevronRight, ExternalLink, GitBranch, GitPullRequest, type LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 import { StatusBadge, useItem, useItems, waitingSummary } from '@/entities/item'
@@ -7,18 +6,19 @@ import { kindLabel } from '@/entities/schema'
 import type { ItemDetail, NodeSummary } from '@/shared/api'
 import { scopeSearch, sectionOf } from '@/shared/config'
 import { displayNode } from '@/shared/lib'
-import { Badge, EmptyState, ErrorState, LoadingState } from '@/shared/ui'
+import { Badge, EmptyState, ErrorState, Icon, LoadingState } from '@/shared/ui'
 import { branchLink, pullRequestLink, type CodeLink } from '../model/code-links'
 import { customEntries, refsOf } from '../model/header-keys'
 import { BodyEditor } from './body-editor'
 import { ItemEditors } from '@/features/edit-item'
 import { RelatedList, Unresolved } from './related-list'
+import './item-view.css'
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[6.5rem_1fr] gap-2 text-sm">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 break-words">{children ?? <span className="text-muted-foreground">—</span>}</dd>
+    <div className="item-view__field">
+      <dt className="item-view__label">{label}</dt>
+      <dd className="item-view__value">{children ?? <span className="item-view__none">—</span>}</dd>
     </div>
   )
 }
@@ -29,15 +29,15 @@ function Externals({ detail, nodes }: { detail: ItemDetail; nodes: NodeSummary[]
   }
   const tracker = trackerOf(nodes, detail.node)
   return (
-    <ul className="space-y-0.5">
+    <ul className="item-view__list item-view__list--tight">
       {detail.external.map((entry) => {
         const url = externalUrl(tracker, entry)
         return (
-          <li key={entry} className="font-mono text-xs">
+          <li key={entry} className="item-view__external">
             {url ? (
-              <a href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+              <a href={url} target="_blank" rel="noreferrer" className="item-view__link item-view__external-link">
                 {entry}
-                <ExternalLink className="size-3" aria-hidden />
+                <Icon name="external-link" className="item-view__external-icon" />
               </a>
             ) : (
               entry
@@ -49,25 +49,25 @@ function Externals({ detail, nodes }: { detail: ItemDetail; nodes: NodeSummary[]
   )
 }
 
-function CodeLinks({ title, icon: Icon, links }: { title: string; icon: LucideIcon; links: CodeLink[] }) {
+function CodeLinks({ title, icon, links }: { title: string; icon: string; links: CodeLink[] }) {
   if (links.length === 0) {
     return null
   }
   return (
-    <section className="space-y-1.5">
-      <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-        {title} <span className="font-normal">({links.length})</span>
+    <section className="item-view__panel">
+      <h3 className="item-view__panel-title">
+        {title} <span className="item-view__panel-count">({links.length})</span>
       </h3>
-      <ul className="space-y-1">
+      <ul className="item-view__list">
         {links.map((link) => (
-          <li key={link.label} className="flex items-start gap-1.5 font-mono text-xs">
-            <Icon className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" aria-hidden />
+          <li key={link.label} className="item-view__code-link">
+            <Icon name={icon} className="item-view__code-icon" />
             {link.url ? (
-              <a href={link.url} target="_blank" rel="noreferrer" className="min-w-0 break-all text-primary hover:underline">
+              <a href={link.url} target="_blank" rel="noreferrer" className="item-view__code-label item-view__link">
                 {link.label}
               </a>
             ) : (
-              <span className="min-w-0 break-all">{link.label}</span>
+              <span className="item-view__code-label">{link.label}</span>
             )}
           </li>
         ))}
@@ -105,37 +105,37 @@ export function ItemView({
   const refs = refsOf(detail.header)
   const { relations } = detail
   return (
-    <article className="flex flex-col gap-5">
-      <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-        <Link to={{ pathname: sectionOf(detail.kind), search: scopeSearch(search) }} className="hover:text-foreground">
+    <article className="item-view">
+      <nav aria-label="Breadcrumb" className="item-view__breadcrumb">
+        <Link to={{ pathname: sectionOf(detail.kind), search: scopeSearch(search) }} className="item-view__section-link">
           {sectionLabel}
         </Link>
-        <ChevronRight className="size-3" aria-hidden />
-        <span className="font-mono">{displayNode(detail.node)}</span>
-        <ChevronRight className="size-3" aria-hidden />
-        <span className="font-mono text-foreground">{detail.id}</span>
+        <Icon name="chevron-right" className="item-view__crumb-icon" />
+        <span className="item-view__mono">{displayNode(detail.node)}</span>
+        <Icon name="chevron-right" className="item-view__crumb-icon" />
+        <span className="item-view__current">{detail.id}</span>
       </nav>
-      <header className="space-y-2">
-        <h1 className="text-2xl leading-tight font-semibold">{detail.title ?? detail.path}</h1>
-        <div className="flex flex-wrap items-center gap-2">
+      <header className="item-view__header">
+        <h1 className="item-view__title">{detail.title ?? detail.path}</h1>
+        <div className="item-view__badges">
           <StatusBadge status={detail.status} category={detail.category} label={statusLabel(nodes, detail.node, detail.status)} />
-          <Badge className="bg-muted text-muted-foreground">{kindLabel(detail.kind)}</Badge>
-          {detail.archived && <Badge className="bg-muted text-muted-foreground">archived</Badge>}
-          {detail.updated && <span className="text-xs text-muted-foreground">last changed {detail.updated}</span>}
+          <Badge className="item-view__badge">{kindLabel(detail.kind)}</Badge>
+          {detail.archived && <Badge className="item-view__badge">archived</Badge>}
+          {detail.updated && <span className="item-view__updated">last changed {detail.updated}</span>}
         </div>
       </header>
-      <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="min-w-0 space-y-6">
+      <div className="item-view__layout">
+        <div className="item-view__main">
           {children?.(detail)}
           <BodyEditor key={detail.body} item={detail} body={detail.body} items={items} />
         </div>
-        <aside className="space-y-5 xl:border-l xl:border-border xl:pl-6">
+        <aside className="item-view__aside">
           <ItemEditors item={detail} />
-          <dl className="space-y-1.5 border-t border-border pt-3">
+          <dl className="item-view__fields">
             {detail.waiting_for.length > 0 && (
               <Field label="Waiting for">
-                <span className="text-violet-700 dark:text-violet-300">{waitingSummary(detail, peopleOf(nodes, detail.node))}</span>
-                {detail.waiting_on && <span className="text-muted-foreground"> — {detail.waiting_on}</span>}
+                <span className="item-view__waiting">{waitingSummary(detail, peopleOf(nodes, detail.node))}</span>
+                {detail.waiting_on && <span className="item-view__waiting-on"> — {detail.waiting_on}</span>}
               </Field>
             )}
             {detail.type && <Field label="Type">{detail.type}</Field>}
@@ -154,11 +154,11 @@ export function ItemView({
               </Field>
             ))}
             <Field label="Path">
-              <code className="font-mono text-xs">{detail.path}</code>
+              <code className="item-view__path">{detail.path}</code>
             </Field>
           </dl>
-          <CodeLinks title="Branches" icon={GitBranch} links={detail.branches.map(branchLink)} />
-          <CodeLinks title="Pull requests" icon={GitPullRequest} links={detail.pull_requests.map(pullRequestLink)} />
+          <CodeLinks title="Branches" icon="branch" links={detail.branches.map(branchLink)} />
+          <CodeLinks title="Pull requests" icon="pull-request" links={detail.pull_requests.map(pullRequestLink)} />
           <RelatedList title="Parent" items={relations.parent ? [relations.parent] : []} scope={detail.node} />
           <RelatedList title="Children" items={relations.children} scope={detail.node} />
           <RelatedList title="Depends on" items={relations.depends_on} scope={detail.node} />

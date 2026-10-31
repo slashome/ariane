@@ -1,4 +1,3 @@
-import { Archive, FolderTree, ListTree, Network } from 'lucide-react'
 import { sortNodes, useNodes } from '@/entities/node'
 import { displayNode, type Command } from '@/shared/lib'
 import { useItemFilters } from '../model/use-item-filters'
@@ -12,7 +11,7 @@ export function useFilterCommands(): Command[] {
       id: 'filter:archived',
       group: 'Actions',
       title: filters.includeArchived ? 'Hide archived items' : 'Show archived items',
-      icon: Archive,
+      icon: 'archive',
       keywords: ['archived', 'archives'],
       hint: filters.includeArchived ? 'on' : 'off',
       run: () => setIncludeArchived(!filters.includeArchived),
@@ -21,7 +20,7 @@ export function useFilterCommands(): Command[] {
       id: 'filter:descendants',
       group: 'Actions',
       title: filters.includeDescendants ? 'Leave out the sub-nodes' : 'Include the sub-nodes',
-      icon: ListTree,
+      icon: 'list-tree',
       keywords: ['sub-nodes', 'descendants', 'children'],
       hint: filters.includeDescendants ? 'on' : 'off',
       run: () => setIncludeDescendants(!filters.includeDescendants),
@@ -32,7 +31,7 @@ export function useFilterCommands(): Command[] {
       id: 'scope:all',
       group: 'Nodes',
       title: 'All nodes',
-      icon: Network,
+      icon: 'network',
       keywords: ['scope', 'tree', 'everything'],
       hint: filters.node === null ? 'current' : undefined,
       run: () => setNode(null),
@@ -41,7 +40,7 @@ export function useFilterCommands(): Command[] {
       id: `scope:${node.path}`,
       group: 'Nodes',
       title: displayNode(node.path),
-      icon: FolderTree,
+      icon: 'folder-tree',
       keywords: ['scope'],
       hint: filters.node === node.path ? 'current' : `${node.items} items`,
       searchOnly: true,

@@ -1,4 +1,3 @@
-import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { usePeople, useRemovePerson } from '../api/use-people'
@@ -7,10 +6,11 @@ import { useItems } from '@/entities/item'
 import { QueryField, useFilteredItems, useItemFilters } from '@/features/filter-items'
 import { ApiError, type Directory, type PersonEntry } from '@/shared/api'
 import { cn, displayNode, isWithinNode } from '@/shared/lib'
-import { Button, ConfirmDialog, DataTable, EmptyState, ErrorState, Highlight, LoadingState, PageHeader, type Column } from '@/shared/ui'
+import { Button, ConfirmDialog, DataTable, EmptyState, ErrorState, Highlight, Icon, LoadingState, PageHeader, type Column } from '@/shared/ui'
 import { References } from './item-reference'
 import { PersonasList } from './personas-list'
 import { PersonDialog } from './person-dialog'
+import './people.css'
 
 type Editing = { directory: Directory; person: PersonEntry | null }
 
@@ -105,21 +105,21 @@ export function PeoplePage() {
       id: 'name',
       header: 'Name',
       sortValue: (person) => person.name,
-      className: 'font-medium',
+      className: 'people-table__name',
       cell: (person) => <Highlight text={person.name} />,
     },
     {
       id: 'handle',
       header: 'Handle',
       sortValue: (person) => person.handle,
-      className: 'font-mono text-xs',
+      className: 'people-table__code',
       cell: (person) => <Highlight text={person.handle} />,
     },
     {
       id: 'monday',
       header: 'monday',
       sortValue: (person) => person.monday,
-      className: 'font-mono text-xs text-muted-foreground',
+      className: 'people-table__code people-table__code--muted',
       cell: (person) => person.monday ?? '—',
     },
     {
@@ -131,19 +131,19 @@ export function PeoplePage() {
     {
       id: 'actions',
       header: '',
-      headerClassName: 'w-20',
+      headerClassName: 'people-table__actions-header',
       cell: (person) => (
-        <div className="flex justify-end gap-1">
-          <button type="button" className="lu-icon-button size-7" aria-label={`Edit ${person.name}`} onClick={() => setEditing({ directory, person })}>
-            <Pencil className="size-3.5" aria-hidden />
+        <div className="people-actions">
+          <button type="button" className="lu-icon-button people-actions__button" aria-label={`Edit ${person.name}`} onClick={() => setEditing({ directory, person })}>
+            <Icon name="edit" className="people-actions__icon" />
           </button>
           <button
             type="button"
-            className="lu-icon-button size-7 hover:text-red-600"
+            className="lu-icon-button people-actions__button people-actions__button--remove"
             aria-label={`Remove ${person.name}`}
             onClick={() => setRemoving({ directory, person })}
           >
-            <Trash2 className="size-3.5" aria-hidden />
+            <Icon name="delete" className="people-actions__icon" />
           </button>
         </div>
       ),
@@ -151,7 +151,7 @@ export function PeoplePage() {
   ]
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="people-page">
       <PageHeader
         title="People"
         description={tab.description}
@@ -163,7 +163,7 @@ export function PeoplePage() {
           )
         }
       />
-      <div role="tablist" aria-label="Directories" className="flex gap-1 border-b border-border">
+      <div role="tablist" aria-label="Directories" className="people-page__tabs">
         {tabs.map((entry) => (
           <button
             key={entry.value}
@@ -172,8 +172,8 @@ export function PeoplePage() {
             aria-selected={tab.value === entry.value}
             onClick={() => selectTab(entry.value)}
             className={cn(
-              '-mb-px border-b-2 border-transparent px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground',
-              tab.value === entry.value && 'border-primary font-medium text-foreground',
+              'people-page__tab',
+              tab.value === entry.value && 'people-page__tab--selected',
             )}
           >
             {entry.label}
@@ -198,23 +198,23 @@ export function PeoplePage() {
         </EmptyState>
       ) : (
         shown.map((directory) => (
-          <section key={directory.node} className="space-y-2">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold">
-                <span className="font-mono">{displayNode(directory.node)}</span>
+          <section key={directory.node} className="people-directory">
+            <div className="people-directory__header">
+              <h2 className="people-directory__title">
+                <span className="people-directory__node">{displayNode(directory.node)}</span>
                 {directory.account && (
-                  <span className="ml-2 font-normal text-muted-foreground">
+                  <span className="people-directory__account">
                     {directory.tracker} · {directory.account}
                   </span>
                 )}
               </h2>
               <Button size="sm" variant="outline" onClick={() => setEditing({ directory, person: null })}>
-                <Plus className="size-3.5" aria-hidden />
+                <Icon name="add" className="people-directory__add-icon" />
                 Add a person
               </Button>
             </div>
             {directory.people.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+              <p className="people-directory__empty">
                 {searching ? 'No one here waited on by an item the search finds.' : 'No one yet.'}
               </p>
             ) : (

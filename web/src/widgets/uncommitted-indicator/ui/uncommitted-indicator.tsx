@@ -1,11 +1,11 @@
-import { GitCommitHorizontal, Undo2, Upload } from 'lucide-react'
 import { useState } from 'react'
 import { useRepo } from '@/entities/repo'
 import type { UncommittedFile } from '@/shared/api'
-import { Button, ConfirmDialog, HoverCard } from '@/shared/ui'
+import { Button, ConfirmDialog, HoverCard, Icon } from '@/shared/ui'
 import { useDiscard, usePush } from '../api/use-git-actions'
 import { CommitForm } from './commit-form'
 import { DiffDialog } from './diff-dialog'
+import './uncommitted-indicator.css'
 
 const discardable = (file: UncommittedFile) => file.path.startsWith('tree/') || file.path === 'settings.toml'
 
@@ -19,13 +19,13 @@ export function UncommittedList({
   onDiscard: (path: string) => void
 }) {
   return (
-    <ul className="max-h-64 space-y-0.5 overflow-y-auto font-mono text-xs">
+    <ul className="uncommitted-list">
       {files.map((file) => (
-        <li key={file.path} className="group flex items-center gap-2">
-          <span className="w-5 shrink-0 text-amber-600 dark:text-amber-400">{file.code}</span>
+        <li key={file.path} className="uncommitted-list__file">
+          <span className="uncommitted-list__code">{file.code}</span>
           <button
             type="button"
-            className="min-w-0 flex-1 truncate rounded px-1 py-0.5 text-left hover:bg-muted"
+            className="uncommitted-list__path lu-truncate"
             title={`Show the diff of ${file.path}`}
             onClick={() => onView(file.path)}
           >
@@ -36,10 +36,10 @@ export function UncommittedList({
               type="button"
               aria-label={`Discard ${file.path}`}
               title="Discard this change"
-              className="lu-icon-button mr-1 size-4.5 shrink-0 hover:text-red-600"
+              className="lu-icon-button uncommitted-list__discard"
               onClick={() => onDiscard(file.path)}
             >
-              <Undo2 className="size-3.5" aria-hidden />
+              <Icon name="undo" className="uncommitted-indicator__icon" />
             </button>
           ) : null}
         </li>
@@ -84,17 +84,17 @@ export function UncommittedIndicator() {
           <button
             type="button"
             aria-label={label}
-            className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-300"
+            className="uncommitted-indicator__trigger"
           >
             {files.length > 0 ? (
               <>
-                <GitCommitHorizontal className="size-3.5" aria-hidden />
+                <Icon name="commit" className="uncommitted-indicator__icon" />
                 {files.length}
               </>
             ) : null}
             {ahead > 0 ? (
               <>
-                <Upload className="size-3.5" aria-hidden />
+                <Icon name="upload" className="uncommitted-indicator__icon" />
                 {ahead}
               </>
             ) : null}
@@ -102,18 +102,18 @@ export function UncommittedIndicator() {
         }
       >
         <div onKeyDown={(event) => event.key === 'Escape' && setComposing(false)}>
-          <p className="mb-2 font-medium">{label}</p>
+          <p className="uncommitted-indicator__label">{label}</p>
           {files.length > 0 ? (
             <UncommittedList files={files} onView={setViewing} onDiscard={(path) => setDiscarding({ path })} />
           ) : null}
-          <div className="mt-3 border-t border-border pt-3">
+          <div className="uncommitted-indicator__actions">
             {composing ? (
               <CommitForm files={files} onDone={() => setComposing(false)} />
             ) : (
-              <div className="flex gap-2">
+              <div className="uncommitted-indicator__buttons">
                 {files.length > 0 ? (
                   <Button size="sm" onClick={() => setComposing(true)}>
-                    <GitCommitHorizontal className="size-3.5" aria-hidden />
+                    <Icon name="commit" className="uncommitted-indicator__icon" />
                     Commit all
                   </Button>
                 ) : null}
@@ -123,17 +123,17 @@ export function UncommittedIndicator() {
                   disabled={ahead === 0 || push.isPending}
                   onClick={() => push.mutate()}
                 >
-                  <Upload className="size-3.5" aria-hidden />
+                  <Icon name="upload" className="uncommitted-indicator__icon" />
                   {push.isPending ? 'Pushing…' : 'Push'}
                 </Button>
                 {files.some(discardable) ? (
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="ml-auto text-red-600 hover:text-red-700 dark:text-red-400"
+                    className="uncommitted-indicator__discard uncommitted-indicator__discard--end"
                     onClick={() => setDiscarding({ path: null })}
                   >
-                    <Undo2 className="size-3.5" aria-hidden />
+                    <Icon name="undo" className="uncommitted-indicator__icon" />
                     Discard all
                   </Button>
                 ) : null}

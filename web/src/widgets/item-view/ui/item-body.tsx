@@ -4,6 +4,7 @@ import type { Item } from '@/shared/api'
 import { scopeSearch } from '@/shared/config'
 import { isExternalLink, resolveLink } from '@/shared/lib'
 import { Markdown, type LinkTarget } from '@/shared/ui'
+import './item-view.css'
 
 export function ItemBody({ item, body, items }: { item: Item; body: string; items: Item[] }) {
   const { search } = useLocation()
@@ -18,7 +19,7 @@ export function ItemBody({ item, body, items }: { item: Item; body: string; item
     return route === null ? { kind: 'unresolved', title: path ?? href } : { kind: 'internal', href: `${route}${scopeSearch(search)}` }
   }
   return body.trim() === '' ? (
-    <p className="text-sm text-muted-foreground">This item has no body.</p>
+    <p className="item-view__empty-body">This item has no body.</p>
   ) : (
     <Markdown source={body} resolveLink={linkTarget} onNavigate={(href) => void navigate(href)} />
   )

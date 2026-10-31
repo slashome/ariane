@@ -1,16 +1,16 @@
 import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from '@dnd-kit/core'
 import { arrayMove, rectSortingStrategy, SortableContext, sortableKeyboardCoordinates } from '@dnd-kit/sortable'
-import { Pencil, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useItems } from '@/entities/item'
 import { findNode, sortNodes, useDashboard, useNodes, useSaveDashboard } from '@/entities/node'
 import { useSchema } from '@/entities/schema'
 import type { Category } from '@/shared/api'
 import { displayNode } from '@/shared/lib'
-import { Button, NativeSelect } from '@/shared/ui'
+import { Button, Icon, NativeSelect } from '@/shared/ui'
 import { cardStats } from '../model/card-stats'
 import { NodeCard } from './node-card'
 import { SortableCard } from './sortable-card'
+import './dashboard.css'
 
 const noCandidate = 'none'
 
@@ -54,16 +54,16 @@ export function DashboardPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4 p-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="dashboard">
+      <div className="dashboard__header">
         <div>
-          <h1 className="text-xl font-semibold">Dashboard</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="dashboard__title">Dashboard</h1>
+          <p className="dashboard__summary">
             {isPending ? 'Loading…' : `${pinned.length} pinned ${pinned.length === 1 ? 'node' : 'nodes'}`}
           </p>
         </div>
         {editing ? (
-          <div className="flex items-center gap-2">
+          <div className="dashboard__actions">
             <NativeSelect
               aria-label="Node to pin"
               value={candidate === null ? noCandidate : `node:${candidate}`}
@@ -88,7 +88,7 @@ export function DashboardPage() {
                 }
               }}
             >
-              <Plus className="size-4" aria-hidden />
+              <Icon name="add" className="dashboard__icon" />
               Pin
             </Button>
             <Button variant="ghost" onClick={() => setDraft(null)}>
@@ -98,21 +98,21 @@ export function DashboardPage() {
           </div>
         ) : (
           <Button variant="outline" onClick={() => setDraft(dashboard?.pinned ?? [])}>
-            <Pencil className="size-4" aria-hidden />
+            <Icon name="edit" className="dashboard__icon" />
             Edit
           </Button>
         )}
       </div>
 
       {pinned.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-          <p className="font-medium text-foreground">No pinned node yet</p>
+        <div className="dashboard__empty">
+          <p className="dashboard__empty-title">No pinned node yet</p>
           <p>Click Edit, pick a node and Pin it: its card shows its progress, quick wins and blockers.</p>
         </div>
       ) : editing ? (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={pinned} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(22rem,1fr))] gap-4">
+            <div className="dashboard__grid">
               {pinned.map((path) => (
                 <SortableCard
                   key={path}
@@ -125,7 +125,7 @@ export function DashboardPage() {
                       stats={stats.get(path) ?? cardStats(items, nodes, path)}
                       labels={labels}
                       toolbar={toolbar}
-                      className="ring-1 ring-primary/20"
+                      className="node-card--editing"
                     />
                   )}
                 />
@@ -134,7 +134,7 @@ export function DashboardPage() {
           </SortableContext>
         </DndContext>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(22rem,1fr))] gap-4">
+        <div className="dashboard__grid">
           {pinned.map((path) => (
             <NodeCard
               key={path}

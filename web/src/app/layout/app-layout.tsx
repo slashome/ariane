@@ -6,13 +6,14 @@ import { Sidebar } from '@/widgets/sidebar'
 import { StatusBar } from '@/widgets/status-bar'
 import { UncommittedIndicator } from '@/widgets/uncommitted-indicator'
 import { ItemPreview } from './item-preview'
+import './layout.css'
 
 export function AppLayout() {
   return (
-    <div className="flex h-screen min-w-[64rem] flex-col bg-background text-foreground">
-      <div className="flex min-h-0 flex-1">
+    <div className="app-layout">
+      <div className="app-layout__body">
         <Sidebar />
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="app-layout__column">
           <AppHeader
             actions={
               <>
@@ -21,7 +22,7 @@ export function AppLayout() {
               </>
             }
           />
-          <main className="min-h-0 flex-1 overflow-auto">
+          <main className="app-layout__main">
             <QueryHighlight>
               <Outlet />
               <ItemPreview />

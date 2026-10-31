@@ -1,4 +1,3 @@
-import { FileText } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router'
 import type { Item, SearchHit } from '@/shared/api'
 import { scopeSearch, searchParamKeys } from '@/shared/config'
@@ -31,7 +30,7 @@ function itemCommand(item: Item, open: (item: Item, preview: boolean) => void, g
     title: item.title ?? item.path,
     hint: item.reference ?? displayNode(item.node),
     keywords: [item.id, item.reference, item.node].filter((word): word is string => word !== null),
-    icon: FileText,
+    icon: 'file',
     searchOnly: true,
     shiftLabel: 'preview',
     run: ({ shift }) => open(item, shift),

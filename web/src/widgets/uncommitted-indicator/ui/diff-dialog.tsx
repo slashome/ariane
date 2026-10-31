@@ -1,34 +1,27 @@
 import { useDiff } from '@/entities/repo'
 import { cn } from '@/shared/lib'
 import { Dialog } from '@/shared/ui'
-import { diffLines, type DiffLineKind } from '../model/diff-lines'
-
-const toneOf: Record<DiffLineKind, string> = {
-  added: 'bg-green-500/15 text-green-800 dark:text-green-300',
-  removed: 'bg-red-500/15 text-red-800 dark:text-red-300',
-  hunk: 'text-sky-700 dark:text-sky-300',
-  meta: 'text-muted-foreground',
-  context: '',
-}
+import { diffLines } from '../model/diff-lines'
+import './uncommitted-indicator.css'
 
 export function DiffDialog({ path, onClose }: { path: string | null; onClose: () => void }) {
   const { data, isPending, error } = useDiff(path)
   const lines = data ? diffLines(data.diff) : []
   return (
     <Dialog open={path !== null} onOpenChange={(open) => !open && onClose()} title={path ?? ''} description="Changes against HEAD">
-      <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border bg-muted/30">
+      <div className="diff-dialog__body">
         {error ? (
-          <p role="alert" className="p-3 text-sm">
+          <p role="alert" className="diff-dialog__message">
             Could not load the diff: {error.message}
           </p>
         ) : isPending ? (
-          <p className="p-3 text-sm text-muted-foreground">Loading…</p>
+          <p className="diff-dialog__message diff-dialog__message--muted">Loading…</p>
         ) : lines.length === 0 ? (
-          <p className="p-3 text-sm text-muted-foreground">No difference with HEAD.</p>
+          <p className="diff-dialog__message diff-dialog__message--muted">No difference with HEAD.</p>
         ) : (
-          <pre className="py-2 font-mono text-xs leading-5">
+          <pre className="diff-dialog__diff">
             {lines.map((line, index) => (
-              <div key={index} className={cn('px-3 whitespace-pre-wrap break-all', toneOf[line.kind])}>
+              <div key={index} className={cn('diff-dialog__line', `diff-dialog__line--${line.kind}`)}>
                 {line.text === '' ? ' ' : line.text}
               </div>
             ))}

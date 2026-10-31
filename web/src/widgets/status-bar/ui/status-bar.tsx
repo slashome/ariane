@@ -1,4 +1,3 @@
-import { CircleAlert, GitBranch, GitCommitHorizontal, Network, TriangleAlert, Upload } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 import { countBySeverity, scopeFindings, useDoctor } from '@/entities/doctor'
@@ -7,12 +6,14 @@ import { useRepo } from '@/entities/repo'
 import { ArchivedToggle, scopeItems, useItemFilters } from '@/features/filter-items'
 import { routes, scopeSearch } from '@/shared/config'
 import { cn, displayNode } from '@/shared/lib'
+import { Icon } from '@/shared/ui'
+import './status-bar.css'
 
 function Cell({ children, to, label, className }: { children: ReactNode; to?: string; label: string; className?: string }) {
   const { search } = useLocation()
-  const classes = cn('flex h-full items-center gap-1 px-2', className)
+  const classes = cn('status-bar__cell', className)
   return to ? (
-    <Link to={{ pathname: to, search: scopeSearch(search) }} aria-label={label} title={label} className={cn(classes, 'hover:bg-muted hover:text-foreground')}>
+    <Link to={{ pathname: to, search: scopeSearch(search) }} aria-label={label} title={label} className={cn(classes, 'status-bar__cell--link')}>
       {children}
     </Link>
   ) : (
@@ -35,41 +36,41 @@ export function StatusBar() {
   return (
     <footer
       aria-label="Status"
-      className="sticky bottom-0 z-20 flex h-7 shrink-0 items-center border-t border-border bg-sidebar text-xs text-muted-foreground"
+      className="status-bar"
     >
-      <Cell to={routes.repo} label={`Branch ${repo?.branch ?? 'unknown'}`} className="font-mono">
-        <GitBranch className="size-3.5" aria-hidden />
+      <Cell to={routes.repo} label={`Branch ${repo?.branch ?? 'unknown'}`} className="status-bar__cell--mono">
+        <Icon name="branch" className="status-bar__icon" />
         {repo?.branch ?? '…'}
       </Cell>
       {(repo?.ahead ?? 0) > 0 && (
         <Cell to={routes.repo} label={`${repo?.ahead} commits to push`}>
-          <Upload className="size-3.5" aria-hidden />
+          <Icon name="upload" className="status-bar__icon" />
           {repo?.ahead}
         </Cell>
       )}
       <Cell
         to={routes.repo}
         label={`${uncommitted} uncommitted ${uncommitted === 1 ? 'file' : 'files'}`}
-        className={uncommitted > 0 ? 'text-amber-700 dark:text-amber-300' : undefined}
+        className={uncommitted > 0 ? 'status-bar__cell--warning' : undefined}
       >
-        <GitCommitHorizontal className="size-3.5" aria-hidden />
+        <Icon name="commit" className="status-bar__icon" />
         {uncommitted} uncommitted
       </Cell>
       <Cell label="Node every view is scoped to">
-        <Network className="size-3.5" aria-hidden />
-        <span className="font-mono">{filters.node === null ? 'all nodes' : displayNode(filters.node)}</span>
+        <Icon name="network" className="status-bar__icon" />
+        <span className="status-bar__mono">{filters.node === null ? 'all nodes' : displayNode(filters.node)}</span>
         {filters.node !== null && filters.includeDescendants && <span>+ sub-nodes</span>}
       </Cell>
       <Cell label={`${visible} items in scope`}>{visible} items</Cell>
       <Cell
         to={routes.health}
         label={`${errors} errors, ${warnings} warnings from doctor`}
-        className={errors > 0 ? 'text-red-700 dark:text-red-300' : undefined}
+        className={errors > 0 ? 'status-bar__cell--danger' : undefined}
       >
-        {errors > 0 ? <CircleAlert className="size-3.5" aria-hidden /> : <TriangleAlert className="size-3.5" aria-hidden />}
+        {errors > 0 ? <Icon name="alert" className="status-bar__icon" /> : <Icon name="warning" className="status-bar__icon" />}
         {errors === 0 && warnings === 0 ? 'healthy' : `${errors} errors · ${warnings} warnings`}
       </Cell>
-      <div className="ml-auto flex h-full items-center px-2">
+      <div className="status-bar__end">
         <ArchivedToggle />
       </div>
     </footer>

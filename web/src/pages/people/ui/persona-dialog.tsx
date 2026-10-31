@@ -3,6 +3,7 @@ import { useAddPersona, useChangePersona } from '../api/use-personas'
 import { isPersonaId } from '../model/handle'
 import type { PersonaEntry } from '@/shared/api'
 import { Button, Dialog, Input } from '@/shared/ui'
+import './people.css'
 
 // Adds a persona to a node, or edits one: name, and id (renamed in every story written for it).
 export function PersonaDialog({
@@ -39,34 +40,34 @@ export function PersonaDialog({
       onOpenChange={(open) => !open && onClose()}
       title={persona === null ? 'Add a persona' : `Edit ${persona.name}`}
       description={`Declared in ${node === '' ? '(home)' : node}, for every story below it.`}
-      className="w-[32rem]"
+      className="people-dialog"
     >
       <form
-        className="flex flex-col gap-4"
+        className="people-form"
         onSubmit={(event) => {
           event.preventDefault()
           save()
         }}
       >
-        <label className="space-y-1 text-sm">
-          <span className="font-medium">Name</span>
+        <label className="people-form__field">
+          <span className="people-form__label">Name</span>
           <Input value={name} onChange={(event) => setName(event.target.value)} autoFocus />
         </label>
-        <label className="space-y-1 text-sm">
-          <span className="font-medium">Id</span>
+        <label className="people-form__field">
+          <span className="people-form__label">Id</span>
           <Input
             value={id}
-            className="font-mono"
+            className="people-form__mono"
             placeholder="group:role"
             aria-invalid={id !== '' && !isPersonaId(id)}
             onChange={(event) => setId(event.target.value)}
           />
-          <span className="block text-xs text-muted-foreground">
+          <span className="people-form__hint">
             What stories write in <code>personas</code>, such as <code>user:rh</code>.
             {persona !== null && id !== persona.id && ` Renaming rewrites the ${persona.used_by.length} stories written for it.`}
           </span>
         </label>
-        <div className="flex justify-end gap-2">
+        <div className="people-form__actions">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>

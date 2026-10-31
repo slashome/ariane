@@ -121,7 +121,7 @@ describe('the navigation', () => {
     const system = screen.getByRole('navigation', { name: 'System' })
     const entry = await within(system).findByRole('link', { name: 'Proxy, 2, a link is broken' })
     expect(entry).toHaveAttribute('href', '/proxy')
-    expect(within(entry).getByTestId('status-dot')).toHaveClass('bg-red-500')
+    expect(within(entry).getByTestId('status-dot')).toHaveClass('sidebar-entry__dot--broken')
     const labels = within(system)
       .getAllByRole('link')
       .map((link) => link.textContent?.replace(/\d+$/, ''))

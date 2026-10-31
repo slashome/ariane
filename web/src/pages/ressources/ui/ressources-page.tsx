@@ -1,10 +1,10 @@
-import { ExternalLink } from 'lucide-react'
 import { useMemo } from 'react'
 import { compareNatural, excerpt, ItemLink, useItemsWithBody } from '@/entities/item'
 import { QueryField, useFilteredItems } from '@/features/filter-items'
 import { displayNode } from '@/shared/lib'
-import { EmptyState, ErrorState, Highlight, LoadingState, PageHeader, useHighlightTerms } from '@/shared/ui'
+import { EmptyState, ErrorState, Highlight, Icon, LoadingState, PageHeader, useHighlightTerms } from '@/shared/ui'
 import { linksOf, snippet } from '../model/library'
+import './ressources.css'
 
 export function RessourcesPage() {
   const { data: items = [], isPending, error } = useItemsWithBody('ressource')
@@ -13,7 +13,7 @@ export function RessourcesPage() {
   const ressources = useMemo(() => [...found].sort((left, right) => compareNatural(left.title ?? '', right.title ?? '')), [found])
 
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="ressources-page">
       <PageHeader
         title="Ressources"
         description={isPending ? 'Loading…' : `${total} references kept for later`}
@@ -34,32 +34,32 @@ export function RessourcesPage() {
           )}
         </EmptyState>
       ) : (
-        <ul className="grid grid-cols-[repeat(auto-fill,minmax(18rem,1fr))] gap-4">
+        <ul className="ressources-page__list">
           {ressources.map((item) => {
             const links = linksOf(item)
             const match = snippet(item.body, terms)
             return (
-              <li key={item.path} className="flex flex-col gap-3 rounded-lg border border-border bg-background p-4 shadow-xs">
-                <div className="flex items-start gap-3">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-muted text-sm font-semibold text-muted-foreground uppercase" aria-hidden>
+              <li key={item.path} className="ressource-card">
+                <div className="ressource-card__header">
+                  <span className="ressource-card__initial" aria-hidden>
                     {(links[0]?.host ?? item.title ?? '?').slice(0, 1)}
                   </span>
-                  <div className="min-w-0">
-                    <h2 className="leading-snug font-medium">
+                  <div className="ressource-card__heading">
+                    <h2 className="ressource-card__title">
                       <ItemLink item={item}>
                         <Highlight text={item.title ?? item.path} />
                       </ItemLink>
                     </h2>
-                    <p className="font-mono text-[10px] text-muted-foreground">
+                    <p className="ressource-card__meta">
                       <Highlight text={item.id ?? ''} /> · {displayNode(item.node)}
                     </p>
                   </div>
                 </div>
-                <p className="line-clamp-4 text-sm leading-relaxed text-muted-foreground">
+                <p className="lu-line-clamp ressource-card__excerpt">
                   <Highlight text={match ?? excerpt(item.body)} />
                 </p>
                 {links.length > 0 && (
-                  <ul className="mt-auto flex flex-wrap gap-1.5">
+                  <ul className="ressource-card__links">
                     {links.slice(0, 4).map((link) => (
                       <li key={link.url}>
                         <a
@@ -67,14 +67,14 @@ export function RessourcesPage() {
                           target="_blank"
                           rel="noreferrer"
                           title={link.url}
-                          className="inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs text-primary hover:bg-muted"
+                          className="ressource-card__link"
                         >
                           {link.host}
-                          <ExternalLink className="size-3" aria-hidden />
+                          <Icon name="external-link" className="ressource-card__link-icon" />
                         </a>
                       </li>
                     ))}
-                    {links.length > 4 && <li className="text-xs text-muted-foreground">+{links.length - 4}</li>}
+                    {links.length > 4 && <li className="ressource-card__more">+{links.length - 4}</li>}
                   </ul>
                 )}
               </li>

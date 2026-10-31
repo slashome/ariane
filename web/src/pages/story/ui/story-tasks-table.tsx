@@ -1,9 +1,9 @@
-import { CircleCheck, CircleDashed, Hourglass } from 'lucide-react'
 import { idColumn, isClosed, ItemLink, statusColumn, titleColumn } from '@/entities/item'
 import { statusLabel, useNodes } from '@/entities/node'
 import type { NodeSummary } from '@/shared/api'
-import { DataTable, EmptyState, type Column } from '@/shared/ui'
+import { DataTable, EmptyState, Icon, type Column } from '@/shared/ui'
 import type { StoryTask } from '../model/story-tasks'
+import './story.css'
 
 type Readiness = 'ready' | 'waiting' | 'closed'
 
@@ -20,40 +20,40 @@ function ReadinessLabel({ row }: { row: StoryTask }) {
   const readiness = readinessOf(row)
   if (readiness === 'closed') {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-        <CircleCheck className="size-3.5" aria-hidden /> closed
+      <span className="story-readiness">
+        <Icon name="success" className="story-readiness__icon" /> closed
       </span>
     )
   }
   if (readiness === 'ready') {
     return (
-      <span className="inline-flex items-center gap-1 text-xs text-green-700 dark:text-green-300">
-        <CircleDashed className="size-3.5" aria-hidden /> ready
+      <span className="story-readiness story-readiness--ready">
+        <Icon name="pending" className="story-readiness__icon" /> ready
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center gap-1 text-xs text-amber-700 dark:text-amber-300">
-      <Hourglass className="size-3.5" aria-hidden /> waiting
+    <span className="story-readiness story-readiness--waiting">
+      <Icon name="waiting" className="story-readiness__icon" /> waiting
     </span>
   )
 }
 
 function Blockers({ row, scope }: { row: StoryTask; scope: string }) {
   if (row.blockers.open.length === 0 && row.blockers.missing.length === 0) {
-    return <span className="text-xs text-muted-foreground">—</span>
+    return <span className="story-blockers__none">—</span>
   }
   return (
-    <ul className="flex flex-wrap gap-1">
+    <ul className="story-blockers">
       {row.blockers.open.map((blocker) => (
         <li key={blocker.path}>
-          <ItemLink item={blocker} className="rounded bg-amber-500/15 px-1.5 py-0.5 font-mono text-[11px] text-amber-800 dark:text-amber-200">
+          <ItemLink item={blocker} className="story-blockers__blocker">
             {blocker.node === scope ? blocker.id : blocker.reference}
           </ItemLink>
         </li>
       ))}
       {row.blockers.missing.map((reference) => (
-        <li key={reference} className="rounded bg-red-500/15 px-1.5 py-0.5 font-mono text-[11px] text-red-700 dark:text-red-300" title="Points to no item">
+        <li key={reference} className="story-blockers__blocker story-blockers__blocker--missing" title="Points to no item">
           {reference}
         </li>
       ))}
@@ -67,7 +67,7 @@ function columnsFor(nodes: NodeSummary[], scope: string): Column<StoryTask>[] {
     idColumn(taskOf),
     titleColumn(taskOf, {
       header: 'Task',
-      details: (row) => row.task.node !== scope && <span className="font-mono">{row.task.node}</span>,
+      details: (row) => row.task.node !== scope && <span className="story-tasks__node">{row.task.node}</span>,
     }),
     statusColumn(taskOf, (task) => statusLabel(nodes, task.node, task.status)),
     {
@@ -80,7 +80,7 @@ function columnsFor(nodes: NodeSummary[], scope: string): Column<StoryTask>[] {
       id: 'readiness',
       header: 'Can start',
       sortValue: (row) => readinessOrder.indexOf(readinessOf(row)),
-      className: 'whitespace-nowrap',
+      className: 'story-tasks__readiness',
       cell: (row) => <ReadinessLabel row={row} />,
     },
   ]

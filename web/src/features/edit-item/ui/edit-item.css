@@ -1,0 +1,125 @@
+.item-editors {
+  & > * + * {
+    margin-block-start: var(--lu-space-2);
+  }
+}
+
+.item-editors__row {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  align-items: center;
+  gap: var(--lu-space-2);
+  font-size: var(--lu-font-size-sm);
+  line-height: 1.25rem;
+}
+
+.item-editors__label {
+  color: var(--lu-color-muted-foreground);
+}
+
+.item-editors__value {
+  min-inline-size: 0;
+}
+
+.item-editors__status {
+  inline-size: 100%;
+  block-size: var(--lu-control-height-sm);
+}
+
+.waiting-dialog {
+  inline-size: 30rem;
+}
+
+.waiting-dialog__empty {
+  margin: 0;
+  font-size: var(--lu-font-size-sm);
+  line-height: 1.25rem;
+  color: var(--lu-color-muted-foreground);
+}
+
+.waiting-dialog__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-4);
+}
+
+.waiting-dialog__fieldset {
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+
+  & > * + * {
+    margin-block-start: var(--lu-space-1);
+  }
+}
+
+.waiting-dialog__legend {
+  margin-block-end: var(--lu-space-1);
+  padding: 0;
+  font-size: var(--lu-font-size-sm);
+  font-weight: var(--lu-font-weight-medium);
+  line-height: 1.25rem;
+}
+
+.waiting-dialog__people {
+  max-block-size: 14rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+
+  & > * + * {
+    margin-block-start: 0.125rem;
+  }
+}
+
+.waiting-dialog__person {
+  display: flex;
+  align-items: center;
+  gap: var(--lu-space-2);
+  padding: var(--lu-space-1) var(--lu-space-1-5);
+  border-radius: var(--lu-radius-sm);
+  font-size: var(--lu-font-size-sm);
+  line-height: 1.25rem;
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--lu-color-muted);
+  }
+}
+
+.waiting-dialog__handle {
+  font-family: var(--lu-font-family-mono);
+  font-size: 0.625rem;
+  color: var(--lu-color-muted-foreground);
+}
+
+.waiting-dialog__reasons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lu-space-2);
+}
+
+.waiting-dialog__reason {
+  display: flex;
+  align-items: center;
+  gap: var(--lu-space-1-5);
+  padding: var(--lu-space-1) var(--lu-space-3);
+  border: 1px solid var(--lu-color-border);
+  border-radius: var(--lu-radius-full);
+  font-size: var(--lu-font-size-sm);
+  line-height: 1.25rem;
+  cursor: pointer;
+}
+
+.waiting-dialog__reason--chosen {
+  border-color: var(--lu-color-primary);
+  background-color: color-mix(in oklab, var(--lu-color-primary) 10%, transparent);
+}
+
+.waiting-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--lu-space-2);
+}

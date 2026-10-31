@@ -1,0 +1,139 @@
+.story-page {
+  padding: var(--lu-space-6);
+}
+
+.story-personas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--lu-space-2);
+}
+
+.story-personas__title {
+  margin: 0;
+  font-size: var(--lu-font-size-sm);
+  font-weight: var(--lu-font-weight-semibold);
+}
+
+.story-personas__persona {
+  padding: 0.125rem var(--lu-space-2);
+  border: 1px solid var(--lu-color-border);
+  border-radius: var(--lu-radius-full);
+  font-size: var(--lu-font-size-xs);
+}
+
+.story-epic {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--lu-space-2);
+  font-size: var(--lu-font-size-sm);
+}
+
+.story-epic__title {
+  margin: 0;
+  font-size: inherit;
+  font-weight: var(--lu-font-weight-semibold);
+}
+
+.story-epic__id {
+  color: var(--lu-color-muted-foreground);
+  font-family: var(--lu-font-family-mono);
+  font-size: var(--lu-font-size-xs);
+}
+
+.story-progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-4);
+}
+
+.story-progress__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-2);
+  padding: var(--lu-space-4);
+  border: 1px solid var(--lu-color-border);
+  border-radius: var(--lu-radius-lg);
+}
+
+.story-progress__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--lu-space-2);
+}
+
+.story-progress__title {
+  margin: 0;
+  font-size: var(--lu-font-size-sm);
+  font-weight: var(--lu-font-weight-semibold);
+}
+
+.story-progress__summary {
+  margin: 0;
+  color: var(--lu-color-muted-foreground);
+  font-size: var(--lu-font-size-xs);
+}
+
+.story-progress__query {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.story-readiness {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lu-space-1);
+  color: var(--lu-color-muted-foreground);
+  font-size: var(--lu-font-size-xs);
+}
+
+.story-readiness--ready {
+  color: var(--lu-color-success);
+}
+
+.story-readiness--waiting {
+  color: var(--lu-color-warning);
+}
+
+.story-readiness__icon {
+  --lu-icon-size: 0.875rem;
+}
+
+.story-blockers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lu-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.story-blockers__none {
+  color: var(--lu-color-muted-foreground);
+  font-size: var(--lu-font-size-xs);
+}
+
+.story-blockers__blocker {
+  padding: 0.125rem var(--lu-space-1-5);
+  border-radius: var(--lu-radius-sm);
+  background: color-mix(in oklab, var(--lu-color-warning) 15%, transparent);
+  color: var(--lu-color-warning);
+  font-family: var(--lu-font-family-mono);
+  font-size: var(--lu-font-size-2xs);
+}
+
+.story-blockers__blocker--missing {
+  background: color-mix(in oklab, var(--lu-color-danger) 15%, transparent);
+  color: var(--lu-color-danger);
+}
+
+.story-tasks__node {
+  font-family: var(--lu-font-family-mono);
+}
+
+.story-tasks__readiness {
+  white-space: nowrap;
+}

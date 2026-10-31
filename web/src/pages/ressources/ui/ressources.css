@@ -1,0 +1,109 @@
+.ressources-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-5);
+  padding: var(--lu-space-6);
+}
+
+.ressources-page__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: var(--lu-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ressource-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-3);
+  padding: var(--lu-space-4);
+  border: 1px solid var(--lu-color-border);
+  border-radius: var(--lu-radius-lg);
+  background: var(--lu-color-background);
+  box-shadow: var(--lu-shadow-sm);
+}
+
+.ressource-card__header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--lu-space-3);
+}
+
+.ressource-card__initial {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  inline-size: 2.25rem;
+  block-size: 2.25rem;
+  border-radius: var(--lu-radius-md);
+  background: var(--lu-color-muted);
+  color: var(--lu-color-muted-foreground);
+  font-size: var(--lu-font-size-sm);
+  font-weight: var(--lu-font-weight-semibold);
+  text-transform: uppercase;
+}
+
+.ressource-card__heading {
+  min-inline-size: 0;
+}
+
+.ressource-card__title {
+  margin: 0;
+  font-size: var(--lu-font-size-base);
+  font-weight: var(--lu-font-weight-medium);
+  line-height: 1.375;
+}
+
+.ressource-card__meta {
+  margin: 0;
+  color: var(--lu-color-muted-foreground);
+  font-family: var(--lu-font-family-mono);
+  font-size: 0.625rem;
+}
+
+.ressource-card__excerpt {
+  --lu-lines: 4;
+
+  margin: 0;
+  color: var(--lu-color-muted-foreground);
+  font-size: var(--lu-font-size-sm);
+  line-height: 1.625;
+}
+
+.ressource-card__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lu-space-1-5);
+  margin: auto 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ressource-card__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lu-space-1);
+  padding: 0.125rem var(--lu-space-2);
+  border: 1px solid var(--lu-color-border);
+  border-radius: var(--lu-radius-full);
+  color: var(--lu-color-primary);
+  font-size: var(--lu-font-size-xs);
+  text-decoration: none;
+  transition: background-color var(--lu-motion-hover-duration) var(--lu-motion-hover-easing);
+
+  &:hover {
+    background: var(--lu-color-muted);
+  }
+}
+
+.ressource-card__link-icon {
+  --lu-icon-size: 0.75rem;
+}
+
+.ressource-card__more {
+  color: var(--lu-color-muted-foreground);
+  font-size: var(--lu-font-size-xs);
+}

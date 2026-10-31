@@ -1,26 +1,5 @@
-@layer theme, base, lu, components, utilities;
+@layer reset, lu;
 
-@import 'tailwindcss';
 @import '@slashome/lumen/lumen.css';
 @import '@fontsource/merienda/latin-700.css';
-
-@custom-variant dark (&:where([data-appearance='dark'], [data-appearance='dark'] *));
-
-@theme {
-  --color-background: var(--lu-color-background);
-  --color-foreground: var(--lu-color-foreground);
-  --color-muted: var(--lu-color-muted);
-  --color-muted-foreground: var(--lu-color-muted-foreground);
-  --color-border: var(--lu-color-border);
-  --color-primary: var(--lu-color-primary);
-  --color-primary-foreground: var(--lu-color-primary-foreground);
-  --color-ring: var(--lu-color-ring);
-  --color-accent: var(--lu-color-accent);
-  --color-popover: var(--lu-color-popover);
-  --color-sidebar: var(--lu-color-sidebar);
-  --color-halo: var(--lu-color-halo);
-  --font-sans: var(--lu-font-family-sans);
-  --font-brand: 'Merienda', cursive;
-  --duration-hover: var(--lu-motion-hover-duration);
-  --ease-hover: var(--lu-motion-hover-easing);
-}
+@import './reset.css' layer(reset);

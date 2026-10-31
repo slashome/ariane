@@ -7,13 +7,14 @@ import type { Progress } from '../model/progress'
 import { ItemLink } from './item-link'
 import { ProgressMeter } from './progress-meter'
 import { StatusBadge } from './status-badge'
+import './item.css'
 
 export function idColumn<Row>(itemOf: (row: Row) => Item): Column<Row> {
   return {
     id: 'id',
     header: 'Id',
     sortValue: (row) => itemOf(row).id,
-    className: 'w-px whitespace-nowrap font-mono text-xs text-muted-foreground',
+    className: 'item-columns__id',
     cell: (row) => <Highlight text={itemOf(row).id ?? '—'} />,
   }
 }
@@ -30,15 +31,15 @@ export function titleColumn<Row>(
       const item = itemOf(row)
       const title = <Highlight text={item.title ?? item.path} />
       return (
-        <div className={cn('min-w-0', isClosed(item.category) && 'text-muted-foreground')}>
+        <div className={cn('item-columns__title', isClosed(item.category) && 'item-columns__title--closed')}>
           {link ? (
-            <ItemLink item={item} className="font-medium">
+            <ItemLink item={item} className="item-columns__link">
               {title}
             </ItemLink>
           ) : (
-            <span className="line-clamp-2">{title}</span>
+            <span className="lu-line-clamp item-columns__clamp">{title}</span>
           )}
-          {details && <p className="mt-0.5 flex flex-wrap gap-x-3 text-xs text-muted-foreground">{details(row)}</p>}
+          {details && <p className="item-columns__details">{details(row)}</p>}
         </div>
       )
     },
@@ -53,7 +54,7 @@ export function statusColumn<Row>(itemOf: (row: Row) => Item, labelOf: (item: It
       const { category } = itemOf(row)
       return category === null ? null : categoryOrder.indexOf(category)
     },
-    className: 'whitespace-nowrap',
+    className: 'item-columns__status',
     cell: (row) => {
       const item = itemOf(row)
       return <StatusBadge status={item.status} category={item.category} label={labelOf(item)} />
@@ -75,7 +76,7 @@ export function progressColumn<Row>(
       const progress = progressOf(row)
       return progress.total === 0 ? null : progress.ratio
     },
-    className: 'w-64 min-w-48',
+    className: 'item-columns__progress',
     cell: (row) => <ProgressMeter progress={progressOf(row)} labels={labels} empty={empty} />,
   }
 }

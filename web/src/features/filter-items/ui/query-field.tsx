@@ -1,8 +1,8 @@
-import { AlertTriangle, Search } from 'lucide-react'
 import { useId, useRef } from 'react'
 import { cn } from '@/shared/lib'
-import { Input, Tooltip } from '@/shared/ui'
+import { Icon, Input, Tooltip } from '@/shared/ui'
 import { useQueryField } from '../model/use-query-field'
+import './filter-items.css'
 
 // The search field of every item view, bound to `?q=`: typed filters, free words, suggestions for the
 // token under the cursor, and what it does not understand reported beside it. With `count`, it tells
@@ -17,8 +17,8 @@ export function QueryField({ count, total, className }: { count?: number; total?
   const expanded = field.options.length > 0
 
   return (
-    <div className={cn('relative w-80', className)}>
-      <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+    <div className={cn('query-field', className)}>
+      <Icon name="search" className="query-field__icon" />
       <Input
         ref={input}
         type="search"
@@ -33,7 +33,7 @@ export function QueryField({ count, total, className }: { count?: number; total?
         autoComplete="off"
         spellCheck={false}
         placeholder="Search, or status: size:<=M @person…"
-        className={cn('pl-8', count !== undefined && 'pr-24', errors && 'border-red-500/60 focus-visible:outline-red-500')}
+        className={cn('query-field__input', count !== undefined && 'query-field__input--counted', errors && 'query-field__input--invalid')}
         value={field.text}
         onChange={(event) => field.onChange(event.target.value, event.target.selectionStart)}
         onSelect={field.onSelect}
@@ -41,34 +41,34 @@ export function QueryField({ count, total, className }: { count?: number; total?
         onFocus={field.onFocus}
         onBlur={field.onBlur}
       />
-      <div className="pointer-events-none absolute top-1/2 right-2.5 flex -translate-y-1/2 items-center gap-1.5 text-xs text-muted-foreground">
+      <div className="query-field__status">
         {count !== undefined && (
-          <span aria-live="polite" className="tabular-nums">
+          <span aria-live="polite" className="query-field__count">
             {total === undefined || field.text.trim() === '' ? `${count} items` : `${count} of ${total}`}
           </span>
         )}
         {field.issues.length > 0 && (
           <Tooltip content={field.issues.map((issue) => issue.message).join('\n')}>
-            <span className="pointer-events-auto" tabIndex={0} aria-label={`${field.issues.length} problems in the search`}>
-              <AlertTriangle className={cn('size-3.5', errors ? 'text-red-500' : 'text-amber-500')} aria-hidden />
+            <span className="query-field__issues" tabIndex={0} aria-label={`${field.issues.length} problems in the search`}>
+              <Icon name="warning" className={cn('query-field__warning', errors && 'query-field__warning--error')} />
             </span>
           </Tooltip>
         )}
       </div>
-      <p id={described} className="sr-only">
+      <p id={described} className="lu-visually-hidden">
         {field.issues.map((issue) => issue.message).join('. ')}
       </p>
       {field.open && (expanded || field.issues.length > 0) && (
-        <div className="absolute top-full right-0 left-0 z-40 mt-1 rounded-md border border-border bg-popover p-1 text-sm shadow-lg">
+        <div className="query-field__popup">
           {field.issues.map((issue) => (
             <p
               key={`${issue.start}-${issue.message}`}
-              className={cn('px-2 py-1 text-xs', issue.severity === 'error' ? 'text-red-600 dark:text-red-400' : 'text-amber-700 dark:text-amber-300')}
+              className={cn('query-field__issue', issue.severity === 'error' && 'query-field__issue--error')}
             >
               {issue.message}
             </p>
           ))}
-          <ul id={listbox} role="listbox" aria-label="Suggestions" className="max-h-72 overflow-y-auto">
+          <ul id={listbox} role="listbox" aria-label="Suggestions" className="query-field__options">
             {field.options.map((option, index) => (
               <li
                 key={option.value}
@@ -79,13 +79,10 @@ export function QueryField({ count, total, className }: { count?: number; total?
                   event.preventDefault()
                   field.choose(option)
                 }}
-                className={cn(
-                  'flex cursor-pointer items-baseline justify-between gap-3 rounded px-2 py-1.5',
-                  index === field.active ? 'bg-accent/15 text-foreground' : 'text-muted-foreground hover:bg-muted',
-                )}
+                className={cn('query-field__option', index === field.active && 'query-field__option--active')}
               >
-                <span className="font-mono text-xs text-foreground">{option.label}</span>
-                {option.description && <span className="truncate text-xs">{option.description}</span>}
+                <span className="query-field__option-label">{option.label}</span>
+                {option.description && <span className="lu-truncate query-field__option-description">{option.description}</span>}
               </li>
             ))}
           </ul>

@@ -1,4 +1,3 @@
-import { NotebookPen } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link, useLocation } from 'react-router'
 import { changesFor, useUpdateItem } from '@/entities/item'
@@ -6,10 +5,11 @@ import { useSchema } from '@/entities/schema'
 import { QueryField } from '@/features/filter-items'
 import type { Item } from '@/shared/api'
 import { routes, scopeSearch } from '@/shared/config'
-import { DragArea, Draggable, DropZone, EmptyState, ErrorState, LoadingState, PageHeader, type DragEndEvent } from '@/shared/ui'
+import { DragArea, Draggable, DropZone, EmptyState, ErrorState, Icon, LoadingState, PageHeader, type DragEndEvent } from '@/shared/ui'
 import { buildLanes } from '../model/reflexions'
 import { ReflexionCard } from './reflexion-card'
 import { useReflexions } from './use-reflexions'
+import './reflexions.css'
 
 export function ReflexionsPage() {
   const { reflexions, total, isPending, error, scope } = useReflexions()
@@ -33,15 +33,15 @@ export function ReflexionsPage() {
   }
 
   return (
-    <div className="flex h-full flex-col gap-4 p-6">
+    <div className="reflexions">
       <PageHeader
         title="Reflexions"
         description={isPending ? 'Loading…' : `${reflexions.length} reflexions — drag a card, or use its menu, to change where it stands`}
         actions={
           <>
             <QueryField count={reflexions.length} total={total} />
-            <Link to={{ pathname: routes.journal, search: scopeSearch(search) }} className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline">
-              <NotebookPen className="size-4" aria-hidden />
+            <Link to={{ pathname: routes.journal, search: scopeSearch(search) }} className="reflexions__link reflexions__link--icon">
+              <Icon name="notebook" className="reflexions__link-icon" />
               Journal of settled reflexions
             </Link>
           </>
@@ -65,16 +65,16 @@ export function ReflexionsPage() {
         <DragArea
           onDragEnd={onDragEnd}
         >
-          <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-3">
+          <div className="reflexions__lanes">
             {lanes.map((lane) => (
-              <DropZone key={lane.status} id={`lane:${lane.status}`} label={lane.label} className="flex min-h-40 flex-col gap-2 rounded-lg bg-muted/50 p-2">
-                <div className="flex items-baseline justify-between px-1">
-                  <h2 className="text-sm font-semibold">
-                    {lane.label} <span className="font-normal text-muted-foreground">{lane.items.length}</span>
+              <DropZone key={lane.status} id={`lane:${lane.status}`} label={lane.label} className="reflexions__lane">
+                <div className="reflexions__lane-header">
+                  <h2 className="reflexions__lane-title">
+                    {lane.label} <span className="reflexions__lane-count">{lane.items.length}</span>
                   </h2>
-                  <span className="text-xs text-muted-foreground">{lane.hint}</span>
+                  <span className="reflexions__lane-hint">{lane.hint}</span>
                 </div>
-                <div className="flex flex-col gap-2 overflow-y-auto">
+                <div className="reflexions__lane-cards">
                   {lane.items.map((item) => (
                     <Draggable key={item.path} id={item.path}>
                       <ReflexionCard
@@ -87,7 +87,7 @@ export function ReflexionsPage() {
                             onChange={(event) => move(item, event.target.value)}
                             onPointerDown={(event) => event.stopPropagation()}
                             onKeyDown={(event) => event.stopPropagation()}
-                            className="rounded border border-border bg-background px-1 py-0.5 text-[11px] text-muted-foreground"
+                            className="reflexions__status"
                           >
                             {lanes.map((option) => (
                               <option key={option.status} value={option.status}>
@@ -99,7 +99,7 @@ export function ReflexionsPage() {
                       />
                     </Draggable>
                   ))}
-                  {lane.items.length === 0 && <p className="px-1 py-4 text-center text-xs text-muted-foreground">Nothing {lane.label.toLowerCase()}</p>}
+                  {lane.items.length === 0 && <p className="reflexions__lane-empty">Nothing {lane.label.toLowerCase()}</p>}
                 </div>
               </DropZone>
             ))}

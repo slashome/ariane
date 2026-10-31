@@ -1,8 +1,8 @@
-import { Send } from 'lucide-react'
 import type { Item } from '@/shared/api'
-import { Button } from '@/shared/ui'
+import { Button, Icon } from '@/shared/ui'
 import { useSyncItem } from '../api/use-sync-item'
 import { mondayLinks } from '../model/bound'
+import './sync-item.css'
 
 // Sends the item's status to its monday ticket now; nothing for an item bound to none.
 export function SyncItemButton({ item }: { item: Item }) {
@@ -12,7 +12,7 @@ export function SyncItemButton({ item }: { item: Item }) {
   }
   return (
     <Button size="sm" variant="outline" disabled={sync.isPending} onClick={() => sync.mutate(item)} title="Send the status to the monday ticket, refusing on a conflict">
-      <Send className="size-3.5" aria-hidden />
+      <Icon name="send" className="sync-item-button__icon" />
       {sync.isPending ? 'Sending…' : 'Send to monday'}
     </Button>
   )

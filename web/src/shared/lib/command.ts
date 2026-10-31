@@ -1,4 +1,3 @@
-import type { LucideIcon } from 'lucide-react'
 import type { Range } from './highlight'
 
 // One entry of the command palette. Each slice builds its own; the palette only finds, shows and runs them.
@@ -13,7 +12,7 @@ export interface Command {
   // Words that find the command besides its title, such as an id or a reference; one equal to the whole
   // text typed ranks the command first.
   keywords?: string[]
-  icon?: LucideIcon
+  icon?: string
   // A line under the title with the ranges to highlight, such as an excerpt found by `ariane search`.
   detail?: { text: string; ranges: readonly Range[] }
   // Listed only once something is typed: a long list, such as the items, that would drown the rest.

@@ -1,0 +1,220 @@
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-6);
+  padding: var(--lu-space-6);
+}
+
+.settings__theme {
+  display: grid;
+  gap: var(--lu-space-6);
+  max-inline-size: 56rem;
+
+  @media (width >= 64rem) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.settings__form > * + * {
+  margin-block-start: var(--lu-space-5);
+}
+
+.settings__title {
+  font-size: var(--lu-font-size-sm);
+  font-weight: var(--lu-font-weight-semibold);
+}
+
+.settings__warning {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--lu-space-1-5);
+  font-size: var(--lu-font-size-xs);
+  color: var(--lu-color-warning);
+}
+
+.settings__warning-icon {
+  --lu-icon-size: 0.875rem;
+  flex-shrink: 0;
+  margin-block-start: 1px;
+}
+
+.settings__presets > * + * {
+  margin-block-start: var(--lu-space-1-5);
+}
+
+.settings__label {
+  font-size: var(--lu-font-size-sm);
+  font-weight: var(--lu-font-weight-medium);
+}
+
+.settings__preset-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lu-space-2);
+}
+
+.settings__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--lu-space-2);
+  padding-block-start: var(--lu-space-1);
+}
+
+.settings__default {
+  margin-inline-start: auto;
+}
+
+.settings__icon {
+  --lu-icon-size: 1rem;
+}
+
+.settings__note {
+  font-size: var(--lu-font-size-xs);
+  color: var(--lu-color-muted-foreground);
+}
+
+.preset-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--lu-space-2);
+  padding-block: var(--lu-space-1);
+  padding-inline: var(--lu-space-1) var(--lu-space-3);
+  border: 1px solid var(--lu-color-border);
+  border-radius: var(--lu-radius-full);
+  font-size: var(--lu-font-size-xs);
+
+  &:hover {
+    background: var(--lu-color-muted);
+  }
+}
+
+.preset-chip--selected {
+  border-color: var(--lu-color-primary);
+}
+
+.preset-chip__swatches {
+  display: flex;
+}
+
+.preset-chip__swatch {
+  inline-size: var(--lu-space-4);
+  block-size: var(--lu-space-4);
+  border-radius: var(--lu-radius-full);
+}
+
+.preset-chip__swatch--overlap {
+  margin-inline-start: calc(-1 * var(--lu-space-1));
+  box-shadow: 0 0 0 2px var(--lu-color-background);
+}
+
+.theme-preview {
+  padding: var(--lu-space-4);
+  border: 1px solid var(--lu-color-border);
+  border-radius: var(--lu-radius-lg);
+
+  & > * + * {
+    margin-block-start: var(--lu-space-3);
+  }
+}
+
+.theme-preview__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--lu-space-2);
+  font-weight: var(--lu-font-weight-semibold);
+}
+
+.theme-preview__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--lu-space-3);
+}
+
+.theme-preview__link {
+  font-size: var(--lu-font-size-sm);
+  color: var(--lu-color-primary);
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.theme-preview__icon-button {
+  inline-size: var(--lu-space-6);
+  block-size: var(--lu-space-6);
+}
+
+.theme-preview__small-icon {
+  --lu-icon-size: 0.875rem;
+}
+
+.theme-preview__menu {
+  inline-size: 14rem;
+
+  & > * + * {
+    margin-block-start: 0.125rem;
+  }
+}
+
+.theme-preview__entry {
+  display: flex;
+  align-items: center;
+  gap: var(--lu-space-2-5);
+  padding-block: var(--lu-space-1-5);
+  padding-inline-start: var(--lu-space-3);
+  border-radius: var(--lu-radius-md);
+  font-size: var(--lu-font-size-sm);
+  color: var(--lu-color-muted-foreground);
+}
+
+.theme-preview__entry--active {
+  background: color-mix(in oklab, var(--lu-color-accent) 15%, transparent);
+  box-shadow: inset 2px 0 0 var(--lu-color-accent);
+  font-weight: var(--lu-font-weight-medium);
+  color: inherit;
+}
+
+.theme-preview__icon {
+  --lu-icon-size: 1rem;
+}
+
+.color-field > * + * {
+  margin-block-start: var(--lu-space-1-5);
+}
+
+.color-field__label {
+  font-size: var(--lu-font-size-sm);
+  font-weight: var(--lu-font-weight-medium);
+}
+
+.color-field__hint {
+  font-size: var(--lu-font-size-xs);
+  color: var(--lu-color-muted-foreground);
+}
+
+.color-field__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--lu-space-2);
+}
+
+.color-field__picker {
+  inline-size: var(--lu-control-height);
+  block-size: var(--lu-control-height);
+  padding: 0.125rem;
+  border: 1px solid var(--lu-color-border);
+  border-radius: var(--lu-radius-md);
+  background: var(--lu-color-background);
+  cursor: pointer;
+}
+
+.color-field__hex {
+  inline-size: 7rem;
+  font-family: var(--lu-font-family-mono);
+}
+
+.color-field__error {
+  font-size: var(--lu-font-size-xs);
+  color: var(--lu-color-danger);
+}

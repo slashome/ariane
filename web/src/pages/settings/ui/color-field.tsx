@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { isColor } from '@/entities/theme'
 import { Input } from '@/shared/ui'
+import './settings.css'
 
 export function ColorField({
   id,
@@ -23,25 +24,25 @@ export function ColorField({
     setText(value)
   }
   return (
-    <div className="space-y-1.5">
-      <label htmlFor={`${id}-hex`} className="text-sm font-medium">
+    <div className="color-field">
+      <label htmlFor={`${id}-hex`} className="color-field__label">
         {label}
       </label>
-      <p className="text-xs text-muted-foreground">{hint}</p>
-      <div className="flex items-center gap-2">
+      <p className="color-field__hint">{hint}</p>
+      <div className="color-field__controls">
         <input
           type="color"
           aria-label={`${label}, color picker`}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className="size-9 cursor-pointer rounded-md border border-border bg-background p-0.5"
+          className="color-field__picker"
         />
         <Input
           id={`${id}-hex`}
           value={text}
           spellCheck={false}
           aria-invalid={!isColor(text)}
-          className="w-28 font-mono"
+          className="color-field__hex"
           onChange={(event) => {
             setText(event.target.value)
             if (isColor(event.target.value)) {
@@ -49,7 +50,7 @@ export function ColorField({
             }
           }}
         />
-        {!isColor(text) && <span className="text-xs text-red-700 dark:text-red-300">#rrggbb</span>}
+        {!isColor(text) && <span className="color-field__error">#rrggbb</span>}
       </div>
     </div>
   )

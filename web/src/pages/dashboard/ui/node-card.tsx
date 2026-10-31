@@ -1,24 +1,24 @@
-import { ArrowUpRight } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import type { Category, Item } from '@/shared/api'
 import { cn, displayNode } from '@/shared/lib'
-import { Markdown } from '@/shared/ui'
+import { Icon, Markdown } from '@/shared/ui'
 import type { CardStats } from '../model/card-stats'
 import { CategoryBar } from '@/entities/item'
+import './dashboard.css'
 
 function Section({ title, items, empty }: { title: string; items: Item[]; empty: string }) {
   return (
     <div>
-      <h3 className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">{title}</h3>
+      <h3 className="node-card__section-title">{title}</h3>
       {items.length === 0 ? (
-        <p className="text-xs text-muted-foreground">{empty}</p>
+        <p className="node-card__meta">{empty}</p>
       ) : (
-        <ul className="space-y-0.5 text-sm">
+        <ul className="node-card__list">
           {items.map((item) => (
-            <li key={item.path} className="flex gap-2">
-              <span className="shrink-0 font-mono text-xs text-muted-foreground">{item.id ?? '—'}</span>
-              <span className="truncate" title={item.title ?? item.path}>
+            <li key={item.path} className="node-card__entry">
+              <span className="node-card__entry-id">{item.id ?? '—'}</span>
+              <span className="lu-truncate" title={item.title ?? item.path}>
                 {item.title ?? item.path}
               </span>
             </li>
@@ -45,30 +45,30 @@ export function NodeCard({
   className?: string
 }) {
   return (
-    <article className={cn('flex flex-col gap-3 rounded-lg border border-border bg-background p-4', className)}>
-      <header className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
+    <article className={cn('node-card', className)}>
+      <header className="node-card__header">
+        <div className="node-card__heading">
           <Link
             to={{ pathname: '/tasks', search: `?node=${encodeURIComponent(path)}` }}
-            className="inline-flex items-center gap-1 font-mono text-sm font-medium hover:underline"
+            className="node-card__link"
           >
-            <span className="truncate">{displayNode(path)}</span>
-            <ArrowUpRight className="size-3.5 shrink-0" aria-hidden />
+            <span className="lu-truncate">{displayNode(path)}</span>
+            <Icon name="arrow-up-right" className="node-card__link-icon" />
           </Link>
-          <p className="text-xs text-muted-foreground">
+          <p className="node-card__meta">
             {stats.total} live items · last movement {stats.lastChange ?? 'unknown'}
           </p>
         </div>
         {toolbar}
       </header>
       {description && (
-        <details className="text-sm">
-          <summary className="cursor-pointer text-xs font-semibold tracking-wide text-muted-foreground uppercase">About</summary>
-          <Markdown source={description} className="mt-1" />
+        <details className="node-card__about">
+          <summary className="node-card__section-title node-card__summary">About</summary>
+          <Markdown source={description} className="node-card__description" />
         </details>
       )}
       <CategoryBar counts={stats.counts} labels={labels} />
-      <div className="grid grid-cols-2 gap-3">
+      <div className="node-card__sections">
         <Section title="Quick wins" items={stats.quickWins} empty="None — size XS/S × impact high" />
         <Section title="Blockers" items={stats.blockers} empty="Nothing blocked" />
       </div>

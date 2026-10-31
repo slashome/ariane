@@ -10,6 +10,7 @@ import { DragArea, toast, type DragEndEvent } from '@/shared/ui'
 import { ItemDetails } from '@/widgets/item-details'
 import { buildColumns, targetStatus } from '../model/columns'
 import { KanbanColumn } from './kanban-column'
+import './kanban.css'
 
 const collapsedByDefault = new Set(['done', 'dropped'])
 
@@ -81,11 +82,11 @@ export function KanbanPage() {
   const around = opened === null ? null : neighbours(visible, (item) => item.path === opened)
 
   return (
-    <div className="flex h-full flex-col gap-4 p-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="kanban-page">
+      <div className="kanban-page__header">
         <div>
-        <h1 className="text-xl font-semibold">Kanban</h1>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="kanban-page__title">Kanban</h1>
+        <p className="kanban-page__description">
           {isPending
             ? 'Loading…'
             : filters.node === null
@@ -98,7 +99,7 @@ export function KanbanPage() {
       <DragArea
         onDragEnd={onDragEnd}
       >
-        <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto pb-2">
+        <div className="kanban-page__board">
           {columns.map((column) => (
             <KanbanColumn
               key={column.id}

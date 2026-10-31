@@ -5,6 +5,7 @@ import { displayNode } from '@/shared/lib'
 import { Button, Dialog, Input, NativeSelect } from '@/shared/ui'
 import { useSetRoute } from '../api/use-route-edits'
 import { needsSetup, parsePort, routeProblem, suggestHost } from '../model/route-form'
+import './proxy.css'
 
 export function RouteDialog({
   route,
@@ -59,19 +60,19 @@ export function RouteDialog({
           then has a change to commit.
         </>
       }
-      className="w-[32rem]"
+      className="route-dialog"
     >
       <form
-        className="flex flex-col gap-4"
+        className="proxy-form"
         onSubmit={(event) => {
           event.preventDefault()
           submit()
         }}
       >
-        <label className="space-y-1 text-sm">
-          <span className="font-medium">Node</span>
+        <label className="proxy-form__field">
+          <span className="proxy-form__label">Node</span>
           {route === null ? (
-            <NativeSelect className="w-full font-mono" value={node ?? ''} onChange={(event) => setNode(event.target.value === '' ? null : event.target.value)}>
+            <NativeSelect className="proxy-form__select" value={node ?? ''} onChange={(event) => setNode(event.target.value === '' ? null : event.target.value)}>
               <option value="" disabled>
                 Choose a node…
               </option>
@@ -82,33 +83,33 @@ export function RouteDialog({
               ))}
             </NativeSelect>
           ) : (
-            <span className="block font-mono text-sm">{displayNode(route.node ?? '')}</span>
+            <span className="proxy-form__value">{displayNode(route.node ?? '')}</span>
           )}
         </label>
-        <label className="space-y-1 text-sm">
-          <span className="font-medium">Host</span>
+        <label className="proxy-form__field">
+          <span className="proxy-form__label">Host</span>
           <Input
             value={shownHost}
-            className="font-mono"
+            className="proxy-form__mono"
             placeholder="app.local"
             onChange={(event) => {
               setHostTouched(true)
               setHost(event.target.value)
             }}
           />
-          <span className="block text-xs text-muted-foreground">The name typed in the browser, as in http://{shownHost || 'app.local'}.</span>
+          <span className="proxy-form__hint">The name typed in the browser, as in http://{shownHost || 'app.local'}.</span>
         </label>
-        <label className="space-y-1 text-sm">
-          <span className="font-medium">Port</span>
-          <Input value={port} inputMode="numeric" className="font-mono" placeholder="3000" onChange={(event) => setPort(event.target.value)} />
-          <span className="block text-xs text-muted-foreground">Where the development server listens, on 127.0.0.1.</span>
+        <label className="proxy-form__field">
+          <span className="proxy-form__label">Port</span>
+          <Input value={port} inputMode="numeric" className="proxy-form__mono" placeholder="3000" onChange={(event) => setPort(event.target.value)} />
+          <span className="proxy-form__hint">Where the development server listens, on 127.0.0.1.</span>
         </label>
         {touched && problem !== null && (
-          <p role="alert" className="text-xs text-red-700 dark:text-red-300">
+          <p role="alert" className="proxy-form__problem">
             {problem}
           </p>
         )}
-        <div className="flex justify-end gap-2">
+        <div className="proxy-form__actions">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>

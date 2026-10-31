@@ -1,0 +1,172 @@
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  inline-size: 15rem;
+  border-inline-end: 1px solid var(--lu-color-border);
+  background: var(--lu-color-sidebar);
+}
+
+.sidebar__brand {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--lu-space-2);
+  block-size: 3.5rem;
+  padding-inline: var(--lu-space-4);
+  border-block-end: 1px solid var(--lu-color-border);
+  font-weight: var(--lu-font-weight-semibold);
+}
+
+.sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-2);
+  padding: var(--lu-space-2);
+}
+
+.sidebar__nav--main {
+  flex: 1;
+  min-block-size: 0;
+  overflow-y: auto;
+}
+
+.sidebar__nav--system {
+  flex-shrink: 0;
+  border-block-start: 1px solid var(--lu-color-border);
+}
+
+.sidebar-entry {
+  display: flex;
+  align-items: center;
+  gap: var(--lu-space-2-5);
+  padding-block: var(--lu-space-1-5);
+  padding-inline: var(--lu-space-3) var(--lu-space-2);
+  border-radius: var(--lu-radius-md);
+  font-size: var(--lu-font-size-sm);
+  color: var(--lu-color-muted-foreground);
+  text-decoration: none;
+  transition:
+    background-color var(--lu-motion-hover-duration) var(--lu-motion-hover-easing),
+    color var(--lu-motion-hover-duration) var(--lu-motion-hover-easing);
+
+  &:hover {
+    background: var(--lu-color-muted);
+    color: var(--lu-color-foreground);
+  }
+}
+
+.sidebar-entry--nested {
+  padding-inline-start: var(--lu-space-8);
+}
+
+.sidebar-entry--active {
+  background: color-mix(in oklab, var(--lu-color-accent) 15%, transparent);
+  font-weight: var(--lu-font-weight-medium);
+  color: var(--lu-color-foreground);
+  box-shadow: inset 2px 0 0 var(--lu-color-accent);
+}
+
+.sidebar-entry--pinned {
+  background: color-mix(in oklab, var(--lu-color-accent) 10%, transparent);
+  font-weight: var(--lu-font-weight-medium);
+  color: var(--lu-color-foreground);
+}
+
+.sidebar-entry__icon {
+  --lu-icon-size: 1rem;
+  flex-shrink: 0;
+  inline-size: 1rem;
+  block-size: 1rem;
+}
+
+.sidebar-entry__pin {
+  --lu-icon-size: 0.875rem;
+  flex-shrink: 0;
+}
+
+.sidebar-entry__path {
+  font-family: var(--lu-font-family-mono);
+  font-size: var(--lu-font-size-xs);
+}
+
+.sidebar-entry__dot {
+  flex-shrink: 0;
+  inline-size: var(--lu-space-2);
+  block-size: var(--lu-space-2);
+  border-radius: var(--lu-radius-full);
+  background: color-mix(in oklab, var(--lu-color-muted-foreground) 40%, transparent);
+}
+
+.sidebar-entry__dot--ok {
+  background: var(--lu-color-success);
+}
+
+.sidebar-entry__dot--broken {
+  background: var(--lu-color-danger);
+}
+
+.sidebar-count {
+  min-inline-size: var(--lu-space-5);
+  margin-inline-start: auto;
+  padding-inline: var(--lu-space-1-5);
+  border-radius: var(--lu-radius-full);
+  text-align: center;
+  font-size: var(--lu-font-size-2xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--lu-color-muted-foreground);
+}
+
+.sidebar-count--danger {
+  background: color-mix(in oklab, var(--lu-color-danger) 15%, transparent);
+  color: var(--lu-color-danger);
+}
+
+.sidebar-count--warning {
+  background: color-mix(in oklab, var(--lu-color-warning) 15%, transparent);
+  color: var(--lu-color-warning);
+}
+
+.sidebar-section__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--lu-space-2-5);
+  inline-size: 100%;
+  padding-block: var(--lu-space-1-5);
+  padding-inline: var(--lu-space-3);
+  border: 0;
+  border-radius: var(--lu-radius-md);
+  background: none;
+  font: inherit;
+  font-size: var(--lu-font-size-sm);
+  font-weight: var(--lu-font-weight-medium);
+  color: var(--lu-color-foreground);
+  cursor: pointer;
+  transition: background-color var(--lu-motion-hover-duration) var(--lu-motion-hover-easing);
+
+  &:hover {
+    background: var(--lu-color-muted);
+  }
+}
+
+.sidebar-section__chevron {
+  --lu-icon-size: 0.875rem;
+  margin-inline-start: auto;
+  color: var(--lu-color-muted-foreground);
+  transition: rotate var(--lu-motion-hover-duration) var(--lu-motion-hover-easing);
+}
+
+.sidebar-section__chevron--collapsed {
+  rotate: -90deg;
+}
+
+.sidebar-section__entries {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin-block-start: 0.125rem;
+
+  &[hidden] {
+    display: none;
+  }
+}

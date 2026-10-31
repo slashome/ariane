@@ -1,11 +1,10 @@
-import { Monitor, Moon, Sun, type LucideIcon } from 'lucide-react'
 import type { Command } from '@/shared/lib'
 import { appearances, setAppearance, useAppearance, type Appearance } from '../model/appearance'
 
-const labels: Record<Appearance, { title: string; icon: LucideIcon }> = {
-  system: { title: 'Appearance: follow the system', icon: Monitor },
-  light: { title: 'Appearance: light', icon: Sun },
-  dark: { title: 'Appearance: dark', icon: Moon },
+const labels: Record<Appearance, { title: string; icon: string }> = {
+  system: { title: 'Appearance: follow the system', icon: 'monitor' },
+  light: { title: 'Appearance: light', icon: 'sun' },
+  dark: { title: 'Appearance: dark', icon: 'moon' },
 }
 
 // Light, dark or the system's choice, remembered by this browser.

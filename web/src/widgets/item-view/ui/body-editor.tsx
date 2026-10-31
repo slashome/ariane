@@ -1,9 +1,9 @@
-import { Pencil, Save, X } from 'lucide-react'
 import { useState } from 'react'
 import { useUpdateItem } from '@/entities/item'
 import type { Item } from '@/shared/api'
-import { Button, Markdown } from '@/shared/ui'
+import { Button, Icon, Markdown } from '@/shared/ui'
 import { ItemBody } from './item-body'
+import './item-view.css'
 
 // The body of an item, read, or edited as Markdown with its rendering beside it. Saving sends the text
 // last read with the new one: a file changed meanwhile is refused, never merged (ADR-0012).
@@ -13,9 +13,9 @@ export function BodyEditor({ item, body, items }: { item: Item; body: string; it
 
   if (draft === null) {
     return (
-      <div className="group relative">
-        <Button size="sm" variant="outline" className="float-right ml-3" onClick={() => setDraft(body)}>
-          <Pencil className="size-3.5" aria-hidden />
+      <div className="body-editor__read">
+        <Button size="sm" variant="outline" className="body-editor__edit" onClick={() => setDraft(body)}>
+          <Icon name="edit" className="body-editor__icon" />
           Edit
         </Button>
         <ItemBody item={item} body={body} items={items} />
@@ -27,21 +27,21 @@ export function BodyEditor({ item, body, items }: { item: Item; body: string; it
     update.mutate({ item, changes: { body: { from: body, to: draft } }, optimistic: {} }, { onSuccess: () => setDraft(null) })
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">Markdown — the rendering is on the right. ⌘↵ saves.</p>
-        <div className="flex gap-2">
+    <div className="body-editor">
+      <div className="body-editor__toolbar">
+        <p className="body-editor__hint">Markdown — the rendering is on the right. ⌘↵ saves.</p>
+        <div className="body-editor__actions">
           <Button size="sm" variant="ghost" onClick={() => setDraft(null)}>
-            <X className="size-3.5" aria-hidden />
+            <Icon name="close" className="body-editor__icon" />
             Cancel
           </Button>
           <Button size="sm" disabled={draft === body || update.isPending} onClick={save}>
-            <Save className="size-3.5" aria-hidden />
+            <Icon name="save" className="body-editor__icon" />
             {update.isPending ? 'Saving…' : 'Save'}
           </Button>
         </div>
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="body-editor__panes">
         <textarea
           aria-label="Body"
           value={draft}
@@ -53,9 +53,9 @@ export function BodyEditor({ item, body, items }: { item: Item; body: string; it
             }
           }}
           spellCheck
-          className="min-h-[60vh] w-full resize-y rounded-md border border-border bg-background p-3 font-mono text-sm leading-relaxed focus-visible:outline-2 focus-visible:outline-ring"
+          className="body-editor__source"
         />
-        <div className="min-h-[60vh] overflow-auto rounded-md border border-dashed border-border p-3">
+        <div className="body-editor__preview">
           <Markdown source={draft} />
         </div>
       </div>

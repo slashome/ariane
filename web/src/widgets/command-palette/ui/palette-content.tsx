@@ -1,10 +1,10 @@
 import { Dialog as DialogPrimitive } from 'radix-ui'
-import { ChevronLeft, Command as CommandIcon, Loader2 } from 'lucide-react'
 import { useId, useState } from 'react'
-import { Kbd } from '@/shared/ui'
+import { Icon, Kbd } from '@/shared/ui'
 import { usePaletteCommands } from '../model/use-palette-commands'
 import { usePaletteList } from '../model/use-palette'
 import { PaletteOption } from './palette-option'
+import './command-palette.css'
 
 // The open palette: a combobox over a listbox of sections, run from the keyboard. Mounted only while
 // open, so it starts afresh every time.
@@ -27,18 +27,18 @@ export function PaletteContent({ close }: { close: () => void }) {
           list.back()
         }
       }}
-      className="fixed top-[12vh] left-1/2 z-50 flex max-h-[70vh] w-[40rem] max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col overflow-hidden rounded-xl border border-border bg-popover text-foreground shadow-2xl focus:outline-none"
+      className="command-palette"
     >
-      <DialogPrimitive.Title className="sr-only">Command palette</DialogPrimitive.Title>
-      <div className="flex items-center gap-2 border-b border-border px-3">
+      <DialogPrimitive.Title className="lu-visually-hidden">Command palette</DialogPrimitive.Title>
+      <div className="command-palette__search">
         {parent ? (
-          <button type="button" onClick={list.back} className="lu-icon-button size-6" aria-label={`Back from ${parent.title}`}>
-            <ChevronLeft className="size-4" aria-hidden />
+          <button type="button" onClick={list.back} className="lu-icon-button command-palette__back" aria-label={`Back from ${parent.title}`}>
+            <Icon name="chevron-left" className="command-palette__icon" />
           </button>
         ) : (
-          <CommandIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+          <Icon name="command" className="command-palette__search-icon" />
         )}
-        {parent && <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{parent.title.replace(/…$/, '')}</span>}
+        {parent && <span className="command-palette__parent">{parent.title.replace(/…$/, '')}</span>}
         <input
           autoFocus
           role="combobox"
@@ -53,19 +53,19 @@ export function PaletteContent({ close }: { close: () => void }) {
           value={text}
           onChange={(event) => list.onTextChange(event.target.value)}
           onKeyDown={list.onKeyDown}
-          className="h-12 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          className="command-palette__input"
         />
         {searching && text.trim().length >= 2 && (
-          <span role="status" aria-label="Searching the text" className="text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" aria-hidden />
+          <span role="status" aria-label="Searching the text" className="command-palette__searching">
+            <Icon name="loading" className="command-palette__icon lu-spin" />
           </span>
         )}
       </div>
-      <ul id={listbox} role="listbox" aria-label="Results" className="min-h-0 flex-1 overflow-y-auto p-2">
+      <ul id={listbox} role="listbox" aria-label="Results" className="command-palette__list">
         {list.sections.map((section, sectionIndex) => (
-          <li key={section.group} role="presentation" className="mb-1">
+          <li key={section.group} role="presentation" className="command-palette__section">
             <ul role="group" aria-labelledby={`${id}-section-${sectionIndex}`}>
-              <li role="presentation" id={`${id}-section-${sectionIndex}`} className="px-3 pt-2 pb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+              <li role="presentation" id={`${id}-section-${sectionIndex}`} className="command-palette__group">
                 {section.group}
               </li>
               {section.entries.map((entry) => {
@@ -85,12 +85,12 @@ export function PaletteContent({ close }: { close: () => void }) {
           </li>
         ))}
         {list.entries.length === 0 && (
-          <li role="presentation" className="px-3 py-10 text-center text-sm text-muted-foreground">
+          <li role="presentation" className="command-palette__empty">
             {searching ? 'Searching…' : text.trim() === '' ? 'Nothing to list here.' : `No result for “${text.trim()}”.`}
           </li>
         )}
       </ul>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border bg-muted/40 px-3 py-2 text-[11px] text-muted-foreground">
+      <div className="command-palette__footer">
         <span>
           <Kbd>↑</Kbd> <Kbd>↓</Kbd> move
         </span>
@@ -102,7 +102,7 @@ export function PaletteContent({ close }: { close: () => void }) {
             <Kbd>⇧</Kbd> <Kbd>↵</Kbd> {list.active.command.shiftLabel}
           </span>
         )}
-        <span className="ml-auto">
+        <span className="command-palette__escape">
           <Kbd>esc</Kbd> {parent ? 'back' : 'close'}
         </span>
       </div>

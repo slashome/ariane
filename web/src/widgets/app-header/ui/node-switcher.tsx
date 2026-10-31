@@ -7,6 +7,7 @@ import { routes, searchParamKeys } from '@/shared/config'
 import { displayNode } from '@/shared/lib'
 import { Select, SelectItem, Switch } from '@/shared/ui'
 import { nodeCounts } from '../model/node-counts'
+import './app-header.css'
 
 const allNodes = '*'
 // Radix refuses an empty value, which is the home node's path.
@@ -50,43 +51,43 @@ export function NodeSwitcher() {
 
   const count = current === null ? undefined : counts.get(current)
   return (
-    <div className="flex items-center gap-3">
+    <div className="node-switcher">
       <Select
         label="Node"
         value={current === null ? allNodes : current === '' ? homeValue : current}
         onValueChange={(value) => select(value === homeValue ? '' : value)}
-        className="w-72"
+        className="node-switcher__select"
         display={
-          <span className="font-mono text-xs">
+          <span className="node-switcher__option">
             {current === null ? 'All nodes' : displayNode(current)}
-            {count !== undefined && <span className="text-muted-foreground"> ({count})</span>}
+            {count !== undefined && <span className="node-switcher__count"> ({count})</span>}
           </span>
         }
       >
         <SelectItem value={allNodes}>All nodes</SelectItem>
         {home && (
           <SelectItem value={homeValue} textValue="(home)">
-            <span className="font-mono text-xs">
-              (home) <span className="text-muted-foreground">({counts.get('') ?? 0})</span>
+            <span className="node-switcher__option">
+              (home) <span className="node-switcher__count">({counts.get('') ?? 0})</span>
             </span>
           </SelectItem>
         )}
         {trackersOnly && nodes.length === 0 && (
-          <div className="px-2 py-1.5 text-xs text-muted-foreground">No node binds a tracker</div>
+          <div className="node-switcher__empty">No node binds a tracker</div>
         )}
         {nodeTree(nodes).map((row) => (
           <SelectItem key={row.node.path} value={row.node.path} textValue={row.name}>
-            <span className="font-mono text-xs whitespace-pre">
-              <span className="text-muted-foreground/60" aria-hidden>
+            <span className="node-switcher__option node-switcher__option--tree">
+              <span className="node-switcher__prefix" aria-hidden>
                 {row.prefix}
               </span>
-              {row.name} <span className="text-muted-foreground">({counts.get(row.node.path) ?? 0})</span>
+              {row.name} <span className="node-switcher__count">({counts.get(row.node.path) ?? 0})</span>
             </span>
           </SelectItem>
         ))}
       </Select>
       {hasDescendants(everyNode, current) && (
-        <label className="flex items-center gap-2 text-sm whitespace-nowrap text-muted-foreground" title="Bring the items of the sub-nodes into every view">
+        <label className="node-switcher__descendants" title="Bring the items of the sub-nodes into every view">
           <Switch checked={filters.includeDescendants} onCheckedChange={setIncludeDescendants} aria-label="Include the sub-nodes" />
           Sub-nodes
         </label>

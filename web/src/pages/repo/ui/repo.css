@@ -1,0 +1,6 @@
+.repo-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-5);
+  padding: var(--lu-space-6);
+}

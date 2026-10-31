@@ -1,9 +1,9 @@
-import { Search } from 'lucide-react'
 import { useState } from 'react'
 import { useAddPerson, useChangePerson } from '../api/use-people'
 import { isHandle, suggestHandle } from '../model/handle'
 import { findMondayUsers, type MondayUser, type PersonEntry } from '@/shared/api'
-import { Button, Dialog, Input } from '@/shared/ui'
+import { Button, Dialog, Icon, Input } from '@/shared/ui'
+import './people.css'
 
 // Adds a person to a node's directory, or edits one: name, handle (renamed in every item that waits
 // for them) and monday id, typed or found by name in the account.
@@ -70,43 +70,43 @@ export function PersonDialog({
       onOpenChange={(open) => !open && onClose()}
       title={person === null ? 'Add a person' : `Edit ${person.name}`}
       description={`Declared in ${node === '' ? '(home)' : node}, for every item below it.`}
-      className="w-[32rem]"
+      className="people-dialog"
     >
       <form
-        className="flex flex-col gap-4"
+        className="people-form"
         onSubmit={(event) => {
           event.preventDefault()
           save()
         }}
       >
-        <label className="space-y-1 text-sm">
-          <span className="font-medium">Name</span>
+        <label className="people-form__field">
+          <span className="people-form__label">Name</span>
           <Input value={name} onChange={(event) => setName(event.target.value)} autoFocus />
         </label>
-        <label className="space-y-1 text-sm">
-          <span className="font-medium">Handle</span>
+        <label className="people-form__field">
+          <span className="people-form__label">Handle</span>
           <Input
             value={shownHandle}
-            className="font-mono"
+            className="people-form__mono"
             aria-invalid={shownHandle !== '' && !isHandle(shownHandle)}
             onChange={(event) => {
               setHandleTouched(true)
               setHandle(event.target.value)
             }}
           />
-          <span className="block text-xs text-muted-foreground">
+          <span className="people-form__hint">
             What items write in <code>waiting_for</code>.
             {person !== null && shownHandle !== person.handle && ` Renaming rewrites the ${person.awaited_by.length} items that wait for them.`}
           </span>
         </label>
-        <div className="space-y-1 text-sm">
-          <label htmlFor="person-monday" className="font-medium">
+        <div className="people-form__field">
+          <label htmlFor="person-monday" className="people-form__label">
             monday id
           </label>
-          <Input id="person-monday" inputMode="numeric" className="font-mono" value={monday} onChange={(event) => setMonday(event.target.value)} />
+          <Input id="person-monday" inputMode="numeric" className="people-form__mono" value={monday} onChange={(event) => setMonday(event.target.value)} />
           {account !== null && (
-            <div className="space-y-1.5 pt-1">
-              <div className="flex gap-2">
+            <div className="person-search">
+              <div className="person-search__row">
                 <Input
                   aria-label="Search monday users by name"
                   placeholder={`Search ${account} by name…`}
@@ -120,18 +120,18 @@ export function PersonDialog({
                   }}
                 />
                 <Button variant="outline" onClick={search} aria-label="Search monday">
-                  <Search className="size-4" aria-hidden />
+                  <Icon name="search" className="person-search__icon" />
                 </Button>
               </div>
-              {searchError && <p className="text-xs text-red-700 dark:text-red-300">{searchError}</p>}
+              {searchError && <p className="person-search__error">{searchError}</p>}
               {found !== null && (
-                <ul className="max-h-40 overflow-y-auto rounded-md border border-border">
-                  {found.length === 0 && <li className="px-2 py-1.5 text-xs text-muted-foreground">No one by that name</li>}
+                <ul className="person-search__results">
+                  {found.length === 0 && <li className="person-search__none">No one by that name</li>}
                   {found.map((user) => (
                     <li key={user.id}>
                       <button
                         type="button"
-                        className="flex w-full items-baseline justify-between gap-2 px-2 py-1.5 text-left text-sm hover:bg-muted"
+                        className="person-search__result"
                         onClick={() => {
                           setMonday(String(user.id))
                           if (name.trim() === '') {
@@ -140,7 +140,7 @@ export function PersonDialog({
                         }}
                       >
                         <span>{user.name}</span>
-                        <span className="font-mono text-[10px] text-muted-foreground">{user.id}</span>
+                        <span className="person-search__result-id">{user.id}</span>
                       </button>
                     </li>
                   ))}
@@ -149,7 +149,7 @@ export function PersonDialog({
             </div>
           )}
         </div>
-        <div className="flex justify-end gap-2">
+        <div className="people-form__actions">
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>

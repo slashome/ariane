@@ -5,12 +5,13 @@ import { enumValues, useSchema } from '@/entities/schema'
 import type { Item } from '@/shared/api'
 import { NativeSelect, Segmented } from '@/shared/ui'
 import { WaitingDialog, type Waiting } from './waiting-dialog'
+import './edit-item.css'
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="grid grid-cols-[6.5rem_1fr] items-center gap-2 text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <div className="min-w-0">{children}</div>
+    <div className="item-editors__row">
+      <span className="item-editors__label">{label}</span>
+      <div className="item-editors__value">{children}</div>
     </div>
   )
 }
@@ -64,10 +65,10 @@ export function ItemEditors({ item }: { item: Item }) {
     update.mutate({ item, changes: changesFor(item, { [field]: value }), optimistic: { [field]: value } })
 
   return (
-    <div className="space-y-2">
+    <div className="item-editors">
       {statuses.length > 0 && (
         <Row label="Status">
-          <NativeSelect aria-label="Status" className="h-8 w-full" value={item.status ?? ''} onChange={(event) => setStatus(event.target.value)}>
+          <NativeSelect aria-label="Status" className="item-editors__status" value={item.status ?? ''} onChange={(event) => setStatus(event.target.value)}>
             {item.status === null && <option value="">—</option>}
             {statuses.map((status) => (
               <option key={status.id} value={status.id}>

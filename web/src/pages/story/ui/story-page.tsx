@@ -9,6 +9,7 @@ import { referenceFromSplat } from '@/shared/config'
 import { ItemView } from '@/widgets/item-view'
 import { storyTasks } from '../model/story-tasks'
 import { StoryTasksTable } from './story-tasks-table'
+import './story.css'
 
 function StoryPersonas({ detail }: { detail: ItemDetail }) {
   const { data: nodes = [] } = useNodes()
@@ -17,10 +18,10 @@ function StoryPersonas({ detail }: { detail: ItemDetail }) {
     return null
   }
   return (
-    <section className="flex flex-wrap items-center gap-2" aria-label="Personas">
-      <h2 className="text-sm font-semibold">Written for</h2>
+    <section className="story-personas" aria-label="Personas">
+      <h2 className="story-personas__title">Written for</h2>
       {personas.map((persona) => (
-        <span key={persona.id} title={persona.id} className="rounded-full border border-border px-2 py-0.5 text-xs">
+        <span key={persona.id} title={persona.id} className="story-personas__persona">
           {persona.name}
         </span>
       ))}
@@ -34,9 +35,9 @@ function StoryEpic({ detail }: { detail: ItemDetail }) {
     return null
   }
   return (
-    <section className="flex flex-wrap items-baseline gap-2 text-sm" aria-label="Epic">
-      <h2 className="font-semibold">Part of</h2>
-      <span className="font-mono text-xs text-muted-foreground">{epic.id}</span>
+    <section className="story-epic" aria-label="Epic">
+      <h2 className="story-epic__title">Part of</h2>
+      <span className="story-epic__id">{epic.id}</span>
       <ItemLink item={epic}>{epic.title ?? epic.path}</ItemLink>
     </section>
   )
@@ -56,20 +57,20 @@ function StoryProgress({ detail }: { detail: ItemDetail }) {
   const progress = progressOf(children)
   const ready = rows.filter((row) => row.ready).length
   return (
-    <section className="space-y-4">
+    <section className="story-progress">
       <StoryEpic detail={detail} />
       <StoryPersonas detail={detail} />
-      <div className="space-y-2 rounded-lg border border-border p-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-sm font-semibold">Progress</h2>
-          <p className="text-xs text-muted-foreground">
+      <div className="story-progress__panel">
+        <div className="story-progress__header">
+          <h2 className="story-progress__title">Progress</h2>
+          <p className="story-progress__summary">
             {ready} ready to start · {progress.counts.blocked} blocked
             {!filters.includeArchived && ' · archived tasks hidden'}
           </p>
         </div>
         <ProgressMeter progress={progress} labels={labels} legend />
       </div>
-      <div className="flex justify-end">
+      <div className="story-progress__query">
         <QueryField count={rows.length} total={total} />
       </div>
       <StoryTasksTable rows={rows} scope={detail.node} hidden={total - rows.length} />
@@ -80,7 +81,7 @@ function StoryProgress({ detail }: { detail: ItemDetail }) {
 export function StoryPage() {
   const { '*': splat } = useParams()
   return (
-    <div className="p-6">
+    <div className="story-page">
       <ItemView reference={referenceFromSplat(splat)} sectionLabel="Stories">
         {(detail) => <StoryProgress detail={detail} />}
       </ItemView>

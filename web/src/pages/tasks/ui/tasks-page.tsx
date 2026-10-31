@@ -1,6 +1,7 @@
 import { useItems } from '@/entities/item'
 import { ItemFiltersBar, QueryField, useFilteredItems, useItemFilters } from '@/features/filter-items'
 import { ItemsTable } from './items-table'
+import './tasks.css'
 
 export function TasksPage() {
   const { data: items = [], isPending, error } = useItems()
@@ -9,21 +10,21 @@ export function TasksPage() {
   const tasks = items.filter((item) => item.kind === 'task').length
 
   return (
-    <div className="flex flex-col gap-4 p-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="tasks-page">
+      <div className="tasks-page__header">
         <div>
-          <h1 className="text-xl font-semibold">Tasks</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="tasks-page__title">Tasks</h1>
+          <p className="tasks-page__description">
             {isPending ? 'Loading…' : `${visible.length} of ${tasks} tasks`}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="tasks-page__actions">
           <ItemFiltersBar />
           <QueryField count={visible.length} total={total} />
         </div>
       </div>
       {error ? (
-        <p role="alert" className="rounded-md border border-red-500/40 bg-red-500/10 p-3 text-sm">
+        <p role="alert" className="tasks-page__error">
           Could not load the items: {error.message}
         </p>
       ) : (

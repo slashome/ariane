@@ -5,14 +5,7 @@ import type { ProxyReport } from '@/shared/api'
 export interface ProxyEntry {
   state: ChainState
   count: number | undefined
-  dot: string
   status: string
-}
-
-const dots: Record<ChainState, string> = {
-  ok: 'bg-emerald-500',
-  broken: 'bg-red-500',
-  unknown: 'bg-muted-foreground/40',
 }
 
 const statuses: Record<ChainState, string> = {
@@ -26,7 +19,6 @@ export function proxyEntry(report: ProxyReport | undefined): ProxyEntry {
   return {
     state,
     count: Array.isArray(report?.routes) ? report.routes.length : undefined,
-    dot: dots[state],
     status: statuses[state],
   }
 }

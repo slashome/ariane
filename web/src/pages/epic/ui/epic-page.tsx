@@ -21,6 +21,7 @@ import { referenceFromSplat } from '@/shared/config'
 import { cn, displayNode } from '@/shared/lib'
 import { DataTable, EmptyState, type Column } from '@/shared/ui'
 import { ItemView } from '@/widgets/item-view'
+import './epic.css'
 
 interface EpicStoryRow {
   story: Item
@@ -55,7 +56,7 @@ function EpicProgressPanel({ detail }: { detail: ItemDetail }) {
       header: 'Story',
       details: ({ story, tasks }) => (
         <>
-          {story.node !== detail.node && <span className="font-mono">{displayNode(story.node)}</span>}
+          {story.node !== detail.node && <span className="epic-stories__node">{displayNode(story.node)}</span>}
           <span>
             {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}
           </span>
@@ -66,21 +67,21 @@ function EpicProgressPanel({ detail }: { detail: ItemDetail }) {
     progressColumn('progress', 'Tasks', (row) => row.progress, labels),
   ]
   return (
-    <section className="space-y-4">
-      <div className="space-y-4 rounded-lg border border-border p-4">
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-sm font-semibold">Stories</h2>
-            {!filters.includeArchived && <p className="text-xs text-muted-foreground">archived stories and tasks hidden</p>}
+    <section className="epic-progress">
+      <div className="epic-progress__panel">
+        <div className="epic-progress__meter">
+          <div className="epic-progress__header">
+            <h2 className="epic-progress__title">Stories</h2>
+            {!filters.includeArchived && <p className="epic-progress__note">archived stories and tasks hidden</p>}
           </div>
           <ProgressMeter progress={storyProgress} labels={labels} empty="no story" legend />
         </div>
-        <div className="space-y-2">
-          <h2 className="text-sm font-semibold">Tasks of its stories</h2>
+        <div className="epic-progress__meter">
+          <h2 className="epic-progress__title">Tasks of its stories</h2>
           <ProgressMeter progress={taskProgress} labels={labels} />
         </div>
       </div>
-      <div className="flex justify-end">
+      <div className="epic-progress__query">
         <QueryField count={matching.length} total={total} />
       </div>
       {matching.length === 0 ? (
@@ -96,7 +97,7 @@ function EpicProgressPanel({ detail }: { detail: ItemDetail }) {
           rowKey={(row) => row.story.path}
           storageKey="epic-stories"
           label="Stories of the epic"
-          rowProps={(row) => ({ className: cn('align-middle', isClosed(row.story.category) && 'opacity-70') })}
+          rowProps={(row) => ({ className: cn('epic-stories__row', isClosed(row.story.category) && 'epic-stories__row--closed') })}
         />
       )}
     </section>
@@ -106,7 +107,7 @@ function EpicProgressPanel({ detail }: { detail: ItemDetail }) {
 export function EpicPage() {
   const { '*': splat } = useParams()
   return (
-    <div className="p-6">
+    <div className="epic-page">
       <ItemView reference={referenceFromSplat(splat)} sectionLabel="Epics">
         {(detail) => <EpicProgressPanel detail={detail} />}
       </ItemView>

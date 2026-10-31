@@ -5,6 +5,7 @@ import { QueryField, useFilteredItems } from '@/features/filter-items'
 import { DragArea, Draggable, Switch, type DragEndEvent } from '@/shared/ui'
 import { parseCellId, placeItems } from '../model/placement'
 import { ImpactRow } from './impact-row'
+import './matrix.css'
 
 export function MatrixPage() {
   const { data: items = [], isPending } = useItems()
@@ -29,16 +30,16 @@ export function MatrixPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4 p-6">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="matrix-page">
+      <div className="matrix-page__header">
         <div>
-          <h1 className="text-xl font-semibold">Size × impact</h1>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="matrix-page__title">Size × impact</h1>
+          <p className="matrix-page__description">
             {isPending ? 'Loading…' : 'Drag an item to estimate it. Quick wins are small and high-impact.'}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-2 text-sm">
+        <div className="matrix-page__actions">
+          <label className="matrix-page__toggle">
             <Switch checked={includeClosed} onCheckedChange={setIncludeClosed} aria-label="Include done and dropped" />
             Include done and dropped
           </label>
@@ -49,12 +50,12 @@ export function MatrixPage() {
         onDragEnd={onDragEnd}
       >
         <div
-          className="grid gap-2"
+          className="matrix-page__grid"
           style={{ gridTemplateColumns: `6rem repeat(${matrix.sizes.length}, minmax(11rem, 1fr))` }}
         >
           <div />
           {matrix.sizes.map((size) => (
-            <div key={size} className="text-center text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            <div key={size} className="matrix-page__size">
               {size}
             </div>
           ))}
@@ -62,11 +63,11 @@ export function MatrixPage() {
             <ImpactRow key={impact} impact={impact} matrix={matrix} />
           ))}
         </div>
-        <section className="rounded-lg border border-dashed border-border p-3">
-          <h2 className="mb-2 text-sm font-medium">
-            Unestimated <span className="text-muted-foreground">({matrix.unestimated.length})</span>
+        <section className="matrix-page__unestimated">
+          <h2 className="matrix-page__unestimated-title">
+            Unestimated <span className="matrix-page__count">({matrix.unestimated.length})</span>
           </h2>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-2">
+          <div className="matrix-page__unestimated-items">
             {matrix.unestimated.map((item) => (
               <Draggable key={item.path} id={item.path}>
                 <ItemCard item={item} showNode />

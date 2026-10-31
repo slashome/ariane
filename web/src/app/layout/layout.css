@@ -1,0 +1,27 @@
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  block-size: 100vh;
+  min-inline-size: 64rem;
+  background-color: var(--lu-color-background);
+  color: var(--lu-color-foreground);
+}
+
+.app-layout__body {
+  display: flex;
+  flex: 1 1 0%;
+  min-block-size: 0;
+}
+
+.app-layout__column {
+  display: flex;
+  flex: 1 1 0%;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+
+.app-layout__main {
+  flex: 1 1 0%;
+  min-block-size: 0;
+  overflow: auto;
+}

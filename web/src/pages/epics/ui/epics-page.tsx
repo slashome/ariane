@@ -7,6 +7,7 @@ import type { Category } from '@/shared/api'
 import { cn, displayNode } from '@/shared/lib'
 import { DataTable, EmptyState, ErrorState, LoadingState, PageHeader, type Column } from '@/shared/ui'
 import { epicRows, type EpicRow } from '../model/epic-rows'
+import './epics.css'
 
 export function EpicsPage() {
   const { data: items = [], isPending, error } = useItems()
@@ -28,7 +29,7 @@ export function EpicsPage() {
       header: 'Epic',
       details: ({ epic, stories, tasks }) => (
         <>
-          {epic.node !== filters.node && <span className="font-mono">{displayNode(epic.node)}</span>}
+          {epic.node !== filters.node && <span className="epics-page__node">{displayNode(epic.node)}</span>}
           <span>
             {stories.length} {stories.length === 1 ? 'story' : 'stories'} · {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}
           </span>
@@ -41,7 +42,7 @@ export function EpicsPage() {
   ]
 
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="epics-page">
       <PageHeader
         title="Epics"
         description={
@@ -66,7 +67,7 @@ export function EpicsPage() {
           )}
         </EmptyState>
       ) : (
-        <DataTable rows={rows} columns={columns} rowKey={(row) => row.epic.path} storageKey="epics" label="Epics" rowProps={(row) => ({ className: cn('align-middle', isClosed(row.epic.category) && 'opacity-70') })} />
+        <DataTable rows={rows} columns={columns} rowKey={(row) => row.epic.path} storageKey="epics" label="Epics" rowProps={(row) => ({ className: cn('epics-page__row', isClosed(row.epic.category) && 'epics-page__row--closed') })} />
       )}
     </div>
   )

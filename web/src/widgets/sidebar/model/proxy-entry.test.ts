@@ -15,18 +15,18 @@ const report = (ok: boolean): ProxyReport => ({
 
 describe('proxyEntry', () => {
   it('is green with the route count when every link holds', () => {
-    expect(proxyEntry(report(true))).toEqual({ state: 'ok', count: 2, dot: 'bg-emerald-500', status: 'every link holds' })
+    expect(proxyEntry(report(true))).toEqual({ state: 'ok', count: 2, status: 'every link holds' })
   })
 
   it('is red when a link is broken', () => {
     const entry = proxyEntry(report(false))
     expect(entry.state).toBe('broken')
-    expect(entry.dot).toBe('bg-red-500')
+    expect(entry.state).toBe('broken')
     expect(entry.count).toBe(2)
   })
 
   it('stays neutral, without a count, while loading or when the answer is not a report', () => {
-    expect(proxyEntry(undefined)).toEqual({ state: 'unknown', count: undefined, dot: 'bg-muted-foreground/40', status: 'not checked yet' })
+    expect(proxyEntry(undefined)).toEqual({ state: 'unknown', count: undefined, status: 'not checked yet' })
     expect(proxyEntry({} as ProxyReport).count).toBeUndefined()
   })
 })

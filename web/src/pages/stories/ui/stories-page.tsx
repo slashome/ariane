@@ -8,6 +8,7 @@ import type { Category } from '@/shared/api'
 import { cn, displayNode } from '@/shared/lib'
 import { DataTable, EmptyState, ErrorState, LoadingState, NativeSelect, PageHeader, type Column } from '@/shared/ui'
 import { groupings, groupStories, type StoryGrouping, type StoryRow } from '../model/story-groups'
+import './stories.css'
 
 const groupParam = 'group'
 
@@ -40,7 +41,7 @@ export function StoriesPage() {
       header: 'Story',
       details: ({ story, tasks }) => (
         <>
-          {story.node !== filters.node && <span className="font-mono">{displayNode(story.node)}</span>}
+          {story.node !== filters.node && <span className="stories-page__node">{displayNode(story.node)}</span>}
           {grouping !== 'milestone' && story.milestone && <span>milestone {story.milestone}</span>}
           {grouping !== 'milestone' && grouping !== 'release' && story.release && <span>release {story.release}</span>}
           <span>
@@ -64,14 +65,14 @@ export function StoriesPage() {
     )
 
   return (
-    <div className="flex flex-col gap-5 p-6">
+    <div className="stories-page">
       <PageHeader
         title="Stories"
         description={isPending ? 'Loading…' : `${count} ${count === 1 ? 'story' : 'stories'} — progress counts the tasks whose parent is the story, dropped ones aside`}
         actions={
           <>
           <QueryField count={count} total={total} />
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <label className="stories-page__grouping">
             Group by
             <NativeSelect aria-label="Group stories by" value={grouping} onChange={(event) => setGrouping(event.target.value)}>
               {groupings.map((entry) => (
@@ -100,12 +101,12 @@ export function StoriesPage() {
         </EmptyState>
       ) : (
         groups.map((group) => (
-          <section key={group.key} aria-labelledby={`group-${group.key}`} className="space-y-2">
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-border pb-2">
-              <h2 id={`group-${group.key}`} className="text-sm font-semibold">
-                {group.label} <span className="font-normal text-muted-foreground">({group.items.length})</span>
+          <section key={group.key} aria-labelledby={`group-${group.key}`} className="stories-group">
+            <div className="stories-group__header">
+              <h2 id={`group-${group.key}`} className="stories-group__title">
+                {group.label} <span className="stories-group__count">({group.items.length})</span>
               </h2>
-              <ProgressMeter progress={group.progress} labels={labels} className="w-72 max-w-full" />
+              <ProgressMeter progress={group.progress} labels={labels} className="stories-group__meter" />
             </div>
             <DataTable
               rows={group.items}
@@ -113,7 +114,7 @@ export function StoriesPage() {
               rowKey={(row) => row.story.path}
               storageKey="stories"
               label={group.label}
-              rowProps={(row) => ({ className: cn('align-middle', isClosed(row.story.category) && 'opacity-70') })}
+              rowProps={(row) => ({ className: cn('stories-group__row', isClosed(row.story.category) && 'stories-group__row--closed') })}
             />
           </section>
         ))

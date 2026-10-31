@@ -1,4 +1,3 @@
-import { ArrowRightToLine } from 'lucide-react'
 import { useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router'
 import { changesFor, idColumn, itemHref, titleColumn, useItems, useUpdateItem } from '@/entities/item'
@@ -8,8 +7,9 @@ import { QueryField, useFilteredItems, useItemFilters } from '@/features/filter-
 import type { Item } from '@/shared/api'
 import { scopeSearch } from '@/shared/config'
 import { displayNode } from '@/shared/lib'
-import { Button, DataTable, EmptyState, ErrorState, Kbd, LoadingState, PageHeader, Segmented, toast, type Column } from '@/shared/ui'
+import { Button, DataTable, EmptyState, ErrorState, Icon, Kbd, LoadingState, PageHeader, Segmented, toast, type Column } from '@/shared/ui'
 import { cycle, level, missingFields, triageFields, triageOrder, type TriageField } from '../model/triage'
+import './backlog.css'
 
 const fieldKeys: Record<string, TriageField> = { p: 'priority', i: 'impact', s: 'size' }
 
@@ -82,7 +82,7 @@ export function BacklogPage() {
     id: field,
     header: field.charAt(0).toUpperCase() + field.slice(1),
     sortValue: (item) => (item[field] === null ? null : level(vocabulary[field], item[field])),
-    className: 'align-middle',
+    className: 'backlog-page__field',
     cell: (item) => (
       <Segmented
         label={`${field} of ${item.id ?? item.path}`}
@@ -101,8 +101,8 @@ export function BacklogPage() {
         const missing = missingFields(item)
         return (
           <>
-            {item.node !== filters.node && <span className="font-mono">{displayNode(item.node)}</span>}
-            {missing.length > 0 && <span className="text-amber-700 dark:text-amber-300">to estimate: {missing.join(', ')}</span>}
+            {item.node !== filters.node && <span className="backlog-page__node">{displayNode(item.node)}</span>}
+            {missing.length > 0 && <span className="backlog-page__missing">to estimate: {missing.join(', ')}</span>}
           </>
         )
       },
@@ -112,16 +112,16 @@ export function BacklogPage() {
       id: 'created',
       header: 'Created',
       sortValue: (item) => item.created,
-      className: 'font-mono text-xs whitespace-nowrap text-muted-foreground',
+      className: 'backlog-page__created',
       cell: (item) => item.created ?? '—',
     },
     {
       id: 'plan',
       header: '',
-      className: 'align-middle',
+      className: 'backlog-page__plan',
       cell: (item) => (
         <Button size="sm" variant="outline" tabIndex={-1} onClick={() => plan(item)} title="Move it to the first todo status of its workflow">
-          <ArrowRightToLine className="size-3.5" aria-hidden />
+          <Icon name="arrow-right-to-line" className="backlog-page__plan-icon" />
           Plan
         </Button>
       ),
@@ -129,7 +129,7 @@ export function BacklogPage() {
   ]
 
   return (
-    <div className="flex flex-col gap-4 p-6">
+    <div className="backlog-page">
       <PageHeader
         title="Backlog"
         description={
@@ -139,7 +139,7 @@ export function BacklogPage() {
         }
         actions={<QueryField count={backlog.length} total={total} />}
       />
-      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+      <p className="backlog-page__shortcuts">
         <span>
           <Kbd>j</Kbd> <Kbd>k</Kbd> move
         </span>
@@ -178,7 +178,7 @@ export function BacklogPage() {
             onFocus: () => setFocused(index),
             onKeyDown: (event) => onKeyDown(event, item, index),
             'aria-label': `${item.id ?? ''} ${item.title ?? item.path}`,
-            className: 'outline-none focus-visible:bg-primary/5 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+            className: 'backlog-page__row',
           })}
         />
       )}

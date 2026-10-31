@@ -1,0 +1,68 @@
+*,
+::before,
+::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0 solid;
+}
+
+html {
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+  tab-size: 4;
+}
+
+:is(h1, h2, h3, h4, h5, h6) {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+:is(ol, ul, menu) {
+  list-style: none;
+}
+
+:is(img, svg, video, canvas, iframe) {
+  display: block;
+  max-inline-size: 100%;
+}
+
+:is(button, input, select, textarea, optgroup) {
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+}
+
+::placeholder {
+  color: var(--lu-color-muted-foreground);
+  opacity: 1;
+}
+
+textarea {
+  resize: vertical;
+}
+
+:is(b, strong) {
+  font-weight: bolder;
+}
+
+:is(code, kbd, samp, pre) {
+  font-family: var(--lu-font-family-mono);
+  font-size: 1em;
+}
+
+table {
+  border-collapse: collapse;
+  text-indent: 0;
+}
+
+[hidden]:where(:not([hidden='until-found'])) {
+  display: none;
+}

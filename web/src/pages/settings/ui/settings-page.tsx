@@ -1,34 +1,34 @@
-import { Eye, Pin, RotateCcw, Save, TriangleAlert } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { defaultColor, previewTheme, readableOnLight, useSaveTheme, useSettings } from '@/entities/theme'
 import type { Theme } from '@/shared/api'
 import { cn } from '@/shared/lib'
-import { Brand, Button, ErrorState, LoadingState, PageHeader } from '@/shared/ui'
+import { Brand, Button, ErrorState, Icon, LoadingState, PageHeader } from '@/shared/ui'
 import { presets, sameTheme } from '../model/presets'
 import { ColorField } from './color-field'
+import './settings.css'
 
 function Preview() {
   return (
-    <div className="space-y-3 rounded-lg border border-border p-4" aria-label="Preview">
-      <div className="flex items-center gap-2 font-semibold">
+    <div className="theme-preview" aria-label="Preview">
+      <div className="theme-preview__brand">
         <Brand />
       </div>
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="theme-preview__controls">
         <Button size="sm">Primary button</Button>
-        <a href="#preview" onClick={(event) => event.preventDefault()} className="text-sm text-primary hover:underline">
+        <a href="#preview" onClick={(event) => event.preventDefault()} className="theme-preview__link">
           A link
         </a>
-        <button type="button" className="lu-icon-button size-6" aria-label="An icon button">
-          <Eye className="size-3.5" aria-hidden />
+        <button type="button" className="lu-icon-button theme-preview__icon-button" aria-label="An icon button">
+          <Icon name="view" className="theme-preview__small-icon" />
         </button>
       </div>
-      <div className="w-56 space-y-0.5">
-        <div className="flex items-center gap-2.5 rounded-md bg-accent/15 py-1.5 pl-3 text-sm font-medium shadow-[inset_2px_0_0_var(--color-accent)]">
-          <Pin className="size-4" aria-hidden />
+      <div className="theme-preview__menu">
+        <div className="theme-preview__entry theme-preview__entry--active">
+          <Icon name="pin" className="theme-preview__icon" />
           Active menu entry
         </div>
-        <div className="flex items-center gap-2.5 rounded-md py-1.5 pl-3 text-sm text-muted-foreground">
-          <Pin className="size-4" aria-hidden />
+        <div className="theme-preview__entry">
+          <Icon name="pin" className="theme-preview__icon" />
           Another entry
         </div>
       </div>
@@ -52,7 +52,7 @@ export function SettingsPage() {
   const update = (next: Partial<Theme>) => setDraft({ ...theme, ...next })
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="settings">
       <PageHeader
         title="Settings"
         description="Saved in settings.toml at the root of the content repository, versioned with the content: commit it to keep the theme on every machine."
@@ -62,9 +62,9 @@ export function SettingsPage() {
       ) : isPending ? (
         <LoadingState rows={3} />
       ) : (
-        <section aria-labelledby="theme-title" className="grid max-w-4xl gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <div className="space-y-5">
-            <h2 id="theme-title" className="text-sm font-semibold">
+        <section aria-labelledby="theme-title" className="settings__theme">
+          <div className="settings__form">
+            <h2 id="theme-title" className="settings__title">
               Theme
             </h2>
             <ColorField
@@ -75,8 +75,8 @@ export function SettingsPage() {
               onChange={(primary) => update({ primary })}
             />
             {!readableOnLight(theme.primary) && (
-              <p className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
-                <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
+              <p className="settings__warning">
+                <Icon name="warning" className="settings__warning-icon" />
                 Too light to stand out from the light background (contrast under 3:1): links and focus rings will be hard to see.
               </p>
             )}
@@ -87,9 +87,9 @@ export function SettingsPage() {
               value={theme.secondary}
               onChange={(secondary) => update({ secondary })}
             />
-            <div className="space-y-1.5">
-              <p className="text-sm font-medium">Presets</p>
-              <ul className="flex flex-wrap gap-2">
+            <div className="settings__presets">
+              <p className="settings__label">Presets</p>
+              <ul className="settings__preset-list">
                 {presets.map((preset) => (
                   <li key={preset.name}>
                     <button
@@ -97,13 +97,13 @@ export function SettingsPage() {
                       aria-pressed={sameTheme(preset.theme, theme)}
                       onClick={() => setDraft(preset.theme)}
                       className={cn(
-                        'flex items-center gap-2 rounded-full border border-border py-1 pr-3 pl-1 text-xs hover:bg-muted',
-                        sameTheme(preset.theme, theme) && 'border-primary',
+                        'preset-chip',
+                        sameTheme(preset.theme, theme) && 'preset-chip--selected',
                       )}
                     >
-                      <span className="flex" aria-hidden>
-                        <span className="size-4 rounded-full" style={{ background: preset.theme.primary }} />
-                        <span className="-ml-1 size-4 rounded-full ring-2 ring-background" style={{ background: preset.theme.secondary }} />
+                      <span className="preset-chip__swatches" aria-hidden>
+                        <span className="preset-chip__swatch" style={{ background: preset.theme.primary }} />
+                        <span className="preset-chip__swatch preset-chip__swatch--overlap" style={{ background: preset.theme.secondary }} />
                       </span>
                       {preset.name}
                     </button>
@@ -111,20 +111,20 @@ export function SettingsPage() {
                 ))}
               </ul>
             </div>
-            <div className="flex flex-wrap gap-2 pt-1">
+            <div className="settings__actions">
               <Button disabled={!changed || save.isPending} onClick={() => draft && save.mutate(draft, { onSuccess: () => setDraft(null) })}>
-                <Save className="size-4" aria-hidden />
+                <Icon name="save" className="settings__icon" />
                 {save.isPending ? 'Saving…' : 'Save'}
               </Button>
               <Button variant="ghost" disabled={!changed} onClick={() => setDraft(null)}>
                 Cancel
               </Button>
-              <Button variant="outline" className="ml-auto" onClick={() => setDraft({ primary: defaultColor, secondary: defaultColor })}>
-                <RotateCcw className="size-4" aria-hidden />
+              <Button variant="outline" className="settings__default" onClick={() => setDraft({ primary: defaultColor, secondary: defaultColor })}>
+                <Icon name="reset" className="settings__icon" />
                 Default
               </Button>
             </div>
-            {changed && <p className="text-xs text-muted-foreground">Previewing across the interface — not saved yet.</p>}
+            {changed && <p className="settings__note">Previewing across the interface — not saved yet.</p>}
           </div>
           <Preview />
         </section>

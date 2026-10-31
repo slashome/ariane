@@ -3,28 +3,29 @@ import { excerpt, ItemLink } from '@/entities/item'
 import type { Item } from '@/shared/api'
 import { cn, displayNode } from '@/shared/lib'
 import { Highlight } from '@/shared/ui'
+import './reflexions.css'
 
 export function ReflexionCard({ item, scope, action, className }: { item: Item; scope: string | null; action?: ReactNode; className?: string }) {
   const summary = excerpt(item.body)
   return (
-    <article className={cn('space-y-1.5 rounded-md border border-border bg-background p-3 text-sm shadow-xs', className)}>
-      <h3 className="leading-snug font-medium">
+    <article className={cn('reflexion-card', className)}>
+      <h3 className="reflexion-card__title">
         <ItemLink item={item}>
           <Highlight text={item.title ?? item.path} />
         </ItemLink>
       </h3>
       {summary && (
-        <p className="line-clamp-3 text-xs leading-relaxed text-muted-foreground">
+        <p className="lu-line-clamp reflexion-card__summary">
           <Highlight text={summary} />
         </p>
       )}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10px] text-muted-foreground">
+      <div className="reflexion-card__meta">
         <span>
           <Highlight text={item.id ?? ''} />
         </span>
-        {item.node !== scope && <span className="truncate">{displayNode(item.node)}</span>}
+        {item.node !== scope && <span className="lu-truncate">{displayNode(item.node)}</span>}
         {item.archived && <span>archived</span>}
-        {(item.updated ?? item.created) && <span className="ml-auto">{item.updated ?? item.created}</span>}
+        {(item.updated ?? item.created) && <span className="reflexion-card__date">{item.updated ?? item.created}</span>}
       </div>
       {action}
     </article>

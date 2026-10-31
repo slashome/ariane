@@ -1,11 +1,11 @@
-import { Download, FolderGit2, GitBranch, GitCommitHorizontal, Undo2, Upload } from 'lucide-react'
 import { useState } from 'react'
 import { useRepo } from '@/entities/repo'
-import { Button, ConfirmDialog, EmptyState, ErrorState, LoadingState } from '@/shared/ui'
+import { Button, ConfirmDialog, EmptyState, ErrorState, Icon, LoadingState } from '@/shared/ui'
 import { useDiscard, usePull, usePush } from '../api/use-git-actions'
 import { CommitForm } from './commit-form'
 import { DiffDialog } from './diff-dialog'
 import { UncommittedList } from './uncommitted-indicator'
+import './uncommitted-indicator.css'
 
 // The whole state of the content repository, for the Repository page: what the header's indicator
 // shows on hover, with room to read it.
@@ -25,52 +25,52 @@ export function RepoPanel() {
   }
   const files = repo.uncommitted
   return (
-    <div className="flex max-w-4xl flex-col gap-5">
-      <dl className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-lg border border-border p-3">
-          <dt className="flex items-center gap-1 text-xs text-muted-foreground">
-            <GitBranch className="size-3.5" aria-hidden /> Branch
+    <div className="repo-panel">
+      <dl className="repo-panel__stats">
+        <div className="repo-panel__stat">
+          <dt className="repo-panel__stat-label">
+            <Icon name="branch" className="uncommitted-indicator__icon" /> Branch
           </dt>
-          <dd className="font-mono text-sm">{repo.branch ?? 'detached'}</dd>
+          <dd className="repo-panel__stat-value repo-panel__stat-value--mono">{repo.branch ?? 'detached'}</dd>
         </div>
-        <div className="rounded-lg border border-border p-3">
-          <dt className="flex items-center gap-1 text-xs text-muted-foreground">
-            <GitCommitHorizontal className="size-3.5" aria-hidden /> Uncommitted files
+        <div className="repo-panel__stat">
+          <dt className="repo-panel__stat-label">
+            <Icon name="commit" className="uncommitted-indicator__icon" /> Uncommitted files
           </dt>
-          <dd className="text-2xl font-semibold tabular-nums">{files.length}</dd>
+          <dd className="repo-panel__stat-value">{files.length}</dd>
         </div>
-        <div className="rounded-lg border border-border p-3">
-          <dt className="flex items-center gap-1 text-xs text-muted-foreground">
-            <Upload className="size-3.5" aria-hidden /> Commits to push
+        <div className="repo-panel__stat">
+          <dt className="repo-panel__stat-label">
+            <Icon name="upload" className="uncommitted-indicator__icon" /> Commits to push
           </dt>
-          <dd className="text-2xl font-semibold tabular-nums">{repo.ahead}</dd>
+          <dd className="repo-panel__stat-value">{repo.ahead}</dd>
         </div>
       </dl>
-      <p className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground">
-        <FolderGit2 className="size-3.5" aria-hidden />
+      <p className="repo-panel__root">
+        <Icon name="repository" className="uncommitted-indicator__icon" />
         {repo.root}
       </p>
-      <section className="space-y-3 rounded-lg border border-border p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold">Working tree</h2>
-          <div className="flex gap-2">
+      <section className="repo-panel__tree">
+        <div className="repo-panel__toolbar">
+          <h2 className="repo-panel__title">Working tree</h2>
+          <div className="repo-panel__actions">
             {files.length > 0 && !composing && (
               <Button size="sm" onClick={() => setComposing(true)}>
-                <GitCommitHorizontal className="size-3.5" aria-hidden />
+                <Icon name="commit" className="uncommitted-indicator__icon" />
                 Commit all
               </Button>
             )}
             <Button size="sm" variant="outline" disabled={repo.ahead === 0 || push.isPending} onClick={() => push.mutate()}>
-              <Upload className="size-3.5" aria-hidden />
+              <Icon name="upload" className="uncommitted-indicator__icon" />
               {push.isPending ? 'Pushing…' : 'Push'}
             </Button>
             <Button size="sm" variant="outline" disabled={pull.isPending} onClick={() => pull.mutate()}>
-              <Download className="size-3.5" aria-hidden />
+              <Icon name="download" className="uncommitted-indicator__icon" />
               {pull.isPending ? 'Pulling…' : 'Pull'}
             </Button>
             {files.some((file) => file.path.startsWith('tree/') || file.path === 'settings.toml') && (
-              <Button size="sm" variant="ghost" className="text-red-600 dark:text-red-400" onClick={() => setDiscarding({ path: null })}>
-                <Undo2 className="size-3.5" aria-hidden />
+              <Button size="sm" variant="ghost" className="uncommitted-indicator__discard" onClick={() => setDiscarding({ path: null })}>
+                <Icon name="undo" className="uncommitted-indicator__icon" />
                 Discard all
               </Button>
             )}

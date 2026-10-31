@@ -1,0 +1,103 @@
+.matrix-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-4);
+  padding: var(--lu-space-6);
+}
+
+.matrix-page__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--lu-space-3);
+}
+
+.matrix-page__title {
+  margin: 0;
+  font-size: var(--lu-font-size-xl);
+  font-weight: var(--lu-font-weight-semibold);
+  line-height: 1.75rem;
+}
+
+.matrix-page__description {
+  margin: 0;
+  color: var(--lu-color-muted-foreground);
+  font-size: var(--lu-font-size-sm);
+}
+
+.matrix-page__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--lu-space-3);
+}
+
+.matrix-page__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--lu-space-2);
+  font-size: var(--lu-font-size-sm);
+}
+
+.matrix-page__grid {
+  display: grid;
+  gap: var(--lu-space-2);
+}
+
+.matrix-page__size {
+  color: var(--lu-color-muted-foreground);
+  font-size: var(--lu-font-size-xs);
+  font-weight: var(--lu-font-weight-semibold);
+  letter-spacing: 0.025em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.matrix-page__unestimated {
+  padding: var(--lu-space-3);
+  border: 1px dashed var(--lu-color-border);
+  border-radius: var(--lu-radius-lg);
+}
+
+.matrix-page__unestimated-title {
+  margin: 0 0 var(--lu-space-2);
+  font-size: var(--lu-font-size-sm);
+  font-weight: var(--lu-font-weight-medium);
+}
+
+.matrix-page__count {
+  color: var(--lu-color-muted-foreground);
+}
+
+.matrix-page__unestimated-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: var(--lu-space-2);
+}
+
+.impact-row__label {
+  align-self: center;
+  color: var(--lu-color-muted-foreground);
+  font-size: var(--lu-font-size-xs);
+  font-weight: var(--lu-font-weight-semibold);
+  letter-spacing: 0.025em;
+  text-align: end;
+  text-transform: uppercase;
+}
+
+.impact-row__cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-2);
+  min-block-size: 7rem;
+  padding: var(--lu-space-2);
+  border: 1px solid var(--lu-color-border);
+  border-radius: var(--lu-radius-lg);
+  background: color-mix(in oklab, var(--lu-color-muted) 30%, transparent);
+}
+
+.impact-row__cell--quick-win {
+  border-color: color-mix(in oklab, var(--lu-color-success) 50%, transparent);
+  background: color-mix(in oklab, var(--lu-color-success) 10%, transparent);
+}

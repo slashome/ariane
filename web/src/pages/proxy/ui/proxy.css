@@ -1,0 +1,342 @@
+.proxy-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-6);
+  padding: var(--lu-space-6);
+}
+
+.proxy-page__button-icon {
+  --lu-icon-size: 0.875rem;
+}
+
+.proxy-page__hint {
+  margin: 0;
+  color: var(--lu-color-muted-foreground);
+  font-size: var(--lu-font-size-xs);
+}
+
+.proxy-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lu-space-1);
+  font-size: var(--lu-font-size-xs);
+  font-weight: var(--lu-font-weight-medium);
+}
+
+.proxy-verdict--ok {
+  color: var(--lu-color-success);
+}
+
+.proxy-verdict--broken {
+  color: var(--lu-color-danger);
+}
+
+.proxy-verdict__icon {
+  --lu-icon-size: 0.875rem;
+}
+
+.copy-command {
+  display: flex;
+  align-items: center;
+  gap: var(--lu-space-2);
+}
+
+.copy-command__code {
+  padding-block: 0.125rem;
+  padding-inline: var(--lu-space-2);
+  border-radius: var(--lu-radius-sm);
+  background: var(--lu-color-muted);
+  font-family: var(--lu-font-family-mono);
+  font-size: var(--lu-font-size-xs);
+}
+
+.copy-command__button {
+  inline-size: 1.375rem;
+  block-size: 1.375rem;
+}
+
+.copy-command__icon {
+  --lu-icon-size: 0.875rem;
+}
+
+.proxy-table__host {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--lu-space-1);
+  color: var(--lu-color-accent);
+  font-family: var(--lu-font-family-mono);
+  font-size: var(--lu-font-size-xs);
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.proxy-table__host-icon {
+  --lu-icon-size: 0.75rem;
+}
+
+.proxy-table__port {
+  font-family: var(--lu-font-family-mono);
+  font-size: var(--lu-font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.proxy-table__owner {
+  font-size: var(--lu-font-size-xs);
+}
+
+.proxy-table__owner--config {
+  color: var(--lu-color-muted-foreground);
+}
+
+.proxy-table__owner--node {
+  font-family: var(--lu-font-family-mono);
+}
+
+.proxy-table__actions-header {
+  inline-size: 5rem;
+}
+
+.proxy-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--lu-space-1);
+}
+
+.proxy-actions__button {
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+}
+
+.proxy-actions__button--remove:hover {
+  color: var(--lu-color-danger);
+}
+
+.proxy-actions__icon {
+  --lu-icon-size: 0.875rem;
+}
+
+.proxy-actions__lock {
+  --lu-icon-size: 0.875rem;
+  color: var(--lu-color-muted-foreground);
+}
+
+.proxy-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--lu-space-2);
+  padding: var(--lu-space-3);
+  border: 1px solid color-mix(in oklab, var(--lu-color-warning) 40%, transparent);
+  border-radius: var(--lu-radius-md);
+  background: color-mix(in oklab, var(--lu-color-warning) 10%, transparent);
+  font-size: var(--lu-font-size-sm);
+}
+
+.proxy-notice--list {
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  gap: var(--lu-space-1);
+}
+
+.proxy-notice__icon {
+  --lu-icon-size: 1rem;
+  color: var(--lu-color-warning);
+}
+
+.proxy-notice__host {
+  font-family: var(--lu-font-family-mono);
+}
+
+.proxy-notice__dismiss {
+  margin-inline-start: auto;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--lu-color-muted-foreground);
+  font: inherit;
+  font-size: var(--lu-font-size-xs);
+
+  &:hover {
+    color: var(--lu-color-foreground);
+  }
+}
+
+.proxy-notice__title {
+  margin: 0;
+  font-weight: var(--lu-font-weight-medium);
+}
+
+.proxy-notice__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin: 0;
+  padding-inline-start: var(--lu-space-4);
+  font-size: var(--lu-font-size-xs);
+  list-style: disc;
+}
+
+.proxy-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-2);
+}
+
+.proxy-section__title {
+  margin: 0;
+  font-size: var(--lu-font-size-sm);
+  font-weight: var(--lu-font-weight-semibold);
+}
+
+.proxy-section__count {
+  color: var(--lu-color-muted-foreground);
+  font-weight: normal;
+}
+
+.proxy-list {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--lu-color-border);
+  border-radius: var(--lu-radius-lg);
+  list-style: none;
+}
+
+.proxy-list__item {
+  display: grid;
+  gap: var(--lu-space-1);
+  padding: var(--lu-space-3);
+
+  & + & {
+    border-block-start: 1px solid var(--lu-color-border);
+  }
+
+  @media (width >= 48rem) {
+    grid-template-columns: 5.5rem minmax(0, 1fr);
+  }
+}
+
+.proxy-list__item--command {
+  gap: var(--lu-space-2);
+
+  @media (width >= 48rem) {
+    grid-template-columns: 16rem minmax(0, 1fr);
+  }
+}
+
+.proxy-check {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-inline-size: 0;
+  font-size: var(--lu-font-size-sm);
+}
+
+.proxy-check__what {
+  margin: 0;
+  font-family: var(--lu-font-family-mono);
+  font-size: var(--lu-font-size-xs);
+}
+
+.proxy-fold {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-2);
+}
+
+.proxy-fold__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--lu-space-2);
+}
+
+.proxy-fold__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: var(--lu-font-size-sm);
+  font-weight: var(--lu-font-weight-semibold);
+
+  &:hover {
+    color: var(--lu-color-foreground);
+  }
+}
+
+.proxy-fold__chevron {
+  --lu-icon-size: 1rem;
+  transition: transform var(--lu-motion-hover-duration) var(--lu-motion-hover-easing);
+}
+
+.proxy-fold__chevron--folded {
+  transform: rotate(-90deg);
+}
+
+.proxy-fold__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-2);
+}
+
+.proxy-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-4);
+}
+
+.route-dialog {
+  --lu-dialog-width: 32rem;
+}
+
+.proxy-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-1);
+  font-size: var(--lu-font-size-sm);
+}
+
+.proxy-form__label {
+  font-weight: var(--lu-font-weight-medium);
+}
+
+.proxy-form__mono {
+  font-family: var(--lu-font-family-mono);
+}
+
+.proxy-form__select {
+  inline-size: 100%;
+  font-family: var(--lu-font-family-mono);
+}
+
+.proxy-form__value {
+  display: block;
+  font-family: var(--lu-font-family-mono);
+  font-size: var(--lu-font-size-sm);
+}
+
+.proxy-form__hint {
+  display: block;
+  color: var(--lu-color-muted-foreground);
+  font-size: var(--lu-font-size-xs);
+}
+
+.proxy-form__problem {
+  margin: 0;
+  color: var(--lu-color-danger);
+  font-size: var(--lu-font-size-xs);
+}
+
+.proxy-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--lu-space-2);
+}

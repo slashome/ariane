@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Item, Person, WaitingReason } from '@/shared/api'
 import { cn } from '@/shared/lib'
 import { Button, Dialog } from '@/shared/ui'
+import './edit-item.css'
 
 export interface Waiting {
   waiting_for: string[]
@@ -40,16 +41,16 @@ export function WaitingDialog({
       onOpenChange={(open) => !open && onCancel()}
       title="Waiting for whom?"
       description={item ? `${item.id ?? ''} ${item.title ?? item.path}` : undefined}
-      className="w-[30rem]"
+      className="waiting-dialog"
     >
       {handles.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="waiting-dialog__empty">
           This node declares no one to wait for. Add a <code>[people.&lt;handle&gt;]</code> table with a <code>name</code> to its{' '}
           <code>node.toml</code>, or to a parent's.
         </p>
       ) : (
         <form
-          className="flex flex-col gap-4"
+          className="waiting-dialog__form"
           onSubmit={(event) => {
             event.preventDefault()
             if (chosen.length > 0) {
@@ -57,36 +58,33 @@ export function WaitingDialog({
             }
           }}
         >
-          <fieldset className="space-y-1">
-            <legend className="mb-1 text-sm font-medium">People</legend>
-            <ul className="max-h-56 space-y-0.5 overflow-y-auto">
+          <fieldset className="waiting-dialog__fieldset">
+            <legend className="waiting-dialog__legend">People</legend>
+            <ul className="waiting-dialog__people">
               {handles.map((handle) => (
                 <li key={handle}>
-                  <label className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-sm hover:bg-muted">
+                  <label className="waiting-dialog__person">
                     <input type="checkbox" checked={chosen.includes(handle)} onChange={() => toggle(handle)} />
                     {people[handle]?.name ?? handle}
-                    <span className="font-mono text-[10px] text-muted-foreground">{handle}</span>
+                    <span className="waiting-dialog__handle">{handle}</span>
                   </label>
                 </li>
               ))}
             </ul>
           </fieldset>
-          <fieldset className="space-y-1">
-            <legend className="mb-1 text-sm font-medium">For</legend>
-            <div className="flex flex-wrap gap-2">
+          <fieldset className="waiting-dialog__fieldset">
+            <legend className="waiting-dialog__legend">For</legend>
+            <div className="waiting-dialog__reasons">
               {reasons.map((entry) => (
                 <label
                   key={entry.value}
                   title={entry.hint}
-                  className={cn(
-                    'flex cursor-pointer items-center gap-1.5 rounded-full border border-border px-3 py-1 text-sm',
-                    reason === entry.value && 'border-primary bg-primary/10',
-                  )}
+                  className={cn('waiting-dialog__reason', reason === entry.value && 'waiting-dialog__reason--chosen')}
                 >
                   <input
                     type="radio"
                     name="waiting-on"
-                    className="sr-only"
+                    className="lu-visually-hidden"
                     checked={reason === entry.value}
                     onChange={() => setReason(entry.value)}
                   />
@@ -95,7 +93,7 @@ export function WaitingDialog({
               ))}
             </div>
           </fieldset>
-          <div className="flex justify-end gap-2">
+          <div className="waiting-dialog__actions">
             <Button variant="ghost" onClick={onCancel}>
               Cancel
             </Button>

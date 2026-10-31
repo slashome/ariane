@@ -1,0 +1,18 @@
+.epics-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--lu-space-5);
+  padding: var(--lu-space-6);
+}
+
+.epics-page__node {
+  font-family: var(--lu-font-family-mono);
+}
+
+.epics-page__row {
+  vertical-align: middle;
+}
+
+.epics-page__row--closed {
+  opacity: 0.7;
+}

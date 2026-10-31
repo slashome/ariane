@@ -1,7 +1,9 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, X } from 'lucide-react'
 import type { ReactElement } from 'react'
+import { cn } from '@/shared/lib'
+import { Icon } from '@/shared/ui'
+import './dashboard.css'
 
 export function SortableCard({
   id,
@@ -14,18 +16,18 @@ export function SortableCard({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
   const toolbar = (
-    <div className="flex shrink-0 items-center gap-1">
+    <div className="sortable-card__toolbar">
       <button
         type="button"
-        className="lu-icon-button size-6 cursor-grab touch-none active:cursor-grabbing"
+        className="lu-icon-button sortable-card__button sortable-card__handle"
         aria-label={`Move ${id}`}
         {...attributes}
         {...listeners}
       >
-        <GripVertical className="size-4" aria-hidden />
+        <Icon name="grip" className="sortable-card__icon" />
       </button>
-      <button type="button" className="lu-icon-button size-6" aria-label={`Unpin ${id}`} onClick={onRemove}>
-        <X className="size-4" aria-hidden />
+      <button type="button" className="lu-icon-button sortable-card__button" aria-label={`Unpin ${id}`} onClick={onRemove}>
+        <Icon name="close" className="sortable-card__icon" />
       </button>
     </div>
   )
@@ -33,7 +35,7 @@ export function SortableCard({
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={isDragging ? 'relative z-20 opacity-80' : undefined}
+      className={cn('sortable-card', isDragging && 'sortable-card--dragging')}
     >
       {render(toolbar)}
     </div>
