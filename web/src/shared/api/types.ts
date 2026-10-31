@@ -150,6 +150,20 @@ export interface ItemPatch {
   changes: ItemChanges
 }
 
+export type Place = 'before' | 'after' | 'top' | 'bottom' | 'clear'
+
+export interface RankRequest {
+  path: string
+  place: Place
+  other?: string
+  seen: Record<string, number | null>
+  status?: FieldChange
+}
+
+export interface RankResult {
+  items: Item[]
+}
+
 export interface PersonEntry {
   handle: string
   name: string

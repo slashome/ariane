@@ -2,7 +2,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react'
 import { categoryTone, ItemCard } from '@/entities/item'
 import type { Item } from '@/shared/api'
 import { cn } from '@/shared/lib'
-import { Draggable, DropZone } from '@/shared/ui'
+import { DropZone, Sortable, SortableList } from '@/shared/ui'
 import type { KanbanColumn as Column } from '../model/columns'
 
 export function KanbanColumn({
@@ -49,21 +49,23 @@ export function KanbanColumn({
       </button>
       {!collapsed && (
         <div className="flex min-h-24 flex-1 flex-col gap-2 overflow-y-auto p-2">
-          {column.items.map((item) => (
-            <Draggable
-              key={item.path}
-              id={item.path}
-              label={`Open ${item.title ?? item.path}`}
-              onOpen={() => onOpen(item)}
-            >
-              <ItemCard
-                item={item}
-                showNode={item.node !== scope}
-                selected={item.path === selected}
-                waiting={waitingOf(item)}
-              />
-            </Draggable>
-          ))}
+          <SortableList ids={column.items.map((item) => item.path)}>
+            {column.items.map((item) => (
+              <Sortable
+                key={item.path}
+                id={item.path}
+                label={`Open ${item.title ?? item.path}`}
+                onOpen={() => onOpen(item)}
+              >
+                <ItemCard
+                  item={item}
+                  showNode={item.node !== scope}
+                  selected={item.path === selected}
+                  waiting={waitingOf(item)}
+                />
+              </Sortable>
+            ))}
+          </SortableList>
         </div>
       )}
     </DropZone>

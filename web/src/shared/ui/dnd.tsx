@@ -1,4 +1,5 @@
 import {
+  closestCorners,
   DndContext,
   DragOverlay,
   KeyboardCode,
@@ -8,8 +9,11 @@ import {
   useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
 } from '@dnd-kit/core'
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import { useState, type KeyboardEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { cn } from '@/shared/lib'
@@ -28,12 +32,15 @@ const keyboardCodes = {
 export function DragArea({
   onDragEnd,
   renderOverlay,
+  sortable = false,
   children,
 }: {
   onDragEnd: (event: DragEndEvent) => void
   renderOverlay?: (id: string) => ReactNode
+  sortable?: boolean
   children: ReactNode
 }) {
+  const collisionDetection: CollisionDetection | undefined = sortable ? closestCorners : undefined
   const sensors = useSensors(
     // Below 8 px the press is a click, which opens the card; a shaky click on a trackpad stays one.
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -43,6 +50,7 @@ export function DragArea({
   return (
     <DndContext
       sensors={sensors}
+      collisionDetection={collisionDetection}
       onDragStart={({ active: dragged }) => setActive(String(dragged.id))}
       onDragCancel={() => setActive(null)}
       onDragEnd={(event) => {
@@ -93,6 +101,56 @@ export function Draggable({
       onClick={onOpen}
       onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
         // Enter also drops a card carried with the keyboard: only a resting card opens.
+        if (onOpen && event.key === 'Enter' && !isDragging) {
+          event.preventDefault()
+          onOpen()
+          return
+        }
+        listeners?.onKeyDown?.(event)
+      }}
+    >
+      {children}
+    </div>
+  )
+}
+
+export function SortableList({ ids, children }: { ids: string[]; children: ReactNode }) {
+  return (
+    <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+      {children}
+    </SortableContext>
+  )
+}
+
+export function Sortable({
+  id,
+  children,
+  className,
+  onOpen,
+  label,
+}: {
+  id: string
+  children: ReactNode
+  className?: string
+  onOpen?: () => void
+  label?: string
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id })
+  return (
+    <div
+      ref={setNodeRef}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      className={cn(
+        'touch-none active:cursor-grabbing',
+        onOpen ? 'cursor-pointer rounded-md hover:ring-1 hover:ring-primary/40' : 'cursor-grab',
+        isDragging && 'opacity-40',
+        className,
+      )}
+      {...attributes}
+      {...listeners}
+      aria-label={label}
+      onClick={onOpen}
+      onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
         if (onOpen && event.key === 'Enter' && !isDragging) {
           event.preventDefault()
           onOpen()

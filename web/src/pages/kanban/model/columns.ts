@@ -64,3 +64,30 @@ export function targetStatus(item: Item, column: KanbanColumn, nodes: NodeSummar
   }
   return { ok: true, status: chosen.id, category: chosen.category }
 }
+
+export interface Drop {
+  column: KanbanColumn
+  other: Item | null
+  place: 'before' | 'after' | null
+}
+
+const samePeer = (item: Item, other: Item) => other.path !== item.path && other.node === item.node && other.kind === item.kind
+
+export function dropOf(item: Item, overId: string, columns: KanbanColumn[]): Drop | null {
+  const holder = columns.find((column) => column.items.some((entry) => entry.path === overId))
+  if (holder === undefined) {
+    const column = columns.find((entry) => entry.id === overId)
+    if (column === undefined) {
+      return null
+    }
+    const last = column.items.filter((entry) => samePeer(item, entry)).at(-1)
+    return { column, other: last ?? null, place: last === undefined ? null : 'after' }
+  }
+  const over = holder.items.find((entry) => entry.path === overId)
+  if (over === undefined || !samePeer(item, over)) {
+    return { column: holder, other: null, place: null }
+  }
+  const from = holder.items.findIndex((entry) => entry.path === item.path)
+  const to = holder.items.indexOf(over)
+  return { column: holder, other: over, place: from !== -1 && from < to ? 'after' : 'before' }
+}

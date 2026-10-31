@@ -8,6 +8,8 @@ import type {
   Item,
   ItemDetail,
   ItemPatch,
+  RankRequest,
+  RankResult,
   Kind,
   NodeSummary,
   Repo,
@@ -87,6 +89,7 @@ export const fetchDiff = (path: string) =>
   request<FileDiff>('GET', `/api/diff?${new URLSearchParams({ path }).toString()}`)
 
 export const patchItem = (patch: ItemPatch) => request<Item>('PATCH', '/api/items', patch)
+export const rankItem = (move: RankRequest) => request<RankResult>('POST', '/api/items/rank', move)
 export const saveDashboard = (dashboard: Dashboard) => request<Dashboard>('PUT', '/api/dashboard', dashboard)
 export const fetchPeople = () => request<Directory[]>('GET', '/api/people')
 export const addPerson = (person: PersonChange) => request<Directory[]>('POST', '/api/people', person)

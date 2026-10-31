@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ApiError, patchItem, queryKeys, syncMonday, type Item, type ItemChanges, type NodeSummary } from '@/shared/api'
+import { ApiError, patchItem, queryKeys, type Item, type ItemChanges } from '@/shared/api'
 import { toast } from '@/shared/ui'
-import { syncMessage } from '../model/sync-message'
+import { followMonday } from './follow-monday'
 
 // The changes a monday ticket follows: the status, and whom it waits for.
 const synced = ['status', 'waiting_for', 'waiting_on']
@@ -44,24 +44,7 @@ export function useUpdateItem() {
       if (!Object.keys(changes).some((key) => synced.includes(key))) {
         return
       }
-      const followed = updated.external.some((entry) => entry.startsWith('monday:'))
-      // On a node bound to monday, an item without a ticket says so rather than moving silently.
-      const bound = queryClient
-        .getQueryData<NodeSummary[]>(queryKeys.nodes)
-        ?.some((node) => node.path === updated.node && node.tracker?.kind === 'monday')
-      if (!followed && bound) {
-        toast.info(`${updated.reference ?? updated.path}: no monday ticket linked, monday not updated`)
-      }
-      if (followed) {
-        syncMonday(updated.path)
-          .then((report) => {
-            const message = syncMessage(report)
-            if (message) {
-              toast[message.tone](message.text)
-            }
-          })
-          .catch((error: unknown) => toast.warning(`monday not updated: ${error instanceof Error ? error.message : String(error)}`))
-      }
+      followMonday(queryClient, updated)
     },
   })
 }

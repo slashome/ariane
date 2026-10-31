@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { changesFor, ItemCard, today, useItems, useUpdateItem, waitingSummary } from '@/entities/item'
+import { changesFor, ItemCard, today, useItems, useRankItem, useUpdateItem, waitingSummary } from '@/entities/item'
 import { peopleOf, useNodes } from '@/entities/node'
 import { useSchema } from '@/entities/schema'
 import { QueryField, useFilteredItems, useItemFilters } from '@/features/filter-items'
@@ -8,7 +8,7 @@ import type { Item } from '@/shared/api'
 import { displayNode, neighbours, useSearchParam, useStoredSet } from '@/shared/lib'
 import { DragArea, toast, type DragEndEvent } from '@/shared/ui'
 import { ItemDetails } from '@/widgets/item-details'
-import { buildColumns, targetStatus } from '../model/columns'
+import { buildColumns, dropOf, targetStatus } from '../model/columns'
 import { KanbanColumn } from './kanban-column'
 
 const collapsedByDefault = new Set(['done', 'dropped'])
@@ -19,6 +19,7 @@ export function KanbanPage() {
   const { data: schema } = useSchema()
   const { filters } = useItemFilters()
   const update = useUpdateItem()
+  const rank = useRankItem()
   // Columns folded or unfolded against their default, remembered by the browser.
   const [toggled, toggle] = useStoredSet('ariane.kanban.toggled')
   // The previewed item lives in the URL, so Back from its page brings the preview back.
@@ -32,20 +33,30 @@ export function KanbanPage() {
   const isCollapsed = (id: string, category: string) => collapsedByDefault.has(category) !== toggled.has(id)
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     const item = scoped.find((entry) => entry.path === active.id)
-    const column = columns.find((entry) => entry.id === over?.id)
-    if (!item || !column) {
+    const drop = item && over ? dropOf(item, String(over.id), columns) : null
+    if (!item || !drop) {
       return
     }
-    const target = targetStatus(item, column, nodes)
+    const target = targetStatus(item, drop.column, nodes)
     if (!target.ok) {
       toast.error(target.reason)
       return
     }
-    if (target.status === item.status) {
+    const moves = target.status !== item.status
+    if (moves && target.category === 'waiting') {
+      setMoving({ item, status: target.status })
       return
     }
-    if (target.category === 'waiting') {
-      setMoving({ item, status: target.status })
+    if (drop.place !== null && drop.other !== null) {
+      rank.mutate({
+        item,
+        place: drop.place,
+        other: drop.other,
+        status: moves ? { to: target.status, category: target.category } : undefined,
+      })
+      return
+    }
+    if (!moves) {
       return
     }
     update.mutate({
@@ -96,6 +107,7 @@ export function KanbanPage() {
         <QueryField count={scoped.length} total={total} />
       </div>
       <DragArea
+        sortable
         onDragEnd={onDragEnd}
         renderOverlay={(id) => {
           const item = scoped.find((entry) => entry.path === id)

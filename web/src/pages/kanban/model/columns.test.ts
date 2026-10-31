@@ -1,5 +1,5 @@
 import type { Item, NodeSummary } from '@/shared/api'
-import { buildColumns, targetStatus } from './columns'
+import { buildColumns, dropOf, targetStatus } from './columns'
 
 const nodes: NodeSummary[] = [
   {
@@ -113,5 +113,27 @@ describe('targetStatus', () => {
   it('keeps the exact status of a workflow column when the item workflow has it', () => {
     const byStatus = buildColumns(items, nodes, 'game', undefined)
     expect(targetStatus(at(items, 0), at(byStatus, 2), nodes)).toEqual({ ok: true, status: 'valide', category: 'done' })
+  })
+})
+
+describe('dropOf', () => {
+  const card = (id: string, extra: Partial<Item> = {}) => item({ id, path: `tree/game/tasks/${id}.md`, ...extra })
+  const [t1, t2, t3, other] = [card('T1'), card('T2'), card('T3'), card('T4', { node: 'other', path: 'tree/other/tasks/T4.md' })]
+  const columns = buildColumns([t1, t2, t3, other], nodes, null, undefined)
+  const todo = at(columns.filter((column) => column.category === 'todo'), 0)
+  const done = at(columns.filter((column) => column.category === 'done'), 0)
+
+  it('places a card moved down after the card it is dropped on, moved up before it', () => {
+    expect(dropOf(t1, t3.path, columns)).toEqual({ column: todo, other: t3, place: 'after' })
+    expect(dropOf(t3, t1.path, columns)).toEqual({ column: todo, other: t1, place: 'before' })
+  })
+
+  it('places a card dropped on a column after the last card of its node there', () => {
+    expect(dropOf(t1, todo.id, columns)).toEqual({ column: todo, other: t3, place: 'after' })
+    expect(dropOf(t1, done.id, columns)).toEqual({ column: done, other: null, place: null })
+  })
+
+  it('only changes the column when dropped on a card of another node', () => {
+    expect(dropOf(t1, other.path, columns)).toEqual({ column: todo, other: null, place: null })
   })
 })
