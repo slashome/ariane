@@ -111,6 +111,7 @@ Each command describes itself with `ariane <command> --help`; `ariane --help` li
 | Command | What it does |
 |---|---|
 | `tasks`, `search`, `show` | List, find and read items |
+| `rank` | Place an item in the manual order of its node and kind |
 | `doctor`, `migrate`, `fix` | Check the tree against the specification, and repair it |
 | `schema` | Print the item header schema |
 | `serve`, `service` | Serve the interface, in the foreground or as a background service |

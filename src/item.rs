@@ -154,6 +154,56 @@ pub fn render(header: &Mapping, body: &str) -> Result<String> {
     Ok(format!("---\n{yaml}---\n{body}"))
 }
 
+/// Writes `wanted` under `key`, or removes the key when `wanted` is `None`.
+///
+/// An existing key keeps its place. A new key is inserted right after the last
+/// core key that precedes it in the canonical order, so custom keys stay where
+/// they were. `Mapping` keeps insertion order, so the insertion rebuilds it.
+pub fn set_key(header: &mut Mapping, key: &str, wanted: Option<Value>) {
+    let Some(value) = wanted else {
+        header.shift_remove(key);
+        return;
+    };
+    if let Some(slot) = header.get_mut(key) {
+        *slot = value;
+        return;
+    }
+    let rank = |name: &str| {
+        crate::schema::CORE_KEYS
+            .iter()
+            .position(|core| core.name == name)
+    };
+    let Some(own) = rank(key) else {
+        header.insert(Value::String(key.to_owned()), value);
+        return;
+    };
+    let anchor = header
+        .iter()
+        .enumerate()
+        .filter(|(_, (name, _))| {
+            name.as_str()
+                .and_then(rank)
+                .is_some_and(|position| position < own)
+        })
+        .map(|(index, _)| index)
+        .last();
+    let insert_at = anchor.map_or(0, |index| index + 1);
+    let mut rebuilt = Mapping::new();
+    let mut pending = Some(value);
+    for (index, (name, existing)) in std::mem::take(header).into_iter().enumerate() {
+        if index == insert_at
+            && let Some(value) = pending.take()
+        {
+            rebuilt.insert(Value::String(key.to_owned()), value);
+        }
+        rebuilt.insert(name, existing);
+    }
+    if let Some(value) = pending {
+        rebuilt.insert(Value::String(key.to_owned()), value);
+    }
+    *header = rebuilt;
+}
+
 /// Cuts a file into its front-matter text and its body, without parsing either.
 ///
 /// The front-matter must open on the very first line (after an optional byte

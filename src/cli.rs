@@ -46,6 +46,10 @@ pub enum Command {
     #[command(about = "Show one item: its header, its body, its parent, children and dependencies")]
     Show(ShowArgs),
     #[command(
+        about = "Place an item in the manual order of its node and kind, by writing its rank"
+    )]
+    Rank(RankArgs),
+    #[command(
         about = "Attach the current agent session to an item: its branches and pull requests go there"
     )]
     Focus(FocusArgs),
@@ -186,6 +190,41 @@ pub struct ShowArgs {
 
     #[arg(long)]
     pub json: bool,
+}
+
+/// Arguments of `ariane rank`: the item, and exactly one place for it.
+#[derive(Args)]
+#[command(group(clap::ArgGroup::new("place").required(true).multiple(false)))]
+pub struct RankArgs {
+    #[arg(help = "The item: `<node>#<id>`, or a bare id within the node of the current directory")]
+    pub reference: String,
+
+    #[arg(
+        long,
+        group = "place",
+        help = "Place it right before this item, of the same node and kind"
+    )]
+    pub before: Option<String>,
+
+    #[arg(
+        long,
+        group = "place",
+        help = "Place it right after this item, of the same node and kind"
+    )]
+    pub after: Option<String>,
+
+    #[arg(long, group = "place", help = "Place it first")]
+    pub top: bool,
+
+    #[arg(long, group = "place", help = "Place it after the last ranked item")]
+    pub bottom: bool,
+
+    #[arg(
+        long,
+        group = "place",
+        help = "Remove its rank: it goes back among the unranked items"
+    )]
+    pub clear: bool,
 }
 
 /// Arguments of `ariane focus`: the item, and the agent session to attach to

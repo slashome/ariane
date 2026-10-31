@@ -41,6 +41,7 @@ external:
 - File name: the id, a `-` and a slug of the title — `T009-login-form.md`. Never rename by hand: after a new id (promotion), `ariane fix --apply` renames the file and rewrites the links to it.
 - `status`: an id of the node's workflow (its `node.toml`, inherited from ancestors, else the default `backlog`, `todo`, `in_progress`, `blocked`, `done`, `dropped`). Reflexions use `open`, `trial` or `settled`; ressources have no status.
 - `size` `XS`…`XL`, `impact` and `priority` `low`/`medium`/`high`, `created` `YYYY-MM-DD` — only when actually known, never from git.
+- `rank`: the item's place in the manual order of its node and kind, an integer ([ADR-0022](https://github.com/slashome/ariane/blob/develop/docs/adr/0022-order-items-by-a-sparse-rank-in-their-header.md)). Never written at creation nor on your own initiative: when the user says what comes before what, run `ariane rank`. Ranked items come first, then the unranked ones by `priority`.
 - `external`: the item's own ticket, `monday:<pulse id>` — never a board id, never another item's ticket.
 - `branches` (`<owner>/<repo>:<branch>`) and `pull_requests` (URLs): where the item's work lives. Recorded by the hook after `ariane focus`, not by hand.
 - `waiting_for` (handles of the node's `[people]`), `waiting_on` (`review`, `validation`, `answer`, `other`) and `waiting_since` (`YYYY-MM-DD`): only while the status is in the `waiting` category, which requires `waiting_for`.
@@ -77,6 +78,7 @@ external:
 | `ariane fix` | The repairs `doctor` names as `ariane fix`: file names after the id, links rewritten. Dry run by default, `--apply` to write. |
 | `ariane search <words> --all --json` | Finding an item by id, reference, title or body words, case and accents ignored, best first (exact id, then title, then body) with an excerpt. Before creating an item, to avoid a duplicate; `--kind`, `--node`, `--archived` narrow it. |
 | `ariane show <node>#<id> --json` | One item: header, body, parent, children, dependencies, dependents. |
+| `ariane rank <node>#<id> --before <ref>` | Places an item in the manual order of its node and kind (`--after`, `--top`, `--bottom`, `--clear`); writes only the ranks that change and prints them. |
 | `ariane focus <node>#<id>` | First thing in a discussion about work: attaches the session to its item, where branches and pull requests are then recorded. |
 | `ariane sync monday` | Sends items' statuses to their monday tickets (`[tracker.push]`, `[tracker.waiting]`), mentioning the people awaited; a conflict or a missing label is reported, never forced. Dry run by default (it still remembers the tickets found in step, so later moves are pushed), `--apply` to send, `--item <ref>` for one. Needs `ariane connect monday --account <account>` once. |
 | `ariane people` | The people items may wait for, by node with a tracker, and who waits for each. `add`, `set`, `rename` (rewrites the items), `remove` (refused while awaited), `find --account <a> <name>` for a monday id. |

@@ -158,6 +158,7 @@ fn run() -> Result<ExitCode> {
             search::run(&tree, &args, scope.as_ref())
         }
         cli::Command::Show(args) => show::run(&tree, &args, here.filter(|node| !node.is_home())),
+        cli::Command::Rank(args) => rank::run(&tree, &args, here.filter(|node| !node.is_home())),
         cli::Command::Settings(args) => settings::run(&location.root, &args),
         cli::Command::Focus(args) => focus::run(&tree, &args, here.filter(|node| !node.is_home())),
         cli::Command::Links(args) => {
