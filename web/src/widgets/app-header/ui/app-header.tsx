@@ -13,7 +13,7 @@ export function AppHeader({ actions }: { actions?: ReactNode }) {
         <button
           type="button"
           aria-label={`Content repository: ${repo?.root ?? 'loading'}`}
-          className="icon-button size-7"
+          className="lu-icon-button size-7"
         >
           <FolderGit2 className="size-4" aria-hidden />
         </button>

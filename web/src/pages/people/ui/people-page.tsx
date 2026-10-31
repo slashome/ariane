@@ -1,4 +1,4 @@
-import { Pencil, Plus, Trash2, Users } from 'lucide-react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import { usePeople, useRemovePerson } from '../api/use-people'
@@ -134,12 +134,12 @@ export function PeoplePage() {
       headerClassName: 'w-20',
       cell: (person) => (
         <div className="flex justify-end gap-1">
-          <button type="button" className="icon-button size-7" aria-label={`Edit ${person.name}`} onClick={() => setEditing({ directory, person })}>
+          <button type="button" className="lu-icon-button size-7" aria-label={`Edit ${person.name}`} onClick={() => setEditing({ directory, person })}>
             <Pencil className="size-3.5" aria-hidden />
           </button>
           <button
             type="button"
-            className="icon-button size-7 hover:text-red-600"
+            className="lu-icon-button size-7 hover:text-red-600"
             aria-label={`Remove ${person.name}`}
             onClick={() => setRemoving({ directory, person })}
           >
@@ -193,7 +193,7 @@ export function PeoplePage() {
       ) : isPending ? (
         <LoadingState rows={3} />
       ) : shown.length === 0 ? (
-        <EmptyState icon={Users} title="No tracker here">
+        <EmptyState icon="users" title="No tracker here">
           People are declared in a node that binds a tracker (<code>[tracker]</code> in its <code>node.toml</code>).
         </EmptyState>
       ) : (

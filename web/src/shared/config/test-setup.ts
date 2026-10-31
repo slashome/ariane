@@ -10,3 +10,6 @@ if (typeof Element !== 'undefined') {
 afterEach(() => {
   localStorage.clear()
 })
+import { installDomShims } from '@slashome/lumen/testing'
+
+installDomShims()

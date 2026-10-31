@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, waitFor, within } from '@testing-library/react'
+import { screen } from 'shadow-dom-testing-library'
 import userEvent from '@testing-library/user-event'
 import type { ProxyReport } from '@/shared/api'
 import { ProxyPage } from './proxy-page'
@@ -118,7 +119,7 @@ describe('ProxyPage', () => {
   it('removes a node route after confirmation', async () => {
     const fetch = renderPage()
     await userEvent.click(await screen.findByRole('button', { name: 'Remove dreamcatchr.local' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    await userEvent.click(await screen.findByShadowRole('button', { name: 'Remove' }))
     await waitFor(() => expect(sent(fetch, 'DELETE')).toHaveLength(1))
     expect(bodyOf(sent(fetch, 'DELETE'))).toEqual({ node: 'slashome/dreamcatchr' })
   })

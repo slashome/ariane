@@ -1,4 +1,3 @@
-import { BookOpen } from 'lucide-react'
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router'
 import { idColumn, isClosed, progressColumn, ProgressMeter, statusColumn, titleColumn, useItems } from '@/entities/item'
@@ -90,7 +89,7 @@ export function StoriesPage() {
       ) : isPending ? (
         <LoadingState />
       ) : count === 0 ? (
-        <EmptyState icon={BookOpen} title={total === 0 ? 'No story here' : 'No story matches the search'}>
+        <EmptyState icon="book" title={total === 0 ? 'No story here' : 'No story matches the search'}>
           {total === 0 ? (
             <>
               A story is a Markdown file under <code>stories/</code>; its tasks point to it with <code>parent</code>.

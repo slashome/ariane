@@ -30,7 +30,7 @@ function CopyCommand({ command }: { command: string }) {
       <button
         type="button"
         aria-label={`Copy ${command}`}
-        className="icon-button size-5.5"
+        className="lu-icon-button size-5.5"
         onClick={() => {
           void navigator.clipboard?.writeText(command)
           toast.success('Command copied')
@@ -102,10 +102,10 @@ export function ProxyPage() {
           </span>
         ) : (
           <div className="flex justify-end gap-1">
-            <button type="button" className="icon-button size-7" aria-label={`Edit ${route.host}`} onClick={() => setEditing({ route })}>
+            <button type="button" className="lu-icon-button size-7" aria-label={`Edit ${route.host}`} onClick={() => setEditing({ route })}>
               <Pencil className="size-3.5" aria-hidden />
             </button>
-            <button type="button" className="icon-button size-7 hover:text-red-600" aria-label={`Remove ${route.host}`} onClick={() => setRemoving(route)}>
+            <button type="button" className="lu-icon-button size-7 hover:text-red-600" aria-label={`Remove ${route.host}`} onClick={() => setRemoving(route)}>
               <Trash2 className="size-3.5" aria-hidden />
             </button>
           </div>

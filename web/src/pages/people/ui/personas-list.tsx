@@ -1,4 +1,4 @@
-import { Pencil, Plus, Trash2, UserRound } from 'lucide-react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useRemovePersona } from '../api/use-personas'
 import { ApiError, type PersonaDirectory, type PersonaEntry } from '@/shared/api'
@@ -61,12 +61,12 @@ export function PersonasList({ directories, searching }: { directories: PersonaD
       headerClassName: 'w-20',
       cell: (persona) => (
         <div className="flex justify-end gap-1">
-          <button type="button" className="icon-button size-7" aria-label={`Edit ${persona.name}`} onClick={() => setEditing({ node, persona })}>
+          <button type="button" className="lu-icon-button size-7" aria-label={`Edit ${persona.name}`} onClick={() => setEditing({ node, persona })}>
             <Pencil className="size-3.5" aria-hidden />
           </button>
           <button
             type="button"
-            className="icon-button size-7 hover:text-red-600"
+            className="lu-icon-button size-7 hover:text-red-600"
             aria-label={`Remove ${persona.name}`}
             onClick={() => setRemoving({ node, persona })}
           >
@@ -79,7 +79,7 @@ export function PersonasList({ directories, searching }: { directories: PersonaD
 
   if (directories.length === 0) {
     return (
-      <EmptyState icon={UserRound} title="No tracker here">
+      <EmptyState icon="user" title="No tracker here">
         Personas are declared in a node that binds a tracker or already declares some (<code>[personas]</code> in its <code>node.toml</code>).
       </EmptyState>
     )

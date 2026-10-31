@@ -47,10 +47,6 @@ export function MatrixPage() {
       </div>
       <DragArea
         onDragEnd={onDragEnd}
-        renderOverlay={(id) => {
-          const item = scoped.find((entry) => entry.path === id)
-          return item ? <ItemCard item={item} showNode className="shadow-lg" /> : null
-        }}
       >
         <div
           className="grid gap-2"

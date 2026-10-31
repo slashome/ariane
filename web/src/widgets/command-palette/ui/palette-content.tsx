@@ -32,7 +32,7 @@ export function PaletteContent({ close }: { close: () => void }) {
       <DialogPrimitive.Title className="sr-only">Command palette</DialogPrimitive.Title>
       <div className="flex items-center gap-2 border-b border-border px-3">
         {parent ? (
-          <button type="button" onClick={list.back} className="icon-button size-6" aria-label={`Back from ${parent.title}`}>
+          <button type="button" onClick={list.back} className="lu-icon-button size-6" aria-label={`Back from ${parent.title}`}>
             <ChevronLeft className="size-4" aria-hidden />
           </button>
         ) : (

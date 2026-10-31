@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, waitFor, within } from '@testing-library/react'
+import { screen } from 'shadow-dom-testing-library'
 import userEvent from '@testing-library/user-event'
 import { makeItem, type NodeSummary, type Schema } from '@/shared/api'
 import { ItemEditors } from './item-editors'
@@ -50,7 +51,7 @@ afterEach(() => vi.unstubAllGlobals())
 describe('ItemEditors', () => {
   it('saves a field as soon as it changes', async () => {
     const fetch = renderEditors()
-    await userEvent.click(await within(await screen.findByRole('group', { name: 'Priority' })).findByRole('button', { name: 'high' }))
+    await userEvent.click(await within(await screen.findByShadowRole('group', { name: 'Priority' })).findByRole('button', { name: 'high' }))
     await waitFor(() => expect(patches(fetch)[0]).toEqual({ path: 'tree/p/tasks/T001.md', changes: { priority: { from: null, to: 'high' } } }))
   })
 

@@ -2,7 +2,7 @@ import { GitCommitHorizontal, Undo2, Upload } from 'lucide-react'
 import { useState } from 'react'
 import { useRepo } from '@/entities/repo'
 import type { UncommittedFile } from '@/shared/api'
-import { Button, ConfirmDialog, HoverCard, HoverCardContent, HoverCardTrigger } from '@/shared/ui'
+import { Button, ConfirmDialog, HoverCard } from '@/shared/ui'
 import { useDiscard, usePush } from '../api/use-git-actions'
 import { CommitForm } from './commit-form'
 import { DiffDialog } from './diff-dialog'
@@ -36,7 +36,7 @@ export function UncommittedList({
               type="button"
               aria-label={`Discard ${file.path}`}
               title="Discard this change"
-              className="icon-button mr-1 size-4.5 shrink-0 hover:text-red-600"
+              className="lu-icon-button mr-1 size-4.5 shrink-0 hover:text-red-600"
               onClick={() => onDiscard(file.path)}
             >
               <Undo2 className="size-3.5" aria-hidden />
@@ -77,8 +77,10 @@ export function UncommittedIndicator() {
   }
   return (
     <>
-      <HoverCard openDelay={100} open={composing ? true : undefined}>
-        <HoverCardTrigger asChild>
+      <HoverCard
+        openDelay={100}
+        pinned={composing}
+        trigger={
           <button
             type="button"
             aria-label={label}
@@ -97,8 +99,9 @@ export function UncommittedIndicator() {
               </>
             ) : null}
           </button>
-        </HoverCardTrigger>
-        <HoverCardContent onEscapeKeyDown={() => setComposing(false)}>
+        }
+      >
+        <div onKeyDown={(event) => event.key === 'Escape' && setComposing(false)}>
           <p className="mb-2 font-medium">{label}</p>
           {files.length > 0 ? (
             <UncommittedList files={files} onView={setViewing} onDiscard={(path) => setDiscarding({ path })} />
@@ -137,7 +140,7 @@ export function UncommittedIndicator() {
               </div>
             )}
           </div>
-        </HoverCardContent>
+        </div>
       </HoverCard>
       <ConfirmDialog
         open={discarding !== null}

@@ -1,4 +1,4 @@
-import { Lightbulb, NotebookPen } from 'lucide-react'
+import { NotebookPen } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link, useLocation } from 'react-router'
 import { changesFor, useUpdateItem } from '@/entities/item'
@@ -52,7 +52,7 @@ export function ReflexionsPage() {
       ) : isPending ? (
         <LoadingState />
       ) : reflexions.length === 0 ? (
-        <EmptyState icon={Lightbulb} title={total === 0 ? 'No reflexion here' : 'No reflexion matches the search'}>
+        <EmptyState icon="idea" title={total === 0 ? 'No reflexion here' : 'No reflexion matches the search'}>
           {total === 0 ? (
             <>
               A reflexion is a Markdown file under <code>reflexions/</code>, open until it is settled.
@@ -64,10 +64,6 @@ export function ReflexionsPage() {
       ) : (
         <DragArea
           onDragEnd={onDragEnd}
-          renderOverlay={(id) => {
-            const item = reflexions.find((entry) => entry.path === id)
-            return item ? <ReflexionCard item={item} scope={scope} className="w-80 shadow-lg" /> : null
-          }}
         >
           <div className="grid min-h-0 flex-1 gap-3 lg:grid-cols-3">
             {lanes.map((lane) => (

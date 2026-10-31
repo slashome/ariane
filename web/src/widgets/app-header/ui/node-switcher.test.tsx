@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render } from '@testing-library/react'
+import { screen } from 'shadow-dom-testing-library'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { useItemFilters } from '@/features/filter-items'
@@ -22,7 +23,7 @@ const items = [
 
 // Opens the node select and reads its options, then closes it.
 async function options(): Promise<string[]> {
-  await userEvent.click(screen.getByRole('combobox', { name: 'Node' }))
+  await userEvent.click(screen.getByShadowRole('combobox', { name: 'Node' }))
   const labels = (await screen.findAllByRole('option')).map((option) => option.textContent ?? '')
   await userEvent.keyboard('{Escape}')
   return labels
@@ -57,7 +58,7 @@ afterEach(() => {
 describe('NodeSwitcher', () => {
   it('lists the nodes as a tree and shows the full path of the one in scope', async () => {
     renderAt('/?node=cmc/cmc-lib')
-    await screen.findByText('(2)')
+    await screen.findAllByText('(2)')
     expect(await options()).toEqual([
       'All nodes',
       '(home) (0)',
@@ -82,7 +83,7 @@ describe('NodeSwitcher', () => {
     expect(withSubNodes).toContain('cmc (3)')
     expect(withSubNodes).toContain('(home) (4)')
     expect(localStorage.getItem('ariane.scope.descendants')).toBe('1')
-    await userEvent.click(screen.getByRole('combobox', { name: 'Node' }))
+    await userEvent.click(screen.getByShadowRole('combobox', { name: 'Node' }))
     await userEvent.click(await screen.findByRole('option', { name: 'All nodes' }))
     expect(screen.queryByRole('switch', { name: 'Include the sub-nodes' })).not.toBeInTheDocument()
   })
@@ -91,7 +92,7 @@ describe('NodeSwitcher', () => {
 describe('NodeSwitcher counts', () => {
   it('count the archived items when the archive toggle is on', async () => {
     renderAt('/?node=cmc/cmc-frontend&archived=1')
-    await screen.findByText('(1)')
+    await screen.findAllByText('(1)')
     expect(await options()).toContain('├─ cmc-frontend (1)')
     expect(screen.getByText('cmc/cmc-frontend')).toBeInTheDocument()
   })

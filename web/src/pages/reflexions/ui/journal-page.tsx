@@ -1,4 +1,3 @@
-import { NotebookPen } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link, useLocation } from 'react-router'
 import { excerpt, ItemLink } from '@/entities/item'
@@ -35,7 +34,7 @@ export function JournalPage() {
       ) : isPending ? (
         <LoadingState />
       ) : settled === 0 && trial.length === 0 ? (
-        <EmptyState icon={NotebookPen} title="Nothing settled yet">
+        <EmptyState icon="notebook" title="Nothing settled yet">
           A reflexion enters the journal when its status becomes <code>settled</code>.
         </EmptyState>
       ) : (

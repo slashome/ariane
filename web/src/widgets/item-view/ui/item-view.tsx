@@ -1,4 +1,4 @@
-import { ChevronRight, ExternalLink, FileQuestion, GitBranch, GitPullRequest, type LucideIcon } from 'lucide-react'
+import { ChevronRight, ExternalLink, GitBranch, GitPullRequest, type LucideIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 import { StatusBadge, useItem, useItems, waitingSummary } from '@/entities/item'
@@ -93,7 +93,7 @@ export function ItemView({
   const { search } = useLocation()
 
   if (reference === null) {
-    return <EmptyState icon={FileQuestion} title="Not an item address" />
+    return <EmptyState icon="file-unknown" title="Not an item address" />
   }
   if (error) {
     return <ErrorState message={`Could not load ${reference}: ${error.message}`} />

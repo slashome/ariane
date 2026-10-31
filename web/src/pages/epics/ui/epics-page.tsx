@@ -1,4 +1,3 @@
-import { Layers } from 'lucide-react'
 import { useMemo } from 'react'
 import { idColumn, isClosed, progressColumn, statusColumn, titleColumn, useItems } from '@/entities/item'
 import { statusLabel, useNodes } from '@/entities/node'
@@ -57,7 +56,7 @@ export function EpicsPage() {
       ) : isPending ? (
         <LoadingState />
       ) : rows.length === 0 ? (
-        <EmptyState icon={Layers} title={total === 0 ? 'No epic here' : 'No epic matches the search'}>
+        <EmptyState icon="layers" title={total === 0 ? 'No epic here' : 'No epic matches the search'}>
           {total === 0 ? (
             <>
               An epic is a Markdown file under <code>epics/</code>; its stories point to it with <code>parent</code>.

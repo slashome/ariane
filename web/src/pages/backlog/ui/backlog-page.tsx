@@ -1,4 +1,4 @@
-import { ArrowRightToLine, Inbox } from 'lucide-react'
+import { ArrowRightToLine } from 'lucide-react'
 import { useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router'
 import { changesFor, idColumn, itemHref, titleColumn, useItems, useUpdateItem } from '@/entities/item'
@@ -158,7 +158,7 @@ export function BacklogPage() {
       ) : isPending ? (
         <LoadingState />
       ) : backlog.length === 0 ? (
-        <EmptyState icon={Inbox} title={total === 0 ? 'The backlog is empty' : 'No backlog task matches the search'}>
+        <EmptyState icon="inbox" title={total === 0 ? 'The backlog is empty' : 'No backlog task matches the search'}>
           {total === 0
             ? "A task joins it when its status belongs to the backlog category of its node's workflow."
             : `${total} backlog tasks in scope; the search field keeps none of them.`}

@@ -1,4 +1,4 @@
-import { ExternalLink, Library } from 'lucide-react'
+import { ExternalLink } from 'lucide-react'
 import { useMemo } from 'react'
 import { compareNatural, excerpt, ItemLink, useItemsWithBody } from '@/entities/item'
 import { QueryField, useFilteredItems } from '@/features/filter-items'
@@ -24,7 +24,7 @@ export function RessourcesPage() {
       ) : isPending ? (
         <LoadingState rows={3} />
       ) : ressources.length === 0 ? (
-        <EmptyState icon={Library} title={total === 0 ? 'No ressource here' : 'No ressource matches'}>
+        <EmptyState icon="library" title={total === 0 ? 'No ressource here' : 'No ressource matches'}>
           {total === 0 ? (
             <>
               A ressource is a Markdown file under <code>ressources/</code>: a site, a book, a repository to come back to.

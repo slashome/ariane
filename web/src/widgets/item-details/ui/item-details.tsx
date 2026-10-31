@@ -92,13 +92,13 @@ export function ItemDetails({ item, onClose, stepper }: { item: Item | null; onC
       )}
       {item && stepper && (
         <nav aria-label="Step through the items" className="mt-auto flex items-center justify-between border-t border-border pt-3">
-          <button type="button" className="icon-button size-8" aria-label="Previous item" disabled={!stepper.onPrevious} onClick={stepper.onPrevious}>
+          <button type="button" className="lu-icon-button size-8" aria-label="Previous item" disabled={!stepper.onPrevious} onClick={stepper.onPrevious}>
             <ChevronLeft className="size-5" aria-hidden />
           </button>
           <span className="text-xs text-muted-foreground tabular-nums">
             {stepper.position} / {stepper.count}
           </span>
-          <button type="button" className="icon-button size-8" aria-label="Next item" disabled={!stepper.onNext} onClick={stepper.onNext}>
+          <button type="button" className="lu-icon-button size-8" aria-label="Next item" disabled={!stepper.onNext} onClick={stepper.onNext}>
             <ChevronRight className="size-5" aria-hidden />
           </button>
         </nav>

@@ -8,13 +8,13 @@ const stats = cardStats([], [], 'cmc/lib')
 afterEach(cleanup)
 
 describe('NodeCard', () => {
-  it('renders the node description as Markdown', () => {
+  it('renders the node description as Markdown', async () => {
     render(
       <MemoryRouter>
         <NodeCard path="cmc/lib" description={'Design system **flow**.\n\n- CI aligned on cmc-lib'} stats={stats} labels={(category) => category} />
       </MemoryRouter>,
     )
-    expect(screen.getByText('flow').tagName).toBe('STRONG')
+    expect((await screen.findByText('flow')).tagName).toBe('STRONG')
     expect(screen.getByText('CI aligned on cmc-lib').tagName).toBe('LI')
   })
 

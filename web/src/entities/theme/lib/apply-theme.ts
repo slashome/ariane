@@ -5,8 +5,8 @@ import { faviconHref } from './favicon'
 // favicon in the primary color.
 export function applyTheme(theme: Theme, document: Document = window.document) {
   const root = document.documentElement
-  root.style.setProperty('--theme-primary', theme.primary)
-  root.style.setProperty('--theme-secondary', theme.secondary)
+  root.style.setProperty('--lu-theme-primary', theme.primary)
+  root.style.setProperty('--lu-theme-secondary', theme.secondary)
   let icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
   if (icon === null) {
     icon = document.createElement('link')

@@ -20,8 +20,8 @@ describe('theme colors', () => {
 describe('applyTheme', () => {
   it('sets the theme variables and a favicon drawn in the primary', () => {
     applyTheme({ primary: '#aa0000', secondary: '#00aa00' })
-    expect(document.documentElement.style.getPropertyValue('--theme-primary')).toBe('#aa0000')
-    expect(document.documentElement.style.getPropertyValue('--theme-secondary')).toBe('#00aa00')
+    expect(document.documentElement.style.getPropertyValue('--lu-theme-primary')).toBe('#aa0000')
+    expect(document.documentElement.style.getPropertyValue('--lu-theme-secondary')).toBe('#00aa00')
     const icon = document.querySelector<HTMLLinkElement>('link[rel="icon"]')
     expect(icon?.getAttribute('href')).toBe(faviconHref('#aa0000'))
     expect(faviconSvg('#aa0000')).toContain('stroke="#aa0000"')

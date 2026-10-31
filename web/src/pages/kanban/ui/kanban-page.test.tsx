@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, within } from '@testing-library/react'
+import { screen } from 'shadow-dom-testing-library'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import { makeItem, type NodeSummary, type Schema } from '@/shared/api'
@@ -31,6 +32,10 @@ const items = [
   makeItem({ id: 'T2', title: 'Second' }),
   makeItem({ id: 'T3', title: 'Third', status: 'waiting', category: 'waiting', waiting_for: ['keyvan'], waiting_since: '2026-10-20' }),
 ]
+
+function dialogHost(dialog: HTMLElement): HTMLElement {
+  return (dialog.getRootNode() as ShadowRoot).host as HTMLElement
+}
 
 function renderAt(url: string) {
   vi.stubGlobal(
@@ -70,12 +75,12 @@ describe('KanbanPage', () => {
     const router = renderAt('/tasks/kanban?node=p')
     await userEvent.click(await screen.findByRole('button', { name: 'Open First' }))
     expect(router.state.location.search).toContain('item=tree%2Fp%2Ftasks%2FT1.md')
-    const sheet = await screen.findByRole('dialog')
+    const sheet = dialogHost(await screen.findByShadowRole('dialog'))
     expect(within(sheet).getByText('1 / 3')).toBeInTheDocument()
     expect(within(sheet).getByRole('button', { name: 'Previous item' })).toBeDisabled()
     await userEvent.click(within(sheet).getByRole('button', { name: 'Next item' }))
     expect(router.state.location.search).toContain('T2.md')
-    expect(within(await screen.findByRole('dialog')).getByText('2 / 3')).toBeInTheDocument()
+    expect(within(dialogHost(await screen.findByShadowRole('dialog'))).getByText('2 / 3')).toBeInTheDocument()
     await router.navigate(-1)
     expect(router.state.location.search).toContain('T1.md')
   })

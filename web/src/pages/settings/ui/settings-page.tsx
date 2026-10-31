@@ -18,7 +18,7 @@ function Preview() {
         <a href="#preview" onClick={(event) => event.preventDefault()} className="text-sm text-primary hover:underline">
           A link
         </a>
-        <button type="button" className="icon-button size-6" aria-label="An icon button">
+        <button type="button" className="lu-icon-button size-6" aria-label="An icon button">
           <Eye className="size-3.5" aria-hidden />
         </button>
       </div>

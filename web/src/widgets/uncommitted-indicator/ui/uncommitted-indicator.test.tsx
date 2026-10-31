@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, within } from '@testing-library/react'
+import { screen } from 'shadow-dom-testing-library'
 import userEvent from '@testing-library/user-event'
 import type { Repo } from '@/shared/api'
 import { UncommittedIndicator } from './uncommitted-indicator'
@@ -72,7 +73,7 @@ describe('UncommittedIndicator', () => {
     expect(await screen.findByRole('button', { name: 'Discard all' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Discard notes.md' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Discard tree/a.md' }))
-    const dialog = await screen.findByRole('alertdialog')
+    const dialog = await screen.findByShadowRole('alertdialog')
     expect(fetch).not.toHaveBeenCalledWith('/api/discard', expect.anything())
     await user.click(within(dialog).getByRole('button', { name: 'Discard' }))
     expect(fetch).toHaveBeenCalledWith(

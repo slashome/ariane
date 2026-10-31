@@ -1,4 +1,4 @@
-import { CircleAlert, Copy, HeartPulse, TriangleAlert } from 'lucide-react'
+import { CircleAlert, Copy, TriangleAlert } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { ItemLink, useItems } from '@/entities/item'
 import { checkLabel, countBySeverity, scopeFindings, useDoctor } from '@/entities/doctor'
@@ -19,7 +19,7 @@ function Remedy({ finding }: { finding: Finding }) {
         <button
           type="button"
           aria-label={`Copy ${command}`}
-          className="icon-button size-5.5"
+          className="lu-icon-button size-5.5"
           onClick={() => {
             void navigator.clipboard?.writeText(command)
             toast.success('Command copied')
@@ -90,7 +90,7 @@ export function HealthPage() {
             ))}
           </dl>
           {scoped.length === 0 ? (
-            <EmptyState icon={HeartPulse} title="Healthy">
+            <EmptyState icon="health" title="Healthy">
               Every item {filters.node === null ? 'of the tree' : `of ${displayNode(filters.node)}`} follows the specification.
             </EmptyState>
           ) : (

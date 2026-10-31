@@ -17,14 +17,14 @@ export function SortableCard({
     <div className="flex shrink-0 items-center gap-1">
       <button
         type="button"
-        className="icon-button size-6 cursor-grab touch-none active:cursor-grabbing"
+        className="lu-icon-button size-6 cursor-grab touch-none active:cursor-grabbing"
         aria-label={`Move ${id}`}
         {...attributes}
         {...listeners}
       >
         <GripVertical className="size-4" aria-hidden />
       </button>
-      <button type="button" className="icon-button size-6" aria-label={`Unpin ${id}`} onClick={onRemove}>
+      <button type="button" className="lu-icon-button size-6" aria-label={`Unpin ${id}`} onClick={onRemove}>
         <X className="size-4" aria-hidden />
       </button>
     </div>
