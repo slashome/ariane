@@ -623,6 +623,14 @@ category = "done"
     }
 
     #[test]
+    fn a_rank_that_is_not_an_integer_is_reported() {
+        let repo = base();
+        repo.write("p/tasks/T1-a.md", &task("p", "T1", "rank: first\n"))
+            .write("p/tasks/T2-b.md", &task("p", "T2", "rank: -1500\n"));
+        only(&repo, Check::WrongType);
+    }
+
+    #[test]
     fn a_custom_key_of_the_wrong_type_is_reported() {
         let repo = base();
         repo.write(

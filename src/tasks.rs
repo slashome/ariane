@@ -17,6 +17,7 @@ use serde::Serialize;
 use crate::cli::TasksArgs;
 use crate::item::Kind;
 use crate::node::Category;
+use crate::rank;
 use crate::relations;
 use crate::tree::{Item, NodePath, Tree};
 
@@ -41,6 +42,8 @@ pub struct Row<'a> {
     pub size: Option<&'a str>,
     pub impact: Option<&'a str>,
     pub priority: Option<&'a str>,
+    /// The manual order within the node and kind (ADR-0022); `None` when unranked.
+    pub rank: Option<i64>,
     pub created: Option<&'a str>,
     /// The node's classification of the item (`type` in the header).
     pub r#type: Option<&'a str>,
@@ -93,14 +96,16 @@ pub struct Selection<'a> {
     pub dates: Option<&'a HashMap<PathBuf, String>>,
 }
 
-/// The rows of the items of `scope` that `selection` keeps, in tree order.
+/// The rows of the items of `scope` that `selection` keeps: nodes and kinds in
+/// tree order, the items of each in their manual order ([`rank::sort`]).
 /// The command and `GET /api/items` both list items through it.
 pub fn rows<'a>(
     tree: &'a Tree,
     scope: Option<&'a NodePath>,
     selection: &Selection,
 ) -> Vec<Row<'a>> {
-    tree.items_within(scope)
+    let mut rows: Vec<Row> = tree
+        .items_within(scope)
         .filter(|item| selection.archived || !item.archived)
         .filter(|item| selection.kinds.is_empty() || selection.kinds.contains(&item.kind))
         .map(|item| {
@@ -113,7 +118,9 @@ pub fn rows<'a>(
             }
             row
         })
-        .collect()
+        .collect();
+    rank::sort(&mut rows);
+    rows
 }
 
 /// Runs `ariane tasks`: filters the items by node and archive state, then prints
@@ -162,6 +169,7 @@ pub fn row<'a>(tree: &Tree, item: &'a Item) -> Row<'a> {
         size: document.text("size"),
         impact: document.text("impact"),
         priority: document.text("priority"),
+        rank: document.integer("rank"),
         created: document.text("created"),
         r#type: document.text("type"),
         personas: document.texts("personas"),

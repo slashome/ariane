@@ -44,6 +44,7 @@ Keys MUST be written in English, in lower case, with `_` as the word separator. 
 | `size` | string | MAY | `XS`, `S`, `M`, `L`, `XL`. |
 | `impact` | string | MAY | `low`, `medium`, `high`. |
 | `priority` | string | MAY | `low`, `medium`, `high`. |
+| `rank` | integer | MAY; SHOULD NOT for ressources | The item's place in the manual order of its node and kind, negative values included (ADR-0022). |
 | `created` | date | SHOULD | ISO 8601 calendar date, `YYYY-MM-DD`. |
 | `release` | string | MAY | Free name of a delivery target. |
 | `milestone` | string | MAY | Free name of an intermediate target. |
@@ -54,6 +55,8 @@ Keys MUST be written in English, in lower case, with `_` as the word separator. 
 | `waiting_for` | list of strings | MUST when the status is in the `waiting` category; MUST NOT otherwise | The people the item waits for, each a handle declared under `[people]` (§1.5). |
 | `waiting_on` | string | MAY when waiting; MUST NOT otherwise | Why it waits: `review` (a review of its work), `validation` (of its result, by a product manager or a client), `answer` (a reply, a decision, an information) or `other`. |
 | `waiting_since` | date | SHOULD when waiting; MUST NOT otherwise | When the wait began, `YYYY-MM-DD`. |
+
+**Order of items.** Items are ordered per node and per kind; the ranks of two nodes or two kinds are never compared. Within one node and kind, items carrying `rank` come first, by ascending `rank`; the others follow, by descending `priority` (`high`, `medium`, `low`, then none). Ties fall back to the ids in natural order (`T9` before `T10`). An item under `archives/` keeps its `rank` but the order ignores it. A tool that lists items across nodes keeps the nodes in tree order and applies this order within each. A tool that writes `rank` spaces ranks by 1000, takes the middle of the gap when an item is moved between two ranked items, and re-spaces only the neighbours of the drop point when the gap is exhausted. A tool MUST NOT give an item a `rank` the user did not ask for.
 
 Any other key is a **custom key**. A custom key SHOULD be declared in the node's `node.toml` (§1.5). A tool that reads an item MUST preserve every key it does not know, unchanged, when it writes the item back.
 
@@ -131,7 +134,7 @@ name = "Responsable RH"
 | `ariane` lower than the version the CLI implements | error — remedy: `ariane migrate` |
 | `ariane` higher than the version the CLI implements | error — the CLI is outdated |
 | A required core key is missing | error |
-| A core key has a value of the wrong type (`release` or `milestone` not a string, `refs` not a list, an `external` entry not `<connector>:<id>`, a `branches` entry not `<owner>/<repo>:<branch>`, a `pull_requests` entry not an `https://` URL) | error |
+| A core key has a value of the wrong type (`rank` not an integer, `release` or `milestone` not a string, `refs` not a list, an `external` entry not `<connector>:<id>`, a `branches` entry not `<owner>/<repo>:<branch>`, a `pull_requests` entry not an `https://` URL) | error |
 | `node` does not match the file's location | error |
 | `id` duplicated within the node | error |
 | `status` not in the node's effective workflow | error |
@@ -145,7 +148,7 @@ name = "Responsable RH"
 | A status in the `waiting` category without `waiting_for` | error |
 | A `waiting_for` handle declared under no applicable `[people]` | error |
 | A `personas` id declared under no applicable `[personas]` | error |
-| `personas` on an item that is not a story | warning |
+| `personas` on an item that is not a story, or `rank` on a ressource | warning |
 | `waiting_for`, `waiting_on` or `waiting_since` on an item whose status is not in the `waiting` category | warning |
 | A required custom key is missing | error |
 | A file name that does not begin with the item's `id`, `-` and a slug | error — remedy: `ariane fix` (renames to `<id>-<current name>` and rewrites the links); a human when the name is the bare id |

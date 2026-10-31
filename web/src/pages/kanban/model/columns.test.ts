@@ -33,6 +33,7 @@ function item(overrides: Partial<Item>): Item {
     size: null,
     impact: null,
     priority: null,
+    rank: null,
     created: null,
     reference: null,
     type: null,

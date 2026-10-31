@@ -16,6 +16,7 @@ export function makeItem(overrides: Partial<Item> = {}): Item {
     size: null,
     impact: null,
     priority: null,
+    rank: null,
     created: null,
     type: null,
     personas: [],

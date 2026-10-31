@@ -24,7 +24,7 @@ pub const LEGACY_BACKLOG: &str = "backlog";
 ///
 /// `clap::ValueEnum` lets `ariane tasks --kind` accept the same words the JSON
 /// uses.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, clap::ValueEnum)]
 #[serde(rename_all = "snake_case")]
 pub enum Kind {
     /// An item in `tasks/`, or in the former `backlog/` directory (SPEC.md §1.1).
@@ -117,6 +117,11 @@ impl Document {
     /// as one step is missing: no header, no key, or a value that is not an integer.
     pub fn version(&self) -> Option<u64> {
         self.mapping()?.get("ariane")?.as_u64()
+    }
+
+    /// The value of `key` when it is an integer, such as `rank`.
+    pub fn integer(&self, key: &str) -> Option<i64> {
+        self.mapping()?.get(key)?.as_i64()
     }
 
     /// The value of `key` when it is a string.

@@ -19,6 +19,7 @@ const item: Item = {
   size: 'M',
   impact: null,
   priority: null,
+  rank: null,
   created: null,
   reference: null,
   type: null,

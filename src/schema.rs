@@ -1,6 +1,6 @@
 //! The core header schema, declared once as data (SPEC.md §1.3, ADR-0008).
 //!
-//! [`CORE_KEYS`](crate::schema::CORE_KEYS) describes each of the twenty-two core keys a single time: its value
+//! [`CORE_KEYS`](crate::schema::CORE_KEYS) describes each of the twenty-three core keys a single time: its value
 //! type, whether it is required depending on the item kind, and its place in the
 //! canonical key order. Everything else reads this table instead of keeping its
 //! own list:
@@ -53,6 +53,8 @@ pub enum Requirement {
 pub enum ValueType {
     /// A non-negative integer: the schema version.
     Version,
+    /// An integer, negative ones included: the manual `rank`.
+    Integer,
     /// A non-empty string.
     Text,
     /// The logical path of a node: a string, empty for the home node.
@@ -90,7 +92,7 @@ impl ValueType {
     /// Name of the type in `ariane schema` output.
     pub fn id(self) -> &'static str {
         match self {
-            ValueType::Version => "integer",
+            ValueType::Version | ValueType::Integer => "integer",
             ValueType::Text => "text",
             ValueType::Node => "node",
             ValueType::Name => "name",
@@ -113,6 +115,7 @@ impl ValueType {
     pub fn expected(self) -> &'static str {
         match self {
             ValueType::Version => "a non-negative integer",
+            ValueType::Integer => "an integer",
             ValueType::Node => "a string, empty for the home node",
             ValueType::Text | ValueType::Id | ValueType::Status => "a non-empty string",
             ValueType::Name => "a string (quote numbers such as \"1.0\")",
@@ -199,6 +202,12 @@ pub const CORE_KEYS: &[CoreKey] = &[
     key("size", ValueType::Enum(SIZES), Requirement::May),
     key("impact", ValueType::Enum(LEVELS), Requirement::May),
     key("priority", ValueType::Enum(LEVELS), Requirement::May),
+    CoreKey {
+        name: "rank",
+        value: ValueType::Integer,
+        requirement: Requirement::May,
+        by_kind: &[(Kind::Ressource, Requirement::ShouldNot)],
+    },
     key("created", ValueType::Date, Requirement::Should),
     key("release", ValueType::Name, Requirement::May),
     key("milestone", ValueType::Name, Requirement::May),
@@ -378,6 +387,7 @@ mod tests {
                 "size",
                 "impact",
                 "priority",
+                "rank",
                 "created",
                 "release",
                 "milestone",
@@ -419,6 +429,18 @@ mod tests {
             assert_eq!(key.requirement_for(Kind::Task), Requirement::May);
             assert!(matches!(key.value, ValueType::Enum(_)));
         }
+    }
+
+    #[test]
+    fn rank_is_an_optional_integer_discouraged_on_ressources() {
+        let rank = core_key("rank").unwrap();
+        assert_eq!(rank.requirement_for(Kind::Task), Requirement::May);
+        assert_eq!(rank.requirement_for(Kind::Reflexion), Requirement::May);
+        assert_eq!(
+            rank.requirement_for(Kind::Ressource),
+            Requirement::ShouldNot
+        );
+        assert_eq!(rank.value.id(), "integer");
     }
 
     #[test]

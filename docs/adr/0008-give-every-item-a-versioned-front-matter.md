@@ -71,6 +71,8 @@ A child node inherits its ancestors' `node.toml`: fields accumulate, and a workf
 
 > **Amended 2026-10-23.** A seventh category, `waiting`, between `in_progress` and `blocked`: an item that waits for someone — a review, an answer — named in `waiting_for`. Kept apart from `blocked` so that a board shows whom the work waits for, and on whom to follow up ([ADR-0015](0015-name-whom-an-item-waits-for.md)).
 
+> **Amended 2026-10-31.** A core key `rank`, an integer, gives an item its place in the manual order of its node and kind ([ADR-0022](0022-order-items-by-a-sparse-rank-in-their-header.md)). It is optional, so the schema version stays `1`: every existing file remains valid, and an older CLI keeps the key as an undeclared custom key.
+
 **8. Unknown keys are tolerated and preserved.** A tool reading a key it does not know keeps it byte for byte, so an older CLI never destroys what a newer one wrote. `doctor` reports an undeclared key as a warning, not an error.
 
 **9. The prose header disappears on migration.** One source per fact. Context that is not metadata — "validé par … le …" — moves into the body. git keeps the history of what the header said.

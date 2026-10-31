@@ -313,6 +313,11 @@ impl Reporter<'_> {
         let name = key.name;
         match key.value {
             ValueType::Version => {}
+            ValueType::Integer => {
+                if value.as_i64().is_none() {
+                    self.wrong_type(name, key.value.expected());
+                }
+            }
             ValueType::Node => {
                 if !value.is_string() {
                     self.wrong_type(name, key.value.expected());

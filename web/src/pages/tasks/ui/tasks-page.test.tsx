@@ -31,6 +31,7 @@ const base: Item = {
   size: 'XL',
   impact: null,
   priority: null,
+  rank: null,
   created: '2030-01-02',
   reference: null,
   type: null,

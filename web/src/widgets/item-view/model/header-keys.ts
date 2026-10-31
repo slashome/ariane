@@ -11,6 +11,7 @@ const shown = new Set([
   'size',
   'impact',
   'priority',
+  'rank',
   'created',
   'release',
   'milestone',

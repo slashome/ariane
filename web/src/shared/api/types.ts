@@ -16,6 +16,7 @@ export interface Item {
   size: string | null
   impact: string | null
   priority: string | null
+  rank: number | null
   created: string | null
   type: string | null
   personas: string[]

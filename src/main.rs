@@ -54,6 +54,8 @@ mod people;
 mod personas;
 /// `ariane proxy`: local names for the interface and the projects' servers.
 mod proxy;
+/// The manual order of items.
+mod rank;
 /// Parents, children, dependencies and dependents of items.
 mod relations;
 /// Discovery of the content repository on disk.

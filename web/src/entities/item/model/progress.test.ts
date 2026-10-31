@@ -14,6 +14,7 @@ const item = (id: string, extra: Partial<Item> = {}): Item => ({
   size: null,
   impact: null,
   priority: null,
+  rank: null,
   created: null,
   type: null,
   personas: [],
