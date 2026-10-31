@@ -54,6 +54,7 @@ A closing *Revisit if* section names the conditions under which the decision wou
 | [0018](0018-name-the-personas-a-story-is-written-for.md) | Name the personas a story is written for | Accepted | 2026-10-23 |
 | [0019](0019-group-stories-into-epics.md) | Group stories into epics | Accepted | 2026-10-27 |
 | [0020](0020-ship-a-method-skillset-under-arianes-authority.md) | Ship a method skillset under Ariane's authority | Proposed | 2026-10-28 |
+| [0021](0021-share-content-through-team-repositories.md) | Share content through team content repositories, never through the host repository | Proposed | 2026-10-31 |
 
 ## Archived
 
