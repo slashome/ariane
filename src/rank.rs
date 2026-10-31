@@ -149,8 +149,9 @@ fn rank_of(item: &Item) -> Option<i64> {
 ///
 /// Only `moved` changes in the usual case: it takes the middle of the gap
 /// between its new neighbours, the first rank minus [`GAP`] at the top, the
-/// last plus [`GAP`] at the bottom. Unranked items above the drop point are
-/// ranked first, in their current order. When the gap is exhausted, a window
+/// last plus [`GAP`] at the bottom. A drop below an unranked item ranks every
+/// unranked item of the node and kind at once, in their current order, the
+/// moved item at its place among them. When the gap is exhausted, a window
 /// of neighbours around the drop point is re-spaced, widened until it holds
 /// enough room. An item already between its new neighbours keeps its rank.
 ///
@@ -202,11 +203,14 @@ pub fn plan<'a>(tree: &'a Tree, moved: &'a Item, target: Target<'a>) -> Result<V
     sequence.insert(position, moved);
     let mut ranks: Vec<Option<i64>> = sequence.iter().map(|item| rank_of(item)).collect();
     ranks[position] = None;
-    let mut last = None;
-    for slot in &mut ranks[..position] {
-        let given = slot.unwrap_or_else(|| last.map_or(GAP, |previous| previous + GAP));
-        *slot = Some(given);
-        last = Some(given);
+    if ranks[..position].iter().any(Option::is_none) {
+        let mut last = None;
+        for slot in &mut ranks {
+            let given = slot.unwrap_or_else(|| last.map_or(GAP, |previous| previous + GAP));
+            *slot = Some(given);
+            last = Some(given);
+        }
+        return Ok(changes(&sequence, ranks, moved, current));
     }
     let end = (position + 1..ranks.len())
         .find(|&index| ranks[index].is_none())
@@ -225,7 +229,17 @@ pub fn plan<'a>(tree: &'a Tree, moved: &'a Item, target: Target<'a>) -> Result<V
             ranks[position]
         }
     };
-    Ok(sequence
+    Ok(changes(&sequence, ranks, moved, current))
+}
+
+/// The ranks of `sequence` that differ from `ranks`, `moved` compared with its rank before the move.
+fn changes<'a>(
+    sequence: &[&'a Item],
+    ranks: Vec<Option<i64>>,
+    moved: &Item,
+    current: Option<i64>,
+) -> Vec<Change<'a>> {
+    sequence
         .iter()
         .zip(ranks)
         .filter_map(|(item, to)| {
@@ -236,7 +250,7 @@ pub fn plan<'a>(tree: &'a Tree, moved: &'a Item, target: Target<'a>) -> Result<V
             };
             (from != to).then_some(Change { item, from, to })
         })
-        .collect())
+        .collect()
 }
 
 /// Fails unless `item` can take a rank: a live item with an id, not a ressource.
@@ -535,15 +549,36 @@ mod tests {
     }
 
     #[test]
-    fn a_drop_among_unranked_items_ranks_those_above_it_first() {
-        let repo = node(&[("T1", None), ("T2", None), ("T3", None), ("T4", None)]);
+    fn a_drop_below_an_unranked_item_ranks_the_whole_node_and_kind() {
+        let repo = node(&[
+            ("T1", None),
+            ("T2", None),
+            ("T3", None),
+            ("T4", None),
+            ("T5", None),
+        ]);
         assert_eq!(
             moves(&repo, "T4", |tree| Target::Before(find(tree, "T3"))),
             [
                 ("T1".to_owned(), Some(1000)),
                 ("T2".to_owned(), Some(2000)),
-                ("T4".to_owned(), Some(3000))
+                ("T4".to_owned(), Some(3000)),
+                ("T3".to_owned(), Some(4000)),
+                ("T5".to_owned(), Some(5000)),
             ]
+        );
+    }
+
+    #[test]
+    fn a_drop_above_every_unranked_item_writes_only_the_moved_item() {
+        let repo = node(&[("T1", Some(1000)), ("T2", None), ("T3", None)]);
+        assert_eq!(
+            moves(&repo, "T3", |_| Target::Top),
+            [("T3".to_owned(), Some(0))]
+        );
+        assert_eq!(
+            moves(&repo, "T3", |tree| Target::Before(find(tree, "T2"))),
+            [("T3".to_owned(), Some(2000))]
         );
     }
 

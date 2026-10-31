@@ -20,11 +20,12 @@ A simulation over 150 items (story S028) measured the files rewritten per move: 
 2. **One order per node and per kind.** Not per status: a kanban column is the filter of one status on that order, and an item that changes status keeps its place. Not per parent: the tasks of a story are a projection of the node's order. The ranks of two nodes are never compared; a view across nodes keeps the nodes in tree order and orders the items within each.
 3. **The comparator**, shared by the CLI and the interface: ranked items first by ascending `rank`, then unranked items by descending `priority`, ties broken by ids in natural order. An archived item keeps its `rank` and the order ignores it. An absolute priority, once it exists (story S024), comes before every rank.
 4. **Sparse ranks.** Ranks are spaced by 1000. A move between two ranked items takes the middle of their gap; at the top, the first rank minus 1000; at the bottom of the ranked items, the last plus 1000. When the gap is exhausted, only a window of neighbours around the drop point is re-spaced.
-5. **Ranks are given as items are moved.** A new or migrated item has no rank. Dropping an item among unranked ones ranks the unranked items above the drop point first, in their displayed order. Neither `migrate` nor an agent writes a rank the user did not ask for.
+5. **Ranks are given when the user first orders a node.** A new or migrated item has no rank. A move above every unranked item writes the moved item only. A move below an unranked item ranks every unranked item of the node and kind at once, in their displayed order, the moved item at its place among them. Neither `migrate` nor an agent writes a rank the user did not ask for.
 6. **The schema version stays `1`.** Adding an optional key leaves every file valid.
 
 ## Consequences
 
+- The first move that needs it modifies every unranked item of the node and kind: on `slashome/ariane`, about a hundred tasks, each gaining one `rank:` line, left uncommitted like any other edit. Ranking only the items above the drop point was tried first: it writes the same total over time, but in several waves, and leaves the bottom of the list ordered by `priority` while the top is manual. One pass gives one explicit order.
 - One move writes one file in nearly every case, a handful when a gap is exhausted. Two machines reordering different items never conflict.
 - `ariane tasks` and `GET /api/items` change order: nodes and kinds as before, but the items of each sorted by the comparator instead of by path. A script that relied on the order of ids has to sort by itself.
 - `priority` no longer orders ranked items: a `low` item may be ranked above a `high` one. It still labels, filters, and orders the unranked items.
