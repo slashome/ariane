@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
-import { idColumn, statusColumn, titleColumn, useRankItem } from '@/entities/item'
+import { idColumn, statusColumn, titleColumn, useMoveItem } from '@/entities/item'
 import { statusLabel, useNodes } from '@/entities/node'
 import { enumValues, kindLabel, useSchema } from '@/entities/schema'
 import type { Item, NodeSummary, Schema } from '@/shared/api'
 import { displayNode } from '@/shared/lib'
-import { DataTable, toast, type Column, type Reorder } from '@/shared/ui'
+import { DataTable, type Column, type Reorder } from '@/shared/ui'
 import { ItemDetails } from '@/widgets/item-details'
 
 type RankedKey = 'priority' | 'size' | 'impact'
@@ -73,17 +73,7 @@ export function ItemsTable({ items }: { items: Item[] }) {
   const index = useMemo(() => new Map(items.map((item, position) => [item.path, position])), [items])
   const columns = useMemo(() => buildColumns(schema, nodes, order, index), [schema, nodes, order, index])
   const [selected, setSelected] = useState<Item | null>(null)
-  const rank = useRankItem()
-  const reorder: Reorder<Item> = {
-    column: 'order',
-    onMove: (item, over, place) => {
-      if (item.node !== over.node || item.kind !== over.kind) {
-        toast.info('The order is per node and kind: drop it next to an item of its own node and kind')
-        return
-      }
-      rank.mutate({ item, place, other: over })
-    },
-  }
+  const reorder: Reorder<Item> = { column: 'order', onMove: useMoveItem() }
 
   return (
     <>

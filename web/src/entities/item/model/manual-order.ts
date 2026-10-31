@@ -58,3 +58,30 @@ export function placeInOrder(items: Item[], moved: Item, place: Place, other: It
   const index = place === 'top' || place === 'before' ? at : at + 1
   return [...rest.slice(0, index), updated, ...rest.slice(index)]
 }
+
+export interface Beside<Lane> {
+  lane: Lane
+  other: Item | null
+  place: 'before' | 'after' | null
+}
+
+const isPeer = (item: Item, other: Item) => other.path !== item.path && other.node === item.node && other.kind === item.kind
+
+export function dropBeside<Lane extends { id: string; items: Item[] }>(item: Item, overId: string, lanes: Lane[]): Beside<Lane> | null {
+  const holder = lanes.find((lane) => lane.items.some((entry) => entry.path === overId))
+  if (holder === undefined) {
+    const lane = lanes.find((entry) => entry.id === overId)
+    if (lane === undefined) {
+      return null
+    }
+    const last = lane.items.filter((entry) => isPeer(item, entry)).at(-1)
+    return { lane, other: last ?? null, place: last === undefined ? null : 'after' }
+  }
+  const over = holder.items.find((entry) => entry.path === overId)
+  if (over === undefined || !isPeer(item, over)) {
+    return { lane: holder, other: null, place: null }
+  }
+  const from = holder.items.findIndex((entry) => entry.path === item.path)
+  const to = holder.items.indexOf(over)
+  return { lane: holder, other: over, place: from !== -1 && from < to ? 'after' : 'before' }
+}

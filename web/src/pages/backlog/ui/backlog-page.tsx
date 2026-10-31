@@ -1,14 +1,14 @@
 import { ArrowRightToLine, Inbox } from 'lucide-react'
 import { useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate, useLocation } from 'react-router'
-import { changesFor, idColumn, itemHref, titleColumn, useItems, useUpdateItem } from '@/entities/item'
+import { changesFor, idColumn, itemHref, sortByManualOrder, titleColumn, useItems, useMoveItem, useUpdateItem } from '@/entities/item'
 import { firstStatusOf, workflowOf, useNodes } from '@/entities/node'
 import { enumValues, useSchema } from '@/entities/schema'
 import { QueryField, useFilteredItems, useItemFilters } from '@/features/filter-items'
 import type { Item } from '@/shared/api'
 import { scopeSearch } from '@/shared/config'
-import { displayNode } from '@/shared/lib'
-import { Button, DataTable, EmptyState, ErrorState, Kbd, LoadingState, PageHeader, Segmented, toast, type Column } from '@/shared/ui'
+import { displayNode, useSearchParam } from '@/shared/lib'
+import { Button, DataTable, EmptyState, ErrorState, Kbd, LoadingState, NativeSelect, PageHeader, Segmented, toast, type Column } from '@/shared/ui'
 import { cycle, level, missingFields, triageFields, triageOrder, type TriageField } from '../model/triage'
 
 const fieldKeys: Record<string, TriageField> = { p: 'priority', i: 'impact', s: 'size' }
@@ -30,7 +30,13 @@ export function BacklogPage() {
   )
 
   const { items: tasks, total } = useFilteredItems(items, { kinds: ['task'], categories: ['backlog'] })
-  const backlog = useMemo(() => triageOrder(tasks, vocabulary.priority, vocabulary.size), [tasks, vocabulary])
+  const [orderParam, setOrder] = useSearchParam('order')
+  const manual = orderParam === 'manual'
+  const move = useMoveItem()
+  const backlog = useMemo(
+    () => (manual ? sortByManualOrder(tasks, (item) => item) : triageOrder(tasks, vocabulary.priority, vocabulary.size)),
+    [tasks, vocabulary, manual],
+  )
   const untriaged = backlog.filter((item) => missingFields(item).length > 0).length
 
   const set = (item: Item, field: TriageField, value: string | null) =>
@@ -137,7 +143,18 @@ export function BacklogPage() {
             ? 'Loading…'
             : `${backlog.length} ${backlog.length === 1 ? 'task' : 'tasks'} waiting in a backlog status · ${untriaged} still to estimate`
         }
-        actions={<QueryField count={backlog.length} total={total} />}
+        actions={
+          <>
+            <QueryField count={backlog.length} total={total} />
+            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+              Order
+              <NativeSelect aria-label="Order the backlog by" value={manual ? 'manual' : 'triage'} onChange={(event) => setOrder(event.target.value === 'manual' ? 'manual' : null)}>
+                <option value="triage">Triage: priority, impact, size</option>
+                <option value="manual">Manual</option>
+              </NativeSelect>
+            </label>
+          </>
+        }
       />
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
         <span>
@@ -170,6 +187,7 @@ export function BacklogPage() {
           rowKey={(item) => item.path}
           storageKey="backlog"
           label="Backlog tasks"
+          reorder={manual ? { column: 'order', onMove: move } : undefined}
           rowProps={(item, index) => ({
             ref: (element: HTMLTableRowElement | null) => {
               rows.current[index] = element

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { changesFor, ItemCard, today, useItems, useRankItem, useUpdateItem, waitingSummary } from '@/entities/item'
+import { changesFor, dropBeside, ItemCard, today, useItems, useRankItem, useUpdateItem, waitingSummary } from '@/entities/item'
 import { peopleOf, useNodes } from '@/entities/node'
 import { useSchema } from '@/entities/schema'
 import { QueryField, useFilteredItems, useItemFilters } from '@/features/filter-items'
@@ -8,7 +8,7 @@ import type { Item } from '@/shared/api'
 import { displayNode, neighbours, useSearchParam, useStoredSet } from '@/shared/lib'
 import { DragArea, toast, type DragEndEvent } from '@/shared/ui'
 import { ItemDetails } from '@/widgets/item-details'
-import { buildColumns, dropOf, targetStatus } from '../model/columns'
+import { buildColumns, targetStatus } from '../model/columns'
 import { KanbanColumn } from './kanban-column'
 
 const collapsedByDefault = new Set(['done', 'dropped'])
@@ -33,11 +33,11 @@ export function KanbanPage() {
   const isCollapsed = (id: string, category: string) => collapsedByDefault.has(category) !== toggled.has(id)
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     const item = scoped.find((entry) => entry.path === active.id)
-    const drop = item && over ? dropOf(item, String(over.id), columns) : null
+    const drop = item && over ? dropBeside(item, String(over.id), columns) : null
     if (!item || !drop) {
       return
     }
-    const target = targetStatus(item, drop.column, nodes)
+    const target = targetStatus(item, drop.lane, nodes)
     if (!target.ok) {
       toast.error(target.reason)
       return

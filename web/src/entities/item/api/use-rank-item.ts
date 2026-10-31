@@ -75,3 +75,14 @@ export function useRankItem() {
     },
   })
 }
+
+export function useMoveItem() {
+  const rank = useRankItem()
+  return (item: Item, over: Item, place: 'before' | 'after') => {
+    if (item.node !== over.node || item.kind !== over.kind) {
+      toast.info('The order is per node and kind: drop it next to an item of its own node and kind')
+      return
+    }
+    rank.mutate({ item, place, other: over })
+  }
+}

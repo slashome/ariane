@@ -137,12 +137,19 @@ export function DataTable<Row>({
 
 function SortableRow({ id, props, children }: { id: string; props: ComponentProps<'tr'>; children: ReactNode }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id })
+  const { ref: outer, style, className, ...rest } = props
+  const ref = (element: HTMLTableRowElement | null) => {
+    setNodeRef(element)
+    if (typeof outer === 'function') {
+      outer(element)
+    }
+  }
   return (
     <tr
-      ref={setNodeRef}
-      {...props}
-      style={{ transform: CSS.Translate.toString(transform), transition }}
-      className={cn('border-t border-border align-top', props.className, isDragging && 'relative z-10 bg-background opacity-80')}
+      ref={ref}
+      {...rest}
+      style={{ ...style, transform: CSS.Translate.toString(transform), transition }}
+      className={cn('border-t border-border align-top', className, isDragging && 'relative z-10 bg-background opacity-80')}
     >
       <td className="w-6 py-2 pl-2">
         <button

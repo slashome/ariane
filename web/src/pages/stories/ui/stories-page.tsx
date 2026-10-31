@@ -1,7 +1,7 @@
 import { BookOpen } from 'lucide-react'
 import { useMemo } from 'react'
 import { useSearchParams } from 'react-router'
-import { idColumn, isClosed, progressColumn, ProgressMeter, statusColumn, titleColumn, useItems } from '@/entities/item'
+import { idColumn, isClosed, progressColumn, ProgressMeter, statusColumn, titleColumn, useItems, useMoveItem } from '@/entities/item'
 import { statusLabel, useNodes } from '@/entities/node'
 import { useSchema } from '@/entities/schema'
 import { QueryField, scopeItems, useFilteredItems, useItemFilters } from '@/features/filter-items'
@@ -17,6 +17,7 @@ export function StoriesPage() {
   const { data: nodes = [] } = useNodes()
   const { data: schema } = useSchema()
   const { filters } = useItemFilters()
+  const move = useMoveItem()
   const [params, setParams] = useSearchParams()
   const grouping = (groupings.find((entry) => entry.value === params.get(groupParam))?.value ?? 'milestone') as StoryGrouping
   const labels = (category: Category) => schema?.categories.find((entry) => entry.id === category)?.label ?? category
@@ -114,6 +115,7 @@ export function StoriesPage() {
               rowKey={(row) => row.story.path}
               storageKey="stories"
               label={group.label}
+              reorder={{ column: 'order', onMove: (row, over, place) => move(row.story, over.story, place) }}
               rowProps={(row) => ({ className: cn('align-middle', isClosed(row.story.category) && 'opacity-70') })}
             />
           </section>

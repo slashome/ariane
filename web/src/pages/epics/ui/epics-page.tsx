@@ -1,6 +1,6 @@
 import { Layers } from 'lucide-react'
 import { useMemo } from 'react'
-import { idColumn, isClosed, progressColumn, statusColumn, titleColumn, useItems } from '@/entities/item'
+import { idColumn, isClosed, progressColumn, statusColumn, titleColumn, useItems, useMoveItem } from '@/entities/item'
 import { statusLabel, useNodes } from '@/entities/node'
 import { useSchema } from '@/entities/schema'
 import { QueryField, scopeItems, useFilteredItems, useItemFilters } from '@/features/filter-items'
@@ -14,6 +14,7 @@ export function EpicsPage() {
   const { data: nodes = [] } = useNodes()
   const { data: schema } = useSchema()
   const { filters } = useItemFilters()
+  const move = useMoveItem()
   const labels = (category: Category) => schema?.categories.find((entry) => entry.id === category)?.label ?? category
 
   const { items: epics, total } = useFilteredItems(items, { kinds: ['epic'] })
@@ -67,7 +68,7 @@ export function EpicsPage() {
           )}
         </EmptyState>
       ) : (
-        <DataTable rows={rows} columns={columns} rowKey={(row) => row.epic.path} storageKey="epics" label="Epics" rowProps={(row) => ({ className: cn('align-middle', isClosed(row.epic.category) && 'opacity-70') })} />
+        <DataTable rows={rows} columns={columns} rowKey={(row) => row.epic.path} storageKey="epics" label="Epics" reorder={{ column: 'order', onMove: (row, over, place) => move(row.epic, over.epic, place) }} rowProps={(row) => ({ className: cn('align-middle', isClosed(row.epic.category) && 'opacity-70') })} />
       )}
     </div>
   )

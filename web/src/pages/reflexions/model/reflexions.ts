@@ -1,14 +1,17 @@
-import { compareNatural, groupBy, type Group } from '@/entities/item'
+import { compareNatural, groupBy, sortByManualOrder, type Group } from '@/entities/item'
 import type { Item } from '@/shared/api'
 
+export type LaneOrder = 'manual' | 'recent'
+
 export interface Lane {
+  id: string
   status: string
   label: string
   hint: string
   items: Item[]
 }
 
-const lanes: Omit<Lane, 'items'>[] = [
+const lanes: Omit<Lane, 'id' | 'items'>[] = [
   { status: 'open', label: 'Open', hint: 'Still being thought through' },
   { status: 'trial', label: 'On trial', hint: 'Applied, not confirmed yet' },
   { status: 'settled', label: 'Settled', hint: 'Decided' },
@@ -19,10 +22,11 @@ const byRecency = (left: Item, right: Item) =>
   compareNatural(right.updated ?? right.created ?? '', left.updated ?? left.created ?? '') ||
   compareNatural(left.reference ?? left.path, right.reference ?? right.path)
 
-export function buildLanes(reflexions: Item[], statuses: string[]): Lane[] {
+export function buildLanes(reflexions: Item[], statuses: string[], order: LaneOrder = 'manual'): Lane[] {
+  const sorted = order === 'recent' ? [...reflexions].sort(byRecency) : sortByManualOrder(reflexions, (item) => item)
   return lanes
     .filter((lane) => statuses.length === 0 || statuses.includes(lane.status))
-    .map((lane) => ({ ...lane, items: reflexions.filter((item) => item.status === lane.status).sort(byRecency) }))
+    .map((lane) => ({ ...lane, id: `lane:${lane.status}`, items: sorted.filter((item) => item.status === lane.status) }))
 }
 
 const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
