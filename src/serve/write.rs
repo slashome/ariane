@@ -12,6 +12,11 @@
 //! rewritten through [`item::render`], the writer the CLI uses: unknown and
 //! custom keys keep their place, the body is kept byte for byte, a new core key
 //! lands at its canonical position (SPEC §1.3).
+//!
+//! `POST /api/items/rank` places an item in the manual order of its node and
+//! kind ([`rank`]), through the planner of `ariane rank` (ADR-0022), with the
+//! status change of the same gesture when it carries one. The ranks the
+//! browser saw are compared with the files, as `from` is for an edit.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -22,6 +27,7 @@ use yaml_serde::{Mapping, Value};
 
 use crate::item::{self, Document, Header, Kind};
 use crate::node::Category;
+use crate::rank;
 use crate::schema::{self, LEVELS, REFLEXION_STATUSES, SIZES, WAITING_REASONS};
 use crate::tree::{Item, Tree};
 
@@ -42,7 +48,7 @@ const WAITING_KEYS: [&str; 3] = ["waiting_for", "waiting_on", "waiting_since"];
 
 /// One requested change: the value the client saw and the value it wants.
 /// `null` on either side means "absent".
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Change {
     /// The value the client believes the file holds.
     pub from: Json,
@@ -127,6 +133,120 @@ pub fn apply(tree: &Tree, patch: &Patch) -> Result<std::path::PathBuf, Refusal> 
     std::fs::write(&item.file, rewritten)
         .map_err(|error| Refusal::Failed(format!("writing {}: {error}", patch.path)))?;
     Ok(item.file.clone())
+}
+
+/// Where `POST /api/items/rank` places an item.
+#[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Place {
+    /// Right before the item `other` names.
+    Before,
+    /// Right after the item `other` names.
+    After,
+    /// First of its node and kind.
+    Top,
+    /// After the last ranked item.
+    Bottom,
+    /// Back among the unranked items.
+    Clear,
+}
+
+/// The body of `POST /api/items/rank`.
+#[derive(Debug, Deserialize)]
+pub struct Move {
+    /// Repository-relative path of the item to place.
+    pub path: String,
+    /// Where to place it.
+    pub place: Place,
+    /// The item it is placed before or after, by path.
+    #[serde(default)]
+    pub other: Option<String>,
+    /// The ranks the client saw, by path, `null` for an unranked item: the
+    /// moved item and its new neighbours at least.
+    #[serde(default)]
+    pub seen: BTreeMap<String, Option<i64>>,
+    /// A status change made by the same gesture, such as a drop into another
+    /// kanban column.
+    #[serde(default)]
+    pub status: Option<Change>,
+}
+
+/// Places the item `request` names in the manual order of its node and kind,
+/// after applying its status change if it carries one, and returns the paths
+/// of the items rewritten.
+///
+/// The ranks are planned before anything is written, so a refused move writes
+/// nothing. The ranks in `seen` are compared with the files on disk: if one
+/// changed, the move is refused with the current ranks.
+///
+/// # Errors
+///
+/// Returns a [`Refusal`]: an unknown path or a missing `other` (`400`), a
+/// stale `seen` or `status.from` (`409`), a move across nodes or kinds, onto
+/// an archive or a ressource, or a status outside the workflow (`422`), a file
+/// that cannot be read or written (`500`).
+pub fn rank(tree: &Tree, request: &Move) -> Result<Vec<std::path::PathBuf>, Refusal> {
+    let moved = find(tree, &request.path)?;
+    let other = match (request.place, &request.other) {
+        (Place::Before | Place::After, Some(path)) => Some(find(tree, path)?),
+        (Place::Before | Place::After, None) => {
+            return Err(Refusal::BadRequest(
+                "`before` and `after` need `other`".to_owned(),
+            ));
+        }
+        _ => None,
+    };
+    let target = match (request.place, other) {
+        (Place::Before, Some(other)) => rank::Target::Before(other),
+        (Place::After, Some(other)) => rank::Target::After(other),
+        (Place::Top, _) => rank::Target::Top,
+        (Place::Bottom, _) => rank::Target::Bottom,
+        _ => rank::Target::Clear,
+    };
+    check_seen(tree, &request.seen)?;
+    let changes =
+        rank::plan(tree, moved, target).map_err(|error| Refusal::Invalid(format!("{error:#}")))?;
+    let mut written = Vec::new();
+    if let Some(status) = &request.status {
+        let patch = Patch {
+            path: request.path.clone(),
+            changes: BTreeMap::from([(
+                "status".to_owned(),
+                Change {
+                    from: status.from.clone(),
+                    to: status.to.clone(),
+                },
+            )]),
+        };
+        written.push(apply(tree, &patch)?);
+    }
+    rank::write(&changes).map_err(|error| Refusal::Failed(format!("{error:#}")))?;
+    written.extend(changes.iter().map(|change| change.item.file.clone()));
+    written.dedup();
+    Ok(written)
+}
+
+/// Refuses the move when a rank the client saw is no longer the one on disk.
+fn check_seen(tree: &Tree, seen: &BTreeMap<String, Option<i64>>) -> Result<(), Refusal> {
+    let mut current = BTreeMap::new();
+    for path in seen.keys() {
+        let item = find(tree, path)?;
+        let text = std::fs::read_to_string(&item.file)
+            .map_err(|error| Refusal::Failed(format!("reading {path}: {error}")))?;
+        current.insert(path.clone(), Document::parse(&text).integer("rank"));
+    }
+    if current
+        .iter()
+        .any(|(path, rank)| seen.get(path) != Some(rank))
+    {
+        return Err(Refusal::Conflict(
+            current
+                .into_iter()
+                .map(|(path, rank)| (path, rank.map_or(Json::Null, Json::from)))
+                .collect(),
+        ));
+    }
+    Ok(())
 }
 
 /// Finds the item whose repository-relative path is `path`.
@@ -592,5 +712,111 @@ mod tests {
         assert!(bad("/etc/passwd", "size"));
         assert!(bad("tree/p/README.md", "size"));
         assert!(bad("tree/p/tasks/T001-a.md", "title"));
+    }
+
+    fn ranked() -> Repo {
+        let repo = sample();
+        repo.write(
+            "p/tasks/T002-b.md",
+            "---\nariane: 1\nnode: p\nid: T002\ntitle: B\nstatus: a-faire\nrank: 1000\n---\n# B\n",
+        )
+        .write(
+            "p/tasks/T003-c.md",
+            "---\nariane: 1\nnode: p\nid: T003\ntitle: C\nstatus: a-faire\nrank: 2000\n---\n# C\n",
+        );
+        repo
+    }
+
+    fn request(
+        path: &str,
+        place: Place,
+        other: Option<&str>,
+        seen: &[(&str, Option<i64>)],
+    ) -> Move {
+        Move {
+            path: path.to_owned(),
+            place,
+            other: other.map(str::to_owned),
+            seen: seen
+                .iter()
+                .map(|(path, rank)| ((*path).to_owned(), *rank))
+                .collect(),
+            status: None,
+        }
+    }
+
+    fn rank_in(repo: &Repo, path: &str) -> Option<i64> {
+        let text = std::fs::read_to_string(repo.root().join(path)).unwrap();
+        Document::parse(&text).integer("rank")
+    }
+
+    const A: &str = "tree/p/tasks/T001-a.md";
+    const B: &str = "tree/p/tasks/T002-b.md";
+    const C: &str = "tree/p/tasks/T003-c.md";
+
+    #[test]
+    fn a_move_writes_the_rank_of_the_moved_item_only() {
+        let repo = ranked();
+        let tree = Tree::load(repo.root()).unwrap();
+        let moved = request(
+            C,
+            Place::Before,
+            Some(B),
+            &[(C, Some(2000)), (B, Some(1000))],
+        );
+        let written = rank(&tree, &moved).unwrap();
+        assert_eq!(written, [repo.root().join(C)]);
+        assert_eq!(rank_in(&repo, C), Some(0));
+    }
+
+    #[test]
+    fn a_rank_changed_since_it_was_seen_refuses_the_move() {
+        let repo = ranked();
+        let tree = Tree::load(repo.root()).unwrap();
+        let stale = request(C, Place::Top, None, &[(C, Some(1500))]);
+        let Err(Refusal::Conflict(current)) = rank(&tree, &stale) else {
+            panic!("a stale rank must conflict");
+        };
+        assert_eq!(current[C], json!(2000));
+        assert_eq!(rank_in(&repo, C), Some(2000));
+    }
+
+    #[test]
+    fn a_drop_into_another_column_changes_the_status_and_the_place() {
+        let repo = ranked();
+        let tree = Tree::load(repo.root()).unwrap();
+        let mut moved = request(
+            A,
+            Place::After,
+            Some(B),
+            &[(A, None), (B, Some(1000)), (C, Some(2000))],
+        );
+        moved.status = Some(Change {
+            from: json!("a-faire"),
+            to: json!("valide"),
+        });
+        rank(&tree, &moved).unwrap();
+        let text = std::fs::read_to_string(repo.root().join(A)).unwrap();
+        assert!(text.contains("status: valide"), "{text}");
+        assert_eq!(rank_in(&repo, A), Some(1500));
+    }
+
+    #[test]
+    fn a_refused_move_writes_nothing_not_even_its_status() {
+        let repo = ranked();
+        let tree = Tree::load(repo.root()).unwrap();
+        let mut across = request(A, Place::Before, Some("tree/p/reflexions/R001-r.md"), &[]);
+        across.status = Some(Change {
+            from: json!("a-faire"),
+            to: json!("valide"),
+        });
+        assert!(matches!(rank(&tree, &across), Err(Refusal::Invalid(_))));
+        let text = std::fs::read_to_string(repo.root().join(A)).unwrap();
+        assert!(text.contains("status: a-faire"), "{text}");
+        let without_other = request(A, Place::Before, None, &[]);
+        assert!(matches!(
+            rank(&tree, &without_other),
+            Err(Refusal::BadRequest(_))
+        ));
     }
 }

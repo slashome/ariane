@@ -33,7 +33,7 @@ use tokio_stream::{Stream, StreamExt};
 
 use super::State;
 use super::git;
-use super::write::{self, Patch, Refusal};
+use super::write::{self, Move, Patch, Refusal};
 use crate::item::Kind;
 use crate::tree::Tree;
 
@@ -324,25 +324,8 @@ pub async fn patch_item(Shared(state): Shared<Arc<State>>, Json(patch): Json<Pat
                 );
             }
         };
-        match applied {
-            Ok(_) => {}
-            Err(Refusal::BadRequest(message)) => return error(StatusCode::BAD_REQUEST, &message),
-            Err(Refusal::Invalid(message)) => {
-                return error(StatusCode::UNPROCESSABLE_ENTITY, &message);
-            }
-            Err(Refusal::Failed(message)) => {
-                return error(StatusCode::INTERNAL_SERVER_ERROR, &message);
-            }
-            Err(Refusal::Conflict(current)) => {
-                return (
-                    StatusCode::CONFLICT,
-                    Json(json!({
-                        "error": "the item changed since it was read",
-                        "current": current,
-                    })),
-                )
-                    .into_response();
-            }
+        if let Err(refusal) = applied {
+            return refused(refusal);
         }
         if let Err(failure) = state.reload() {
             return error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}"));
@@ -358,6 +341,60 @@ pub async fn patch_item(Shared(state): Shared<Arc<State>>, Json(patch): Json<Pat
         })
     })
     .await
+}
+
+/// `POST /api/items/rank`: places one item in the manual order of its node
+/// and kind, with an optional status change, refusing stale ranks with `409`.
+///
+/// Responds with the rows of the items rewritten, read from the reloaded tree.
+pub async fn rank_item(Shared(state): Shared<Arc<State>>, Json(request): Json<Move>) -> Response {
+    exclusive(state, move |state| {
+        let applied = match state.tree.read() {
+            Ok(tree) => write::rank(&tree, &request),
+            Err(_) => {
+                return error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "the tree lock is poisoned",
+                );
+            }
+        };
+        let written = match applied {
+            Ok(written) => written,
+            Err(refusal) => return refused(refusal),
+        };
+        if let Err(failure) = state.reload() {
+            return error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}"));
+        }
+        with_tree(state, |tree| {
+            let rows: Vec<Value> = tree
+                .items
+                .iter()
+                .filter(|item| written.contains(&item.file))
+                .map(|item| {
+                    serde_json::to_value(crate::tasks::row(tree, item)).unwrap_or(Value::Null)
+                })
+                .collect();
+            json!({ "items": rows })
+        })
+    })
+    .await
+}
+
+/// The response to a refused edit: its message, and for a conflict the current values.
+fn refused(refusal: Refusal) -> Response {
+    match refusal {
+        Refusal::BadRequest(message) => error(StatusCode::BAD_REQUEST, &message),
+        Refusal::Invalid(message) => error(StatusCode::UNPROCESSABLE_ENTITY, &message),
+        Refusal::Failed(message) => error(StatusCode::INTERNAL_SERVER_ERROR, &message),
+        Refusal::Conflict(current) => (
+            StatusCode::CONFLICT,
+            Json(json!({
+                "error": "the item changed since it was read",
+                "current": current,
+            })),
+        )
+            .into_response(),
+    }
 }
 
 /// The body of `GET` and `PUT /api/dashboard`.

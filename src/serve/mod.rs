@@ -149,6 +149,7 @@ fn last_changes(root: &Path, tree: &Tree) -> BTreeMap<NodePath, Option<String>> 
 pub fn router(state: Arc<State>) -> Router {
     Router::new()
         .route("/api/items", get(api::items).patch(api::patch_item))
+        .route("/api/items/rank", post(api::rank_item))
         .route("/api/search", get(api::search))
         .route("/api/show", get(api::show))
         .route("/api/dashboard", get(api::dashboard).put(api::pin))
