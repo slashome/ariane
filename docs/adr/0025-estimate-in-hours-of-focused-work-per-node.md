@@ -1,0 +1,68 @@
+# ADR-0025 — Estimate in hours of focused work, declared per node
+
+- **Status:** Proposed
+- **Date:** 2026-11-11
+- **Concerns:** SPEC §1.3, §1.5; reflexion `slashome/ariane#R010`; [ADR-0023](0023-plan-by-releases-declared-in-order-per-node.md), [ADR-0026](0026-keep-the-work-calendar-personal.md)
+
+## Context
+
+A forecast turns work into dates, so it needs a unit of work. The header has `size`, `XS` to `XL` (SPEC §1.3), with no quantity behind it. It is also rarely set: none of `pharmakon`'s 211 tasks carry one (`grep -rh '^size:' tree/slashome/pharmakon | wc -l` in `_ariane` prints `0`).
+
+Testing is real work that nobody estimates. In `pharmakon` the owner plays the build to validate a task (`a-tester`, an `in_progress` status). On `cmc` nodes a product manager validates while the task waits (`waiting_on: validation`, [ADR-0015](0015-name-whom-an-item-waits-for.md)): the owner's hours are free, but the release is not delivered.
+
+There is no measured velocity yet. Whatever unit is chosen will be recalibrated once one exists.
+
+## Decision
+
+> **A size stands for hours of focused work. Each node declares the hours of each size, a default size, and a test ratio.**
+
+1. **Declaration.** An `[estimates]` table in `node.toml`:
+
+   ```toml
+   [estimates]
+   XS = 2
+   S = 4
+   M = 12
+   L = 24
+   XL = 48
+   default = "M"
+   test_ratio = 0.25
+   tester = "owner"
+   ```
+
+   Hours are positive numbers. Keys accumulate through inheritance like `[fields]`; the nearest declaration of a key wins. A node with no table anywhere above it uses the values above.
+2. **Items keep `size`.** The header does not change: an item says `M`, the node says what `M` costs. Recalibrating a node rewrites one table, never its items.
+3. **A task without `size` counts as the default size.** The roadmap draws it hatched and counts it among its warnings ([ADR-0028](0028-compute-the-forecast-in-one-place.md)).
+4. **Testing is added, never estimated.** A task of `h` hours adds `h × test_ratio` of testing after it. With `tester = "owner"`, the testing consumes the owner's hours like the task. With `tester = "others"`, it is a delay: the task's release cannot be delivered before it elapses, but the owner's hours go to the next task. A ratio of `0` removes it.
+5. **The sizes stay the five of SPEC §1.3.** A table gives hours to those five; it cannot add a sixth.
+
+## Consequences
+
+- Every unsized task still weighs something, so a forecast exists from the first day, and the warnings say how much of it is a guess.
+- The hours shown are focused hours. Meetings, reviews and interruptions are taken out once, by the calendar's focus coefficient ([ADR-0026](0026-keep-the-work-calendar-personal.md)), not padded into each estimate.
+- One table per node means two nodes may price `M` differently, which is correct when their work differs and confusing when it does not. The interface shows the hours next to the size wherever a size is shown.
+- `tester` is a node-wide setting. A node where some tasks are validated by the owner and some by someone else gets one rule for all.
+- Velocity (later) will rewrite the table and the focus coefficient from measured durations, using `closed` dates ([ADR-0027](0027-record-when-an-item-closes.md)). Nothing in the items has to change for it.
+
+## Alternatives considered
+
+### Hours in each item (`estimate: 6h`)
+
+Precise, per task. Rejected: the precision is false before any measurement, and every recalibration would rewrite every item. A size is a judgment the owner can make in a second; an hour count is not.
+
+### Story points
+
+The usual agile unit. Rejected: points become dates only through a velocity, which does not exist yet. Until then a forecast in points is no forecast.
+
+### Ideal days
+
+Closer to how people talk. Rejected: a day means nine hours on `cmc` and three evening hours on `pharmakon`, so the same "two days" would be a different amount of work on each node. Hours mean the same everywhere; the calendar says when they happen.
+
+### Leave unsized tasks out of the forecast
+
+Only count what is estimated. Rejected: the forecast would be silently optimistic, and on `pharmakon` empty, since no task carries a size.
+
+## Revisit if
+
+- Measured durations show that sizes do not separate work at all (an `S` takes as long as an `L`). Then the unit, not the table, is wrong.
+- A node needs per-task testers, which would make `tester` a property of the task or of its workflow status rather than of the node.
