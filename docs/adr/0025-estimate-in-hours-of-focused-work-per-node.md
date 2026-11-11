@@ -33,12 +33,14 @@ There is no measured velocity yet. Whatever unit is chosen will be recalibrated 
    Hours are positive numbers. Keys accumulate through inheritance like `[fields]`; the nearest declaration of a key wins. A node with no table anywhere above it uses the values above.
 2. **Items keep `size`.** The header does not change: an item says `M`, the node says what `M` costs. Recalibrating a node rewrites one table, never its items.
 3. **A task without `size` counts as the default size.** The roadmap draws it hatched and counts it among its warnings ([ADR-0028](0028-compute-the-forecast-in-one-place.md)).
-4. **Testing is added, never estimated.** A task of `h` hours adds `h × test_ratio` of testing after it. With `tester = "owner"`, the testing consumes the owner's hours like the task. With `tester = "others"`, it is a delay: the task's release cannot be delivered before it elapses, but the owner's hours go to the next task. A ratio of `0` removes it.
-5. **The sizes stay the five of SPEC §1.3.** A table gives hours to those five; it cannot add a sixth.
+4. **An epic or a story without tasks MAY carry a provisional `size`**, priced by the same table. It stands for the whole of the work not yet split, and the roadmap draws it hatched, as a rough estimate. Once it has tasks, its size is the sum of its tasks' and its own `size` is ignored. Without a `size` and without tasks, it counts as the default size, like an unsized task.
+5. **Testing is added, never estimated.** A task of `h` hours adds `h × test_ratio` of testing after it. With `tester = "owner"`, the testing consumes the owner's hours like the task. With `tester = "others"`, it is a delay: the task's release cannot be delivered before it elapses, but the owner's hours go to the next task. A ratio of `0` removes it.
+6. **The sizes stay the five of SPEC §1.3.** A table gives hours to those five; it cannot add a sixth.
 
 ## Consequences
 
 - Every unsized task still weighs something, so a forecast exists from the first day, and the warnings say how much of it is a guess.
+- An epic planned in a release before it is split ([ADR-0023](0023-plan-by-releases-declared-in-order-per-node.md) §3) weighs its provisional size, so a far release has a date before its work is broken down. The size left on a split epic stays in its header, unread; the interface shows the sum of its tasks instead.
 - The hours shown are focused hours. Meetings, reviews and interruptions are taken out once, by the calendar's focus coefficient ([ADR-0026](0026-keep-the-work-calendar-personal.md)), not padded into each estimate.
 - One table per node means two nodes may price `M` differently, which is correct when their work differs and confusing when it does not. The interface shows the hours next to the size wherever a size is shown.
 - `tester` is a node-wide setting. A node where some tasks are validated by the owner and some by someone else gets one rule for all.
@@ -57,6 +59,10 @@ The usual agile unit. Rejected: points become dates only through a velocity, whi
 ### Ideal days
 
 Closer to how people talk. Rejected: a day means nine hours on `cmc` and three evening hours on `pharmakon`, so the same "two days" would be a different amount of work on each node. Hours mean the same everywhere; the calendar says when they happen.
+
+### Sizes on tasks only
+
+One estimate per piece of work, never two that overlap. Rejected: an epic not yet split would weigh only the default size of one task, so a release planned with whole epics would look far shorter than it is. A provisional size that yields to the tasks as soon as they exist keeps a single estimate at any time.
 
 ### Leave unsized tasks out of the forecast
 

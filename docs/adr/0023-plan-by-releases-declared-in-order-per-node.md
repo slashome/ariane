@@ -19,14 +19,14 @@ What the market calls these levels, checked before deciding:
 
 ## Decision
 
-> **A release is a delivered version of the product, even internal. A node declares its releases in order in `node.toml`; a task names one in `release`. There is no level between a release and an epic.**
+> **A release is a delivered version of the product, even internal. A node declares its releases in order in `node.toml`; a task names one in `release`, or inherits it from its story or epic. There is no level between a release and an epic.**
 
-1. **Declaration.** Each `[[release]]` entry of `node.toml` declares one release: `name` MUST be given, free (`1.8.0`, `0.3`, `mango`); `parking = true` MAY mark a release that is never scheduled and never closed, such as `plus-tard`; `desired` MAY give a date (ADR-0028). The order of entries is the delivery order.
+1. **Declaration.** Each `[[release]]` entry of `node.toml` declares one release: `name` MUST be given, free (`1.8.0`, `0.3`, `mango`); `parking = true` MAY mark a release that is never scheduled and never closed, such as `plus-tard`; `target` MAY give a desired date (ADR-0028). The order of entries is the delivery order.
 2. **Inheritance.** Like `[[workflow]]`, a `[[release]]` list declared in a node replaces the inherited list **as a whole**. A repository node under a project node plans against the project's releases unless it declares its own.
-3. **Carried by tasks.** `release` is a key of tasks. Stories and epics SHOULD NOT carry it: they appear in each release through their tasks, and an epic whose tasks span two releases is drawn as one fragment per release. `doctor` warns on `release` on any other kind, and errors on a value absent from the node's effective list when a list applies. A node with no list anywhere above it keeps free values, which the roadmap cannot order.
+3. **Decided on tasks, forecast on stories and epics.** `release` MAY on tasks, stories and epics. On a task it is the decision. On a story or an epic it is a **provisional forecast**: the default release of its tasks that declare none. The nearest declaration wins: task, then story, then epic. A task's effective release is what the roadmap schedules and what closing reads; an epic whose tasks end up in two releases is drawn as one fragment per release. An epic or story not yet split into tasks is scheduled as a whole in its release, at its provisional size ([ADR-0025](0025-estimate-in-hours-of-focused-work-per-node.md)). `doctor` errors on a value absent from the node's effective list when a list applies, on every kind. A node with no list anywhere above it keeps free values, which the roadmap cannot order.
 4. **The hierarchy is optional.** A task without a story and a story without an epic are legal, and neither `doctor` nor the roadmap treats them as an error. The roadmap gathers them in "(sans story)" and "(sans epic)" groups and folds an empty level. [ADR-0019](0019-group-stories-into-epics.md) still forbids a task under an epic.
-5. **Tasks without release** are "non planifié": shown, not scheduled, like a parking release.
-6. **Closing a release.** `ariane release close <name>` refuses while a task of the release is open, listing them; `--move-open-to <next>` rewrites their `release` instead, so the slip stays visible in git. Then it moves the release's `done` tasks into `archives/`. It writes the working tree and never commits ([ADR-0009](0009-migrate-content-with-versioned-migrations.md)). A parking release cannot be closed. Whether a release is closed is read from its tasks: none open, none left outside `archives/`.
+5. **Tasks without release**, on themselves, their story and their epic, are "non planifié": shown, not scheduled, like a parking release.
+6. **Closing a release.** `ariane release close <name>` refuses while a task of the release is open, listing them; `--move-open-to <next>` rewrites their `release` instead, so the slip stays visible in git. Then it moves the release's `done` tasks into `archives/`. It writes the working tree and never commits ([ADR-0009](0009-migrate-content-with-versioned-migrations.md)). A parking release cannot be closed. Whether a release is closed is read from the tasks whose effective release it is: none open, none left outside `archives/`. A story or epic forecast in a closing release that still has no tasks blocks the close like an open task.
 
 ## Consequences
 
@@ -35,6 +35,8 @@ What the market calls these levels, checked before deciding:
 - Archiving `done` work moves from "when its status changes" to "when its release closes": a validated task stays visible in its release until then, which is what `pharmakon`'s `build.py` already approximates with its milestones. `build.py` stops archiving and only writes the status.
 - Every node that wants a roadmap has to write its release list once. A node that never does gets no dates, only an unordered list.
 - Moving tasks to the next release is an explicit act with a diff, never a silent roll-over.
+- An epic can be placed in a release before it is split, and its tasks follow it until one of them says otherwise. Moving a whole epic is one edit; moving one of its tasks is another, and the task's own value wins.
+- A task's release is no longer always readable in its own header: the reader has to look up its story and epic. The interface and `ariane roadmap` show the effective value and where it comes from.
 - The milestone level disappears; [ADR-0024](0024-remove-milestone-from-the-header.md) removes the key and migrates `pharmakon`.
 
 ## Alternatives considered
@@ -47,9 +49,9 @@ What the market calls these levels, checked before deciding:
 
 A file per release could hold a description, a status and a date. Rejected: the prefix `R` is taken by reflexions, and a release item would need its own status, its own order through `rank`, and links from tasks that `doctor` reconciles with the files present — a second source of truth for a list the node already owns. A release has no body worth writing that is not the body of its epics.
 
-### `release` on stories and epics
+### `release` on tasks only
 
-Planning a whole story at once. Rejected for the reason [ADR-0019](0019-group-stories-into-epics.md) rejected an `epic` key on tasks: a task would have two targets that can disagree, and moving one task to the next release would have to update its story.
+One target per task, never two that can disagree, for the reason [ADR-0019](0019-group-stories-into-epics.md) rejected an `epic` key on tasks. Rejected: an epic or a story not yet split into tasks could not be planned at all, so the roadmap would show nothing beyond the work already broken down, which is exactly the part of the future the owner least needs to see. The disagreement is resolved by precedence instead: the story or epic gives a default, the task's own value wins, and only the task's value is a decision.
 
 ### Order releases by sorting their names
 

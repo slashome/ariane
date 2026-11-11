@@ -26,7 +26,7 @@ Two programs outside Ariane read the key: `pharmakon`'s `atelier/build.py` (as `
 
 - The first versioned migration after `0 → 1`. It tests what ADR-0009 promised: a mixed repository where `pharmakon` is at `1` while the rest is at `2`, read correctly by every tool until it is migrated.
 - Every reader of the header drops `milestone`: `src/tasks.rs`, `src/schema.rs`, `/api/items`, the interface's types and its filter. Readers keep accepting version `1` files, where `milestone` still appears.
-- 21 stories of `pharmakon` carry a `release` and a `milestone`: migrated like tasks, then warned by `doctor` under ADR-0023 §3, and cleaned by hand. The migration does not drop them, since it cannot know whether every task of the story carries the same value.
+- 21 stories of `pharmakon` carry a `release` and a `milestone`: migrated like tasks. Under ADR-0023 §3 their value becomes the provisional forecast of their tasks that declare none, which is legitimate; the owner may drop it where every task carries its own. The migration keeps them, since it cannot know whether every task of the story carries the same value.
 - A release list of thirteen entries for one node, of which nine are internal. Accepted: they are what the owner plays and judges.
 - `build.py`'s notion of a closed milestone becomes `ariane release close`; until both are shipped, the pending `pharmakon` change that archives on milestone close must not be merged against a node already at version `2`.
 
