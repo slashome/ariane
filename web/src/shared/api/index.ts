@@ -76,6 +76,7 @@ export type {
   ProxyReport,
   ProxyRoute,
   RouteChange,
+  RouteRemoval,
   RouteTable,
   SyncReport,
   SyncStep,

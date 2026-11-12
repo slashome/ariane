@@ -22,6 +22,7 @@ import type {
   PersonaDirectory,
   ProxyReport,
   RouteChange,
+  RouteRemoval,
   RouteTable,
   Settings,
   SyncReport,
@@ -111,4 +112,4 @@ export const discardChanges = (paths?: string[]) =>
   request<DiscardResult>('POST', '/api/discard', paths === undefined ? {} : { paths })
 export const fetchProxy = () => request<ProxyReport>('GET', '/api/proxy')
 export const setRoute = (route: RouteChange) => request<RouteTable>('PUT', '/api/proxy/routes', route)
-export const removeRoute = (node: string) => request<RouteTable>('DELETE', '/api/proxy/routes', { node })
+export const removeRoute = (route: RouteRemoval) => request<RouteTable>('DELETE', '/api/proxy/routes', route)

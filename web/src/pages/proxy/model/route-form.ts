@@ -7,19 +7,25 @@ export function isHost(name: string): boolean {
   return name.length > 0 && name.length <= 253 && name.split('.').every((part) => label.test(part))
 }
 
-export function suggestHost(node: string): string {
+export function suggestHost(node: string, taken: string[] = []): string {
   const last = node.split('/').pop() ?? ''
-  const name = last
+  const cleaned = last
     .toLowerCase()
     .replace(/[^a-z0-9-]+/g, '-')
     .replace(/^-+|-+$/g, '')
-  return `${name === '' ? 'project' : name}.local`
+  const name = cleaned === '' ? 'project' : cleaned
+  let host = `${name}.local`
+  for (let rank = 2; taken.includes(host); rank += 1) {
+    host = `${name}-${rank}.local`
+  }
+  return host
 }
 
 export interface RouteDraft {
   node: string | null
   host: string
   port: string
+  replaces?: string
 }
 
 export function parsePort(port: string): number | null {
@@ -38,7 +44,9 @@ export function routeProblem(draft: RouteDraft, report: Pick<ProxyReport, 'route
   if (!isHost(host)) {
     return 'A host name: lowercase letters, digits and inner hyphens, separated by dots, such as app.local.'
   }
-  const taken = report.routes.find((route) => route.host === host && route.node !== draft.node)
+  const taken = report.routes.find(
+    (route) => route.host === host && !(route.node === draft.node && (draft.replaces === undefined || route.host === draft.replaces)),
+  )
   if (taken !== undefined) {
     return `${host} is already the name of ${taken.node === null ? 'the interface' : `node ${routeOwner(taken)}`}.`
   }

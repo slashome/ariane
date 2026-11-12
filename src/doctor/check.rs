@@ -823,16 +823,18 @@ impl Reporter<'_> {
     }
 }
 
-/// Reports the `[proxy]` tables of `scope` that `ariane proxy` leaves out: a
-/// host that is not a host name, port 0, or a host another node declares
-/// first (ADR-0016). The interface's own name lives in the machine's
+/// Reports the `[proxy]` tables and `[[proxy]]` entries of `scope` that
+/// `ariane proxy` leaves out: a host that is not a host name, port 0, or a
+/// host another entry declares first (ADR-0016). The interface's own name lives in the machine's
 /// configuration, which doctor does not read.
 fn proxies(tree: &Tree, scope: Option<&NodePath>, found: &mut Vec<Finding>) {
     let mut first: BTreeMap<&str, &NodePath> = BTreeMap::new();
-    for (node, file) in &tree.configs.files {
-        let Some(proxy) = &file.proxy else {
-            continue;
-        };
+    let declared = tree
+        .configs
+        .files
+        .iter()
+        .flat_map(|(node, file)| file.proxy.iter().map(move |proxy| (node, proxy)));
+    for (node, proxy) in declared {
         let problem = if !crate::config::is_host(&proxy.host) {
             Some(format!(
                 "`[proxy] host = \"{}\"` is not a host name: lowercase letters, digits, hyphens and dots",

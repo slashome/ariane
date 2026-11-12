@@ -977,20 +977,27 @@ pub async fn proxy(Shared(state): Shared<Arc<State>>) -> Response {
 /// The body of `PUT /api/proxy/routes`.
 #[derive(Debug, Deserialize)]
 pub struct RouteRequest {
-    /// The node whose `[proxy]` table is written.
+    /// The node whose `[proxy]` table or `[[proxy]]` entry is written.
     pub node: String,
     pub host: String,
     /// Read wide, so that a port out of range is refused with a reason.
     pub port: i64,
+    /// The host of the node's route being edited; absent to add a route.
+    #[serde(default)]
+    pub replaces: Option<String>,
 }
 
 /// The body of `DELETE /api/proxy/routes`.
 #[derive(Debug, Deserialize)]
 pub struct RouteRemoval {
     pub node: String,
+    /// The host of the route to remove; absent to remove every route of the
+    /// node.
+    #[serde(default)]
+    pub host: Option<String>,
 }
 
-/// Runs one write of a `[proxy]` table, reloads the tree and answers the new
+/// Runs one write of a node's routes, reloads the tree and answers the new
 /// route table; `422` with the reason for a refused write.
 async fn change_route(
     state: Arc<State>,
@@ -1026,8 +1033,9 @@ async fn change_route(
     .await
 }
 
-/// `PUT /api/proxy/routes`: gives a node the route `host` → `port`, in the
-/// `[proxy]` table of its `node.toml`, and answers the route table.
+/// `PUT /api/proxy/routes`: gives a node the route `host` → `port` in its
+/// `node.toml`, rewriting the route `replaces` when given, and answers the
+/// route table.
 pub async fn set_route(
     Shared(state): Shared<Arc<State>>,
     Json(request): Json<RouteRequest>,
@@ -1039,19 +1047,24 @@ pub async fn set_route(
             &crate::tree::NodePath::new(&request.node),
             &request.host,
             request.port,
+            request.replaces.as_deref(),
         )
     })
     .await
 }
 
-/// `DELETE /api/proxy/routes`: takes a node's route away, and answers the
-/// route table.
+/// `DELETE /api/proxy/routes`: takes a node's route `host` away, or all of
+/// them without `host`, and answers the route table.
 pub async fn remove_route(
     Shared(state): Shared<Arc<State>>,
     Json(request): Json<RouteRemoval>,
 ) -> Response {
     change_route(state, move |tree, _| {
-        crate::proxy::declare::remove(tree, &crate::tree::NodePath::new(&request.node))
+        crate::proxy::declare::remove(
+            tree,
+            &crate::tree::NodePath::new(&request.node),
+            request.host.as_deref(),
+        )
     })
     .await
 }

@@ -309,4 +309,10 @@ export interface RouteChange {
   node: string
   host: string
   port: number
+  replaces?: string
+}
+
+export interface RouteRemoval {
+  node: string
+  host: string
 }

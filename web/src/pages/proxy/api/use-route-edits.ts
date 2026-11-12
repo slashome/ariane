@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { queryKeys, removeRoute, setRoute, type RouteChange, type RouteTable } from '@/shared/api'
+import { queryKeys, removeRoute, setRoute, type RouteChange, type RouteRemoval, type RouteTable } from '@/shared/api'
 import { toast } from '@/shared/ui'
 
 function useRouteEdit<T>(send: (input: T) => Promise<RouteTable>, done: string) {
@@ -17,4 +17,4 @@ function useRouteEdit<T>(send: (input: T) => Promise<RouteTable>, done: string) 
 }
 
 export const useSetRoute = () => useRouteEdit((route: RouteChange) => setRoute(route), 'Route saved in node.toml')
-export const useRemoveRoute = () => useRouteEdit((node: string) => removeRoute(node), 'Route removed from node.toml')
+export const useRemoveRoute = () => useRouteEdit((route: RouteRemoval) => removeRoute(route), 'Route removed from node.toml')

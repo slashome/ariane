@@ -159,7 +159,7 @@ export function ProxyPage() {
             <DataTable rows={report.routes} columns={routeColumns} rowKey={(route) => route.host} storageKey="proxy-routes" label="Routes" />
             <p className="text-xs text-muted-foreground">
               The interface's own route comes from <code>server.host</code> in config.toml and is changed with <code>ariane config set server.host &lt;name&gt;</code>.
-              The others are the <code>[proxy]</code> table of each node's node.toml.
+              The others are the <code>[proxy]</code> table, or the <code>[[proxy]]</code> entries, of each node's node.toml.
             </p>
             {report.problems.length > 0 && (
               <div className="space-y-1 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
@@ -230,14 +230,14 @@ export function ProxyPage() {
         open={removing !== null}
         onOpenChange={(open) => !open && setRemoving(null)}
         title={`Remove ${removing?.host ?? ''}?`}
-        description="Its [proxy] table leaves the node's node.toml. The name stays in /etc/hosts until the next ariane proxy setup."
+        description="It leaves the node's node.toml. The name stays in /etc/hosts until the next ariane proxy setup."
         confirmLabel={remove.isPending ? 'Removing…' : 'Remove'}
         pending={remove.isPending}
         onConfirm={() => {
           if (removing?.node == null) {
             return
           }
-          remove.mutate(removing.node, { onSettled: () => setRemoving(null) })
+          remove.mutate({ node: removing.node, host: removing.host }, { onSettled: () => setRemoving(null) })
         }}
       />
     </div>

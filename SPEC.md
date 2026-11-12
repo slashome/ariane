@@ -141,12 +141,12 @@ name = "Responsable RH"
 - `[fields]`, `[people]` and `[personas]` accumulate. A descendant MAY redeclare a key, a person or a persona inherited from an ancestor, and the descendant's declaration wins.
 - A `[[workflow]]` declared in a node replaces the inherited workflow **as a whole**; entries are never merged.
 - A `[[release]]` list declared in a node replaces the inherited list **as a whole**, the same way. A node with no list anywhere above it has none, and its items keep free `release` values.
-- `description` and `[proxy]` are never inherited.
+- `description` and `[proxy]` (or `[[proxy]]`) are never inherited.
 - A node with no workflow anywhere above it uses the **default workflow**: one status per category, whose `id` equals the category.
 
 **Tracker.** A `[tracker]` table binds the node to an external tracker. Its content is specified with the connectors (ADR-0011) and is out of scope of this section.
 
-**Proxy.** A `[proxy]` table gives the node's development server a local name (ADR-0016): `host` MUST be a host name — labels of lowercase letters, digits and inner hyphens, separated by dots, such as `dreamcatchr.local` — and `port` MUST be the port it listens on, on `127.0.0.1`, from 1 to 65535. Two nodes MUST NOT declare the same `host`. A `[proxy]` table is not inherited.
+**Proxy.** A `[proxy]` table gives the node's development server a local name (ADR-0016): `host` MUST be a host name — labels of lowercase letters, digits and inner hyphens, separated by dots, such as `dreamcatchr.local` — and `port` MUST be the port it listens on, on `127.0.0.1`, from 1 to 65535. A node that runs several servers declares one `[[proxy]]` entry per server instead, each with its own `host` and `port`. No two entries of the tree MAY declare the same `host`. Routes are not inherited.
 
 **Changing a workflow.** Renaming a status id MUST go through `ariane status rename <node> <old> <new>`; removing a status still in use MUST go through `ariane status remove <node> <id> --into <other>`. Both commands rewrite `node.toml` and every affected item in one operation.
 
@@ -182,7 +182,7 @@ name = "Responsable RH"
 | A file name that does not begin with the item's `id`, `-` and a slug | error — remedy: `ariane fix` (renames to `<id>-<current name>` and rewrites the links); a human when the name is the bare id |
 | An item in `backlog/` or `archives/backlog/` | error — remedy: `ariane fix` (moves it into `tasks/` or `archives/tasks/` and rewrites the links) |
 | A custom key not declared in any applicable `node.toml` | warning — `milestone` on a version `2` file is one ([ADR-0024](docs/adr/0024-remove-milestone-from-the-header.md)) |
-| A `[proxy]` table whose `host` is not a host name, whose `port` is 0, or whose `host` another node declares | error |
+| A `[proxy]` table or `[[proxy]]` entry whose `host` is not a host name, whose `port` is 0, or whose `host` another entry declares | error |
 | An `INDEX.md` anywhere in the tree | warning — remedy: move the node's description into the `description` of its `node.toml`, its judgment into the item it concerns, its rules into a ressource of the node, then delete the file |
 
 ### 1.7 Examples

@@ -18,8 +18,8 @@
 //!    proxy` opens it alone when the server does not run.
 //!
 //! The routes ([`Table`]) are the interface's own, `server.host` of the
-//! configuration, and one per node whose `node.toml` has a `[proxy]` table,
-//! which the interface can also write ([`declare`]).
+//! configuration, and one per `[proxy]` table or `[[proxy]]` entry of a node's
+//! `node.toml`, which the interface can also write ([`declare`]).
 
 pub mod declare;
 pub mod door;
@@ -76,7 +76,8 @@ pub struct Table {
 
 impl Table {
     /// The routes of the tree: the interface's on `server`, then one per
-    /// `[proxy]` table. A name already taken keeps its first owner.
+    /// `[proxy]` table or `[[proxy]]` entry. A name already taken keeps its
+    /// first owner.
     pub fn of(tree: &Tree, server: &config::Server) -> Table {
         let mut table = Table {
             routes: vec![Route {
@@ -87,38 +88,37 @@ impl Table {
             problems: Vec::new(),
         };
         for (node, file) in &tree.configs.files {
-            let Some(proxy) = &file.proxy else {
-                continue;
-            };
-            if !config::is_host(&proxy.host) {
-                table.problems.push(format!(
-                    "node {node}: `{}` is not a host name such as `{}.local`",
-                    proxy.host,
-                    node.as_str().rsplit('/').next().unwrap_or("project")
-                ));
-                continue;
+            for proxy in &file.proxy {
+                table.declare(node, proxy);
             }
-            if proxy.port == 0 {
-                table
-                    .problems
-                    .push(format!("node {node}: port 0 cannot be forwarded to"));
-                continue;
-            }
-            if let Some(taken) = table.find(&proxy.host) {
-                table.problems.push(format!(
-                    "node {node}: `{}` is already the name of {}",
-                    proxy.host,
-                    taken.owner()
-                ));
-                continue;
-            }
-            table.routes.push(Route {
+        }
+        table
+    }
+
+    /// Adds the route `proxy` of `node`, or the reason it is left out.
+    fn declare(&mut self, node: &NodePath, proxy: &crate::node::Proxy) {
+        if !config::is_host(&proxy.host) {
+            self.problems.push(format!(
+                "node {node}: `{}` is not a host name such as `{}.local`",
+                proxy.host,
+                node.as_str().rsplit('/').next().unwrap_or("project")
+            ));
+        } else if proxy.port == 0 {
+            self.problems
+                .push(format!("node {node}: port 0 cannot be forwarded to"));
+        } else if let Some(taken) = self.find(&proxy.host) {
+            self.problems.push(format!(
+                "node {node}: `{}` is already the name of {}",
+                proxy.host,
+                taken.owner()
+            ));
+        } else {
+            self.routes.push(Route {
                 host: proxy.host.clone(),
                 port: proxy.port,
                 node: Some(node.clone()),
             });
         }
-        table
     }
 
     /// The route named `host`, compared without case, port or final dot.
@@ -127,35 +127,23 @@ impl Table {
         self.routes.iter().find(|route| route.host == host)
     }
 
-    /// Only the routes of the nodes `names`, each a node path or its last
-    /// segment. With no name, the whole table.
+    /// Only the routes named by `names`: each a route's host, which selects
+    /// that route, or a node path or its last segment, which selects every
+    /// route of that node. With no name, the whole table.
     ///
     /// # Errors
     ///
-    /// Fails when a name matches no route, or the last segments of several.
+    /// Fails when a name matches no route, or the last segments of several
+    /// nodes.
     pub fn select(self, names: &[String]) -> Result<Table> {
         if names.is_empty() {
             return Ok(self);
         }
-        let mut routes = Vec::new();
+        let mut routes: Vec<Route> = Vec::new();
         for name in names {
-            let matching: Vec<&Route> = self
-                .routes
-                .iter()
-                .filter(|route| {
-                    route.node.as_ref().is_some_and(|node| {
-                        node.as_str() == name || node.as_str().rsplit('/').next() == Some(name)
-                    })
-                })
-                .collect();
-            match matching.as_slice() {
-                [route] => routes.push((*route).clone()),
-                [] => bail!(
-                    "no node `{name}` declares a route; add `[proxy]` with `host` and `port` to its node.toml"
-                ),
-                several => {
-                    let nodes: Vec<String> = several.iter().map(|route| route.owner()).collect();
-                    bail!("`{name}` names several nodes: {}", nodes.join(", "));
+            for route in self.named(name)? {
+                if !routes.contains(route) {
+                    routes.push(route.clone());
                 }
             }
         }
@@ -163,6 +151,32 @@ impl Table {
             routes,
             problems: self.problems,
         })
+    }
+
+    /// The routes `name` selects: the route of that host, else the routes of
+    /// the one node whose path or last segment it is.
+    fn named(&self, name: &str) -> Result<Vec<&Route>> {
+        if let Some(route) = self.find(name).filter(|route| route.node.is_some()) {
+            return Ok(vec![route]);
+        }
+        let matching: Vec<&Route> = self
+            .routes
+            .iter()
+            .filter(|route| {
+                route.node.as_ref().is_some_and(|node| {
+                    node.as_str() == name || node.as_str().rsplit('/').next() == Some(name)
+                })
+            })
+            .collect();
+        let mut nodes: Vec<String> = matching.iter().map(|route| route.owner()).collect();
+        nodes.dedup();
+        match nodes.len() {
+            0 => bail!(
+                "no route is named `{name}` and no node `{name}` declares one; add `[proxy]` with `host` and `port` to its node.toml"
+            ),
+            1 => Ok(matching),
+            _ => bail!("`{name}` names several nodes: {}", nodes.join(", ")),
+        }
     }
 }
 
@@ -312,6 +326,32 @@ mod tests {
         assert_eq!(selected.routes[0].host, "lib.local");
         assert_eq!(table.clone().select(&[]).unwrap(), table);
         assert!(table.select(&["nowhere".to_owned()]).is_err());
+    }
+
+    #[test]
+    fn a_node_declares_several_routes_and_is_selected_by_any_of_them() {
+        let (repo, server) = sample();
+        repo.write(
+            "slashome/ishtar/node.toml",
+            "[[proxy]]\nhost = \"ishtar.local\"\nport = 3117\n\n[[proxy]]\nhost = \"ishtar-b.local\"\nport = 3118\n",
+        );
+        let table = Table::of(&Tree::load(repo.root()).unwrap(), &server);
+        assert!(table.problems.is_empty(), "{:?}", table.problems);
+        assert_eq!(table.find("ishtar-b.local").unwrap().port, 3118);
+        let by_node = table.clone().select(&["ishtar".to_owned()]).unwrap();
+        let hosts: Vec<_> = by_node
+            .routes
+            .iter()
+            .map(|route| route.host.as_str())
+            .collect();
+        assert_eq!(hosts, ["ishtar.local", "ishtar-b.local"]);
+        let by_host = table
+            .clone()
+            .select(&["ishtar-b.local".to_owned(), "ishtar".to_owned()])
+            .unwrap();
+        assert_eq!(by_host.routes.len(), 2);
+        assert_eq!(by_host.routes[0].host, "ishtar-b.local");
+        assert!(table.select(&["ariane.local".to_owned()]).is_err());
     }
 
     #[test]

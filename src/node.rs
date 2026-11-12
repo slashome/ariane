@@ -14,7 +14,8 @@
 //! - `[personas."<id>"]` names the personas a user story is written for
 //!   (ADR-0018);
 //! - `[tracker]` binds the node to an external tracker (ADR-0011, not used yet);
-//! - `[proxy]` gives the node's development server a local name (ADR-0016).
+//! - `[proxy]`, or several `[[proxy]]`, give the node's development servers
+//!   local names (ADR-0016).
 //!
 //! A node inherits from its ancestors: fields, people and personas accumulate (the nearest
 //! declaration wins), a workflow or a release list replaces the inherited one as a whole, and
@@ -262,11 +263,22 @@ pub struct NodeFile {
     pub personas: BTreeMap<String, Persona>,
     /// The tracker binding, kept as raw TOML until connectors exist (ADR-0011).
     pub tracker: Option<toml::Table>,
-    /// The local name of the node's development server; never inherited.
-    pub proxy: Option<Proxy>,
+    /// The local names of the node's development servers, one per `[proxy]`
+    /// table or `[[proxy]]` entry; never inherited.
+    #[serde(default, deserialize_with = "proxies")]
+    pub proxy: Vec<Proxy>,
 }
 
-/// A `[proxy]` table: the name under which `ariane serve` and `ariane proxy`
+/// Reads `proxy` as one `[proxy]` table or as a `[[proxy]]` array of them.
+fn proxies<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<Proxy>, D::Error> {
+    match toml::Value::deserialize(deserializer)? {
+        toml::Value::Array(entries) => toml::Value::Array(entries).try_into(),
+        table => table.try_into().map(|proxy| vec![proxy]),
+    }
+    .map_err(D::Error::custom)
+}
+
+/// A `[proxy]` table or `[[proxy]]` entry: the name under which `ariane serve` and `ariane proxy`
 /// forward requests to a port of the loopback interface (ADR-0016).
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]

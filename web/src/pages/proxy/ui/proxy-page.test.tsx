@@ -120,7 +120,7 @@ describe('ProxyPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Remove dreamcatchr.local' }))
     await userEvent.click(screen.getByRole('button', { name: 'Remove' }))
     await waitFor(() => expect(sent(fetch, 'DELETE')).toHaveLength(1))
-    expect(bodyOf(sent(fetch, 'DELETE'))).toEqual({ node: 'slashome/dreamcatchr' })
+    expect(bodyOf(sent(fetch, 'DELETE'))).toEqual({ node: 'slashome/dreamcatchr', host: 'dreamcatchr.local' })
   })
   it('folds the chain and the root step once every link holds, and unfolds them on demand', async () => {
     renderPage(healthy)

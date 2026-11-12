@@ -26,6 +26,15 @@ describe('a route draft', () => {
     expect(routeProblem({ node: 'p', host: 'p.local', port: '27317' }, report)).toMatch(/interface's port/)
   })
 
+  it('lets a node hold several routes, a renamed one not taking another of its names', () => {
+    const draft = { node: 'slashome/dreamcatchr', port: '3001' }
+    expect(routeProblem({ ...draft, host: 'dreamcatchr-b.local' }, report)).toBeNull()
+    expect(routeProblem({ ...draft, host: 'dreamcatchr.local', replaces: 'dreamcatchr.local' }, report)).toBeNull()
+    expect(routeProblem({ ...draft, host: 'dreamcatchr.local', replaces: 'dreamcatchr-b.local' }, report)).toBe(
+      'dreamcatchr.local is already the name of node slashome/dreamcatchr.',
+    )
+  })
+
   it('reads hosts and ports as the server does', () => {
     expect(isHost('dream-catchr.local')).toBe(true)
     expect(isHost('localhost')).toBe(true)
@@ -40,6 +49,7 @@ describe('a route draft', () => {
   it('suggests a host from the node and tells when /etc/hosts must be rewritten', () => {
     expect(suggestHost('slashome/Dream Catchr')).toBe('dream-catchr.local')
     expect(suggestHost('')).toBe('project.local')
+    expect(suggestHost('slashome/ishtar', ['ishtar.local', 'ishtar-2.local'])).toBe('ishtar-3.local')
     expect(needsSetup('ariane.local', report)).toBe(false)
     expect(needsSetup('dreamcatchr.local', report)).toBe(true)
     expect(needsSetup('new.local', report)).toBe(true)

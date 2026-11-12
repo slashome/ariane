@@ -19,14 +19,18 @@ export function RouteDialog({
 }) {
   const save = useSetRoute()
   const { data: nodes = [] } = useNodes()
-  const routed = new Set(report.routes.map((entry) => entry.node))
-  const free = nodes.filter((node) => !routed.has(node.path))
   const [node, setNode] = useState<string | null>(route?.node ?? null)
   const [host, setHost] = useState(route?.host ?? '')
   const [hostTouched, setHostTouched] = useState(route !== null)
   const [port, setPort] = useState(route?.port.toString() ?? '')
-  const shownHost = hostTouched || node === null ? host : suggestHost(node)
-  const draft = { node, host: shownHost, port }
+  const shownHost =
+    hostTouched || node === null
+      ? host
+      : suggestHost(
+          node,
+          report.routes.map((entry) => entry.host),
+        )
+  const draft = { node, host: shownHost, port, replaces: route?.host }
   const problem = routeProblem(draft, report)
   const touched = node !== null && (shownHost !== '' || port !== '')
 
@@ -38,7 +42,7 @@ export function RouteDialog({
     const name = shownHost.trim()
     const setup = needsSetup(name, report)
     save.mutate(
-      { node, host: name, port: parsed },
+      route === null ? { node, host: name, port: parsed } : { node, host: name, port: parsed, replaces: route.host },
       {
         onSuccess: () => {
           onSaved(name, setup)
@@ -55,8 +59,8 @@ export function RouteDialog({
       title={route === null ? 'Add a route' : `Edit ${route.host}`}
       description={
         <>
-          Written to the <code>[proxy]</code> table of the node's <code>node.toml</code>, comments and other tables kept. The content repository
-          then has a change to commit.
+          Written to the node's <code>node.toml</code>: a <code>[proxy]</code> table for its first route, <code>[[proxy]]</code> entries from the
+          second, comments and other tables kept. The content repository then has a change to commit.
         </>
       }
       className="w-[32rem]"
@@ -75,7 +79,7 @@ export function RouteDialog({
               <option value="" disabled>
                 Choose a node…
               </option>
-              {free.map((entry) => (
+              {nodes.map((entry) => (
                 <option key={entry.path} value={entry.path}>
                   {displayNode(entry.path)}
                 </option>

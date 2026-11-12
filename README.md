@@ -101,7 +101,7 @@ From `~/code/my-app`, every command is then scoped to that node.
 - **A health check.** `ariane doctor` reports what breaks the specification, and `ariane migrate` and `ariane fix` repair it — dry runs unless `--apply`.
 - **Sync with monday.** A node bound to a monday board sends its items' statuses there, and refuses to guess when both sides changed.
 - **Branches and pull requests on their item.** With the Claude Code hook, the branches and pull requests created while working on an item are recorded in it.
-- **Local names for your dev servers.** `ariane proxy` serves the interface at `http://ariane.local`, and each node's dev server at its own name.
+- **Local names for your dev servers.** `ariane proxy` serves the interface at `http://ariane.local`, and each node's dev server at its own name — several names when a node runs several servers (`[[proxy]]`).
 - **An agent.** [Ariane](agents/ariane/AGENT.md), the guide, answers "where are we, what's next" from the tree and operates the lifecycle. Its Claude Code adapter is in [`adapters/claude/`](adapters/claude/).
 
 ## Commands
