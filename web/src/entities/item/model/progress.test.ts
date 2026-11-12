@@ -20,7 +20,6 @@ const item = (id: string, extra: Partial<Item> = {}): Item => ({
   personas: [],
   release: null,
   effective_release: null,
-  milestone: null,
   parent: null,
   epic: null,
   depends_on: [],
@@ -82,14 +81,14 @@ describe('relations between items', () => {
 describe('groupBy', () => {
   it('sorts groups naturally and puts the items without a key last', () => {
     const groups = groupBy(
-      [item('A', { milestone: '0.10' }), item('B', { milestone: '0.9' }), item('C'), item('D', { milestone: '0.9' })],
-      (entry) => entry.milestone,
-      'No milestone',
+      [item('A', { release: '0.10' }), item('B', { release: '0.9' }), item('C'), item('D', { release: '0.9' })],
+      (entry) => entry.release,
+      'No release',
     )
     expect(groups.map((group) => [group.label, group.items.map((entry) => entry.id)])).toEqual([
       ['0.9', ['B', 'D']],
       ['0.10', ['A']],
-      ['No milestone', ['C']],
+      ['No release', ['C']],
     ])
   })
 })

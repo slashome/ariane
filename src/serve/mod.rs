@@ -372,7 +372,7 @@ mod tests {
             )
             .write(
                 "p/tasks/T001-a.md",
-                "---\nariane: 1\nnode: p\nid: T001\ntitle: A\nstatus: a-faire\nexternal: [monday:42]\n---\n# A\n",
+                "---\nariane: 2\nnode: p\nid: T001\ntitle: A\nstatus: a-faire\nexternal: [monday:42]\n---\n# A\n",
             )
             .write("p/tasks/legacy.md", "# Legacy\n");
         repo
@@ -458,7 +458,7 @@ mod tests {
         let repo = sample();
         repo.write(
             "p/stories/S001-s.md",
-            "---\nariane: 1\nnode: p\nid: S001\ntitle: S\nstatus: a-faire\n---\n# S\n",
+            "---\nariane: 2\nnode: p\nid: S001\ntitle: S\nstatus: a-faire\n---\n# S\n",
         );
         let (status, body, _) = get(&repo, "/api/items?kind=story&body=1").await;
         assert_eq!(status, StatusCode::OK);
@@ -479,7 +479,7 @@ mod tests {
         let repo = sample();
         repo.write(
             "p/tasks/T002-b.md",
-            "---\nariane: 1\nnode: p\nid: T002\ntitle: B\nstatus: a-faire\ndepends_on: [T001]\n---\n# B\n",
+            "---\nariane: 2\nnode: p\nid: T002\ntitle: B\nstatus: a-faire\ndepends_on: [T001]\n---\n# B\n",
         );
         let (status, body, _) = get(&repo, "/api/show?ref=p%23T001").await;
         assert_eq!(status, StatusCode::OK);
@@ -505,7 +505,7 @@ mod tests {
         let repo = sample();
         repo.write(
             "p/archives/tasks/T009-z.md",
-            "---\nariane: 1\nnode: p\nid: T009\ntitle: Été\nstatus: a-faire\n---\nT001 again\n",
+            "---\nariane: 2\nnode: p\nid: T009\ntitle: Été\nstatus: a-faire\n---\nT001 again\n",
         );
         let (status, body, _) = get(&repo, "/api/search?q=t001").await;
         assert_eq!(status, StatusCode::OK);
@@ -714,7 +714,7 @@ mod tests {
         let repo = sample();
         repo.write(
             "q/tasks/T1-a.md",
-            "---\nariane: 1\nnode: q\nid: T1\ntitle: A\nstatus: todo\n---\n",
+            "---\nariane: 2\nnode: q\nid: T1\ntitle: A\nstatus: todo\n---\n",
         );
         let body = serde_json::json!({ "path": "tree/q/tasks/T1-a.md" });
         let (status, answer) = send(&repo, "POST", "/api/sync/monday", body).await;
@@ -735,7 +735,7 @@ mod tests {
         let repo = sample();
         repo.write(
             "p/stories/S001-a.md",
-            "---\nariane: 1\nnode: p\nid: S001\ntitle: A\nstatus: a-faire\npersonas: [\"user:rh\"]\n---\n",
+            "---\nariane: 2\nnode: p\nid: S001\ntitle: A\nstatus: a-faire\npersonas: [\"user:rh\"]\n---\n",
         );
         let (status, body) = send(
             &repo,
@@ -781,7 +781,7 @@ mod tests {
         let repo = sample();
         repo.write(
             "p/tasks/T002-b.md",
-            "---\nariane: 1\nnode: p\nid: T002\ntitle: B\nstatus: a-faire\n---\n",
+            "---\nariane: 2\nnode: p\nid: T002\ntitle: B\nstatus: a-faire\n---\n",
         );
         let person = |extra: serde_json::Value| {
             let mut body = serde_json::json!({ "node": "p", "handle": "keyvan" });
@@ -1113,7 +1113,7 @@ mod tests {
         let mut changes = state.changes.subscribe();
         repo.write(
             "p/tasks/T002-b.md",
-            "---\nariane: 1\nnode: p\nid: T002\ntitle: B\nstatus: a-faire\n---\n# B\n",
+            "---\nariane: 2\nnode: p\nid: T002\ntitle: B\nstatus: a-faire\n---\n# B\n",
         );
         state.reload().unwrap();
         assert_eq!(state.tree.read().unwrap().items.len(), 3);

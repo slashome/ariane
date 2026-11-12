@@ -144,7 +144,7 @@ mod tests {
         )
         .write(
             "q/tasks/T1-a.md",
-            "---\nariane: 1\nnode: q\nid: T1\ntitle: A\nstatus: todo\n---\n",
+            "---\nariane: 2\nnode: q\nid: T1\ntitle: A\nstatus: todo\n---\n",
         );
         repo
     }

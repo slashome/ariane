@@ -364,23 +364,23 @@ mod tests {
         let repo = Repo::new();
         repo.write(
             "p/tasks/T001-a.md",
-            "---\nariane: 1\nnode: p\nid: T001\ntitle: Préparer l'été\nstatus: todo\n---\nRien.\n",
+            "---\nariane: 2\nnode: p\nid: T001\ntitle: Préparer l'été\nstatus: todo\n---\nRien.\n",
         )
         .write(
             "p/tasks/T002-b.md",
-            "---\nariane: 1\nnode: p\nid: T002\ntitle: Autre chose\nstatus: todo\n---\nIl faut préparer la rentrée et l'ÉTÉ.\n",
+            "---\nariane: 2\nnode: p\nid: T002\ntitle: Autre chose\nstatus: todo\n---\nIl faut préparer la rentrée et l'ÉTÉ.\n",
         )
         .write(
             "p/stories/S001-s.md",
-            "---\nariane: 1\nnode: p\nid: S001\ntitle: T002 en avance\nstatus: todo\n---\n",
+            "---\nariane: 2\nnode: p\nid: S001\ntitle: T002 en avance\nstatus: todo\n---\n",
         )
         .write(
             "p/archives/tasks/T003-c.md",
-            "---\nariane: 1\nnode: p\nid: T003\ntitle: Été passé\nstatus: done\n---\n",
+            "---\nariane: 2\nnode: p\nid: T003\ntitle: Été passé\nstatus: done\n---\n",
         )
         .write(
             "q/tasks/T001-x.md",
-            "---\nariane: 1\nnode: q\nid: T001\ntitle: Ailleurs\nstatus: todo\n---\n",
+            "---\nariane: 2\nnode: q\nid: T001\ntitle: Ailleurs\nstatus: todo\n---\n",
         );
         repo
     }

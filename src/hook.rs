@@ -373,7 +373,7 @@ mod tests {
         let repo = Repo::new();
         repo.write(
             "p/tasks/T1-a.md",
-            "---\nariane: 1\nnode: p\nid: T1\ntitle: A\nstatus: todo\n---\n",
+            "---\nariane: 2\nnode: p\nid: T1\ntitle: A\nstatus: todo\n---\n",
         );
         let host = tempfile::tempdir().unwrap();
         let git = |args: &[&str]| {

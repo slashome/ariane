@@ -681,11 +681,11 @@ mod tests {
         repo.write("p/README.md", "# p\n\n- [A](tasks/a.md)\n")
             .write(
                 "p/tasks/a.md",
-                "---\nariane: 1\nnode: p\nid: T1\ntitle: A\nstatus: todo\n---\n# A\n",
+                "---\nariane: 2\nnode: p\nid: T1\ntitle: A\nstatus: todo\n---\n# A\n",
             )
             .write(
                 "p/tasks/T2-b.md",
-                "---\nariane: 1\nnode: p\nid: T2\ntitle: B\nstatus: todo\n---\nAfter [A](a.md); see a.md.\n",
+                "---\nariane: 2\nnode: p\nid: T2\ntitle: B\nstatus: todo\n---\nAfter [A](a.md); see a.md.\n",
             );
         repo
     }
@@ -735,19 +735,19 @@ mod tests {
         )
         .write(
             "p/backlog/T1-a.md",
-            "---\nariane: 1\nnode: p\nid: T1\ntitle: A\nstatus: backlog\n---\nSee [B](./b.md) and [C](../tasks/T3-c.md).\n",
+            "---\nariane: 2\nnode: p\nid: T1\ntitle: A\nstatus: backlog\n---\nSee [B](./b.md) and [C](../tasks/T3-c.md).\n",
         )
         .write(
             "p/backlog/b.md",
-            "---\nariane: 1\nnode: p\nid: T2\ntitle: B\nstatus: backlog\n---\n",
+            "---\nariane: 2\nnode: p\nid: T2\ntitle: B\nstatus: backlog\n---\n",
         )
         .write(
             "p/archives/backlog/T4-d.md",
-            "---\nariane: 1\nnode: p\nid: T4\ntitle: D\nstatus: done\n---\n",
+            "---\nariane: 2\nnode: p\nid: T4\ntitle: D\nstatus: done\n---\n",
         )
         .write(
             "p/tasks/T3-c.md",
-            "---\nariane: 1\nnode: p\nid: T3\ntitle: C\nstatus: todo\ndepends_on: [T1]\n---\nAfter [A](../backlog/T1-a.md).\n",
+            "---\nariane: 2\nnode: p\nid: T3\ntitle: C\nstatus: todo\ndepends_on: [T1]\n---\nAfter [A](../backlog/T1-a.md).\n",
         );
         let tree = Tree::load(repo.root()).unwrap();
         assert_eq!(run(&tree, &args(true), None).unwrap(), ExitCode::SUCCESS);
@@ -780,15 +780,15 @@ mod tests {
         repo.write("p/README.md", "# p\n")
             .write(
                 "p/tasks/T1.md",
-                "---\nariane: 1\nnode: p\nid: T1\ntitle: A\nstatus: todo\n---\n",
+                "---\nariane: 2\nnode: p\nid: T1\ntitle: A\nstatus: todo\n---\n",
             )
             .write(
                 "p/tasks/b.md",
-                "---\nariane: 1\nnode: p\nid: T2\ntitle: B\nstatus: todo\n---\n",
+                "---\nariane: 2\nnode: p\nid: T2\ntitle: B\nstatus: todo\n---\n",
             )
             .write(
                 "p/tasks/T2-b.md",
-                "---\nariane: 1\nnode: p\nid: T3\ntitle: C\nstatus: todo\n---\n",
+                "---\nariane: 2\nnode: p\nid: T3\ntitle: C\nstatus: todo\n---\n",
             );
         let tree = Tree::load(repo.root()).unwrap();
         let markdown = markdown_files(&tree).unwrap();

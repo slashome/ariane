@@ -27,7 +27,6 @@ function item(overrides: Partial<Item>): Item {
     personas: [],
     release: null,
     effective_release: null,
-    milestone: null,
     parent: null,
     epic: null,
     depends_on: [],

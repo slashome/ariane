@@ -15,7 +15,7 @@
 //! `# ` heading, `status` mapped onto the node's workflow. `created` is kept only when the
 //! header or the prose states it: the commit that added a file dates an import,
 //! not the item, so it is never used. Keys are written in the canonical order of
-//! [`CORE_KEYS`](crate::schema::CORE_KEYS), custom keys after them. When a value cannot be decided, the
+//! the version-1 header, [`ORDER`](crate::migrate::v1::ORDER), custom keys after them. When a value cannot be decided, the
 //! file is left to a human with the reasons, never guessed silently.
 
 /// Allocation of item ids.
@@ -29,7 +29,6 @@ use yaml_serde::{Mapping, Value};
 
 use crate::item::{self, Document, Header, Kind};
 use crate::node::{Category, Effective};
-use crate::schema::{self, CORE_KEYS, ValueType};
 use crate::tree::{Item, NodePath, Tree};
 
 use super::{Migration, Step};
@@ -42,6 +41,40 @@ const RENAMED: [(&str, &str); 4] = [
     ("statut", "status"),
     ("jalon", "milestone"),
     ("depend", "depends_on"),
+];
+
+/// The version this migration writes; the next ones take the file from there.
+const VERSION: u64 = 1;
+
+/// Keys kept as text, read from the raw file so that `1.0` stays `"1.0"`.
+const NAMES: [&str; 2] = ["release", "milestone"];
+
+/// The core keys of the version-1 header in their canonical order, frozen here
+/// since the current schema has moved on (ADR-0024 removed `milestone`).
+pub const ORDER: [&str; 23] = [
+    "ariane",
+    "node",
+    "id",
+    "title",
+    "status",
+    "type",
+    "personas",
+    "parent",
+    "depends_on",
+    "size",
+    "impact",
+    "priority",
+    "rank",
+    "created",
+    "release",
+    "milestone",
+    "refs",
+    "external",
+    "branches",
+    "pull_requests",
+    "waiting_for",
+    "waiting_on",
+    "waiting_since",
 ];
 
 /// The migration from version 0 to version 1. It borrows the tree (lifetime
@@ -120,7 +153,7 @@ impl Migration for ZeroToOne<'_> {
         if !draft.reasons.is_empty() {
             return Err(draft.reasons);
         }
-        fields.insert("ariane".into(), Value::from(item::SCHEMA_VERSION));
+        fields.insert("ariane".into(), Value::from(VERSION));
         fields.insert("node".into(), Value::from(item.node.as_str()));
         if let Some(id) = id {
             fields.insert("id".into(), Value::from(id));
@@ -182,7 +215,7 @@ impl Draft {
                     .push(format!("both `{name}` and `{target}` are present"));
                 continue;
             }
-            let value = if schema::keys_of_type(ValueType::Name).any(|key| key == target) {
+            let value = if NAMES.contains(&target) {
                 as_name(value, raw.and_then(|raw| raw_scalar(raw, name)))
             } else {
                 value.clone()
@@ -345,9 +378,9 @@ fn as_name(value: &Value, raw: Option<&str>) -> Value {
 /// The fields with the core keys first, in canonical order, then the custom keys in their original order.
 fn ordered(mut fields: Mapping) -> Mapping {
     let mut result = Mapping::new();
-    for key in CORE_KEYS {
-        if let Some(value) = fields.shift_remove(key.name) {
-            result.insert(Value::from(key.name), value);
+    for key in ORDER {
+        if let Some(value) = fields.shift_remove(key) {
+            result.insert(Value::from(key), value);
         }
     }
     for (key, value) in fields {

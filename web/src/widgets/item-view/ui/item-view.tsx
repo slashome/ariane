@@ -140,7 +140,6 @@ export function ItemView({
             )}
             {detail.type && <Field label="Type">{detail.type}</Field>}
             {detail.release && <Field label="Release">{detail.release}</Field>}
-            {detail.milestone && <Field label="Milestone">{detail.milestone}</Field>}
             <Field label="Created">{detail.created}</Field>
             {detail.external.length > 0 && (
               <Field label="External">

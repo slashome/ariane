@@ -475,15 +475,15 @@ mod tests {
         )
         .write(
             "p/tasks/T001-a.md",
-            "---\nariane: 1\nnode: p\nid: T001\ntitle: A\nstatus: a-faire\nrelease: '1.0'\nmod: Forge\n---\n# A\n\nBody  with  spaces\n",
+            "---\nariane: 2\nnode: p\nid: T001\ntitle: A\nstatus: a-faire\nrelease: '1.0'\nmod: Forge\n---\n# A\n\nBody  with  spaces\n",
         )
         .write(
             "p/reflexions/R001-r.md",
-            "---\nariane: 1\nnode: p\nid: R001\ntitle: R\nstatus: open\n---\n# R\n",
+            "---\nariane: 2\nnode: p\nid: R001\ntitle: R\nstatus: open\n---\n# R\n",
         )
         .write(
             "p/ressources/D001-d.md",
-            "---\nariane: 1\nnode: p\nid: D001\ntitle: D\n---\n# D\n",
+            "---\nariane: 2\nnode: p\nid: D001\ntitle: D\n---\n# D\n",
         );
         repo
     }
@@ -494,7 +494,7 @@ mod tests {
         repo.write("w/node.toml", "[people.keyvan]\nname = \"Keyvan\"\n")
             .write(
                 "w/tasks/T1-a.md",
-                "---\nariane: 1\nnode: w\nid: T1\ntitle: A\nstatus: in_progress\n---\n# A\n",
+                "---\nariane: 2\nnode: w\nid: T1\ntitle: A\nstatus: in_progress\n---\n# A\n",
             );
         let path = "tree/w/tasks/T1-a.md";
         let tree = Tree::load(repo.root()).unwrap();
@@ -598,7 +598,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             read(&repo, "p/tasks/T001-a.md"),
-            "---\nariane: 1\nnode: p\nid: T001\ntitle: A\nstatus: valide\nsize: S\npriority: high\nrelease: '1.0'\nmod: Forge\n---\n# A\n\nBody  with  spaces\n"
+            "---\nariane: 2\nnode: p\nid: T001\ntitle: A\nstatus: valide\nsize: S\npriority: high\nrelease: '1.0'\nmod: Forge\n---\n# A\n\nBody  with  spaces\n"
         );
     }
 
@@ -607,7 +607,7 @@ mod tests {
         let repo = sample();
         repo.write(
             "p/tasks/T002-b.md",
-            "---\nariane: 1\nnode: p\nid: T002\ntitle: B\nstatus: a-faire\nimpact: low\npriority: high\ncreated: 2026-01-02\nmod: X\n---\n# B\n",
+            "---\nariane: 2\nnode: p\nid: T002\ntitle: B\nstatus: a-faire\nimpact: low\npriority: high\ncreated: 2026-01-02\nmod: X\n---\n# B\n",
         );
         let tree = Tree::load(repo.root()).unwrap();
         apply(
@@ -620,7 +620,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             read(&repo, "p/tasks/T002-b.md"),
-            "---\nariane: 1\nnode: p\nid: T002\ntitle: B\nstatus: a-faire\npriority: high\ncreated: 2026-01-02\nmod: X\n---\n# B\n"
+            "---\nariane: 2\nnode: p\nid: T002\ntitle: B\nstatus: a-faire\npriority: high\ncreated: 2026-01-02\nmod: X\n---\n# B\n"
         );
     }
 
@@ -718,11 +718,11 @@ mod tests {
         let repo = sample();
         repo.write(
             "p/tasks/T002-b.md",
-            "---\nariane: 1\nnode: p\nid: T002\ntitle: B\nstatus: a-faire\nrank: 1000\n---\n# B\n",
+            "---\nariane: 2\nnode: p\nid: T002\ntitle: B\nstatus: a-faire\nrank: 1000\n---\n# B\n",
         )
         .write(
             "p/tasks/T003-c.md",
-            "---\nariane: 1\nnode: p\nid: T003\ntitle: C\nstatus: a-faire\nrank: 2000\n---\n# C\n",
+            "---\nariane: 2\nnode: p\nid: T003\ntitle: C\nstatus: a-faire\nrank: 2000\n---\n# C\n",
         );
         repo
     }

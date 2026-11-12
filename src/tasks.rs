@@ -56,7 +56,6 @@ pub struct Row<'a> {
     /// epic's, with where it comes from and its place in the node's declared
     /// order (ADR-0023); `None` when none of them carries one.
     pub effective_release: Option<EffectiveRelease<'a>>,
-    pub milestone: Option<&'a str>,
     /// `parent` as `<node>#<id>`.
     pub parent: Option<String>,
     /// The epic of a story, or of a task's story, as `<node>#<id>` (ADR-0019).
@@ -178,7 +177,6 @@ pub fn row<'a>(tree: &'a Tree, item: &'a Item) -> Row<'a> {
         personas: document.texts("personas"),
         release: document.text("release"),
         effective_release: release::effective(tree, item, &config),
-        milestone: document.text("milestone"),
         parent: relations::parent(item),
         epic: relations::epic(tree, item),
         depends_on: relations::depends_on(item),
@@ -243,7 +241,7 @@ mod tests {
         )
         .write(
             "slashome/pharmakon/tasks/T038-x.md",
-            "---\nariane: 1\nnode: slashome/pharmakon\nid: T038\ntitle: X\nstatus: valide\n---\n# X\n",
+            "---\nariane: 2\nnode: slashome/pharmakon\nid: T038\ntitle: X\nstatus: valide\n---\n# X\n",
         )
         .write("slashome/me/tasks/legacy.md", "# Legacy\n\n- **État** : ouvert\n");
         let tree = Tree::load(repo.root()).unwrap();
@@ -260,15 +258,15 @@ mod tests {
         let repo = Repo::new();
         repo.write(
             "p/tasks/T1-a.md",
-            "---\nariane: 1\nnode: p\nid: T1\ntitle: A\nstatus: todo\nparent: S1\nrelease: \"1.0\"\n---\n# A\n",
+            "---\nariane: 2\nnode: p\nid: T1\ntitle: A\nstatus: todo\nparent: S1\nrelease: \"1.0\"\n---\n# A\n",
         )
         .write(
             "p/stories/S1-s.md",
-            "---\nariane: 1\nnode: p\nid: S1\ntitle: S\nstatus: todo\n---\n# S\n",
+            "---\nariane: 2\nnode: p\nid: S1\ntitle: S\nstatus: todo\n---\n# S\n",
         )
         .write(
             "p/archives/stories/S2-old.md",
-            "---\nariane: 1\nnode: p\nid: S2\ntitle: Old\nstatus: done\n---\n",
+            "---\nariane: 2\nnode: p\nid: S2\ntitle: Old\nstatus: done\n---\n",
         );
         let tree = Tree::load(repo.root()).unwrap();
         let dates = HashMap::from([(

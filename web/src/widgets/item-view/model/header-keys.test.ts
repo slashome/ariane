@@ -2,7 +2,7 @@ import { customEntries, refsOf } from './header-keys'
 
 describe('header keys', () => {
   it('keeps the custom keys, lists joined', () => {
-    expect(customEntries({ ariane: 1, id: 'T1', mod: 'Takedowns', tests: ['a', 'b'] })).toEqual([
+    expect(customEntries({ ariane: 2, id: 'T1', mod: 'Takedowns', tests: ['a', 'b'] })).toEqual([
       ['mod', 'Takedowns'],
       ['tests', 'a, b'],
     ])

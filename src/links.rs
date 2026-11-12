@@ -278,9 +278,9 @@ mod tests {
         let repo = Repo::new();
         repo.write(
             "cmc/lib/tasks/T9-a.md",
-            "---\nariane: 1\nnode: cmc/lib\nid: T9\ntitle: A\nstatus: todo\nexternal: [monday:2955884643]\npull_requests: [https://x/pull/1]\n---\n",
+            "---\nariane: 2\nnode: cmc/lib\nid: T9\ntitle: A\nstatus: todo\nexternal: [monday:2955884643]\npull_requests: [https://x/pull/1]\n---\n",
         )
-        .write("p/tasks/T9-b.md", "---\nariane: 1\nnode: p\nid: T9\ntitle: B\nstatus: todo\n---\n");
+        .write("p/tasks/T9-b.md", "---\nariane: 2\nnode: p\nid: T9\ntitle: B\nstatus: todo\n---\n");
         let tree = Tree::load(repo.root()).unwrap();
         let pulls = [
             pull("https://x/pull/1", "[2955884643] fix(store): keys", ""),

@@ -278,8 +278,8 @@ mod tests {
             "cmc/node.toml",
             "# the team\n[tracker]\nkind = \"monday\"\naccount = \"acme\"\nboard = 1\n\n[personas.\"user:rh\"]\nname = \"RH\" # the HR\n",
         )
-        .write("cmc/lib/stories/S1-a.md", "---\nariane: 1\nnode: cmc/lib\nid: S1\ntitle: A\nstatus: todo\npersonas: [\"user:rh\"]\n---\n# A\n")
-        .write("cmc/lib/stories/S2-b.md", "---\nariane: 1\nnode: cmc/lib\nid: S2\ntitle: B\nstatus: todo\n---\n");
+        .write("cmc/lib/stories/S1-a.md", "---\nariane: 2\nnode: cmc/lib\nid: S1\ntitle: A\nstatus: todo\npersonas: [\"user:rh\"]\n---\n# A\n")
+        .write("cmc/lib/stories/S2-b.md", "---\nariane: 2\nnode: cmc/lib\nid: S2\ntitle: B\nstatus: todo\n---\n");
         repo
     }
 
@@ -344,7 +344,7 @@ mod tests {
         assert_eq!(errors, 0);
         repo.write(
             "cmc/lib/stories/S1-a.md",
-            "---\nariane: 1\nnode: cmc/lib\nid: S1\ntitle: A\nstatus: todo\n---\n",
+            "---\nariane: 2\nnode: cmc/lib\nid: S1\ntitle: A\nstatus: todo\n---\n",
         );
         let tree = Tree::load(repo.root()).unwrap();
         remove(&tree, &cmc, "user:hr").unwrap().unwrap();

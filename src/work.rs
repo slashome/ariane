@@ -140,7 +140,7 @@ mod tests {
         let file = dir.path().join("T1-a.md");
         std::fs::write(
             &file,
-            "---\nariane: 1\nid: T1\nmod: Kept\nbranches:\n- o/r:a\n---\n# Body\n",
+            "---\nariane: 2\nid: T1\nmod: Kept\nbranches:\n- o/r:a\n---\n# Body\n",
         )
         .unwrap();
         let links = Links {

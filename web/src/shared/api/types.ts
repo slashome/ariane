@@ -32,7 +32,6 @@ export interface Item {
   personas: string[]
   release: string | null
   effective_release: EffectiveRelease | null
-  milestone: string | null
   parent: string | null
   // The epic of a story, or of a task's story, as `<node>#<id>`.
   epic: string | null

@@ -441,7 +441,7 @@ mod tests {
         let repo = Repo::new();
         let task = |node: &str, id: &str, extra: &str| {
             format!(
-                "---\nariane: 1\nnode: {node}\nid: {id}\ntitle: {id}\nstatus: todo\n{extra}---\n"
+                "---\nariane: 2\nnode: {node}\nid: {id}\ntitle: {id}\nstatus: todo\n{extra}---\n"
             )
         };
         repo.write("p/tasks/T1-a.md", &task("p", "T1", "priority: high\n"))
@@ -479,7 +479,7 @@ mod tests {
                 .unwrap_or_default();
             repo.write(
                 &format!("p/tasks/{id}-x.md"),
-                &format!("---\nariane: 1\nnode: p\nid: {id}\ntitle: {id}\nstatus: todo\n{rank}---\n# {id}\n"),
+                &format!("---\nariane: 2\nnode: p\nid: {id}\ntitle: {id}\nstatus: todo\n{rank}---\n# {id}\n"),
             );
         }
         repo
@@ -605,7 +605,7 @@ mod tests {
         let repo = Repo::new();
         repo.write(
             "p/tasks/T1-x.md",
-            "---\nariane: 1\nnode: p\nid: T1\ntitle: X\nstatus: todo\npriority: high\ncreated: 2026-10-31\nowner: me\n---\n# X\n",
+            "---\nariane: 2\nnode: p\nid: T1\ntitle: X\nstatus: todo\npriority: high\ncreated: 2026-10-31\nowner: me\n---\n# X\n",
         );
         let tree = Tree::load(repo.root()).unwrap();
         write(&plan(&tree, find(&tree, "T1"), Target::Top).unwrap()).unwrap();
@@ -625,15 +625,15 @@ mod tests {
         let repo = node(&[("T1", Some(1000))]);
         repo.write(
             "q/tasks/T2-x.md",
-            "---\nariane: 1\nnode: q\nid: T2\ntitle: T2\nstatus: todo\n---\n",
+            "---\nariane: 2\nnode: q\nid: T2\ntitle: T2\nstatus: todo\n---\n",
         )
         .write(
             "p/stories/S1-x.md",
-            "---\nariane: 1\nnode: p\nid: S1\ntitle: S1\nstatus: todo\n---\n",
+            "---\nariane: 2\nnode: p\nid: S1\ntitle: S1\nstatus: todo\n---\n",
         )
         .write(
             "p/archives/tasks/T3-x.md",
-            "---\nariane: 1\nnode: p\nid: T3\ntitle: T3\nstatus: done\n---\n",
+            "---\nariane: 2\nnode: p\nid: T3\ntitle: T3\nstatus: done\n---\n",
         );
         let tree = Tree::load(repo.root()).unwrap();
         let moved = find(&tree, "T1");

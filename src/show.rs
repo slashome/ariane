@@ -231,15 +231,15 @@ mod tests {
         let repo = Repo::new();
         repo.write(
             "p/stories/S1-s.md",
-            "---\nariane: 1\nnode: p\nid: S1\ntitle: S\nstatus: todo\npersonas: [\"cmc:dev\"]\nmod: Kept\n---\n# S\n\nBody.\n",
+            "---\nariane: 2\nnode: p\nid: S1\ntitle: S\nstatus: todo\npersonas: [\"cmc:dev\"]\nmod: Kept\n---\n# S\n\nBody.\n",
         )
         .write(
             "p/tasks/T1-a.md",
-            "---\nariane: 1\nnode: p\nid: T1\ntitle: A\nstatus: todo\nparent: S1\n---\n",
+            "---\nariane: 2\nnode: p\nid: T1\ntitle: A\nstatus: todo\nparent: S1\n---\n",
         )
         .write(
             "q/tasks/T1-b.md",
-            "---\nariane: 1\nnode: q\nid: T1\ntitle: B\nstatus: todo\n---\n",
+            "---\nariane: 2\nnode: q\nid: T1\ntitle: B\nstatus: todo\n---\n",
         );
         Tree::load(repo.root()).unwrap()
     }
@@ -265,12 +265,12 @@ mod tests {
         let repo = Repo::new();
         repo.write(
             "p/epics/E1-e.md",
-            "---\nariane: 1\nnode: p\nid: E1\ntitle: E\nstatus: todo\n---\n",
+            "---\nariane: 2\nnode: p\nid: E1\ntitle: E\nstatus: todo\n---\n",
         );
         for (id, status) in [("S1", "done"), ("S2", "todo"), ("S3", "dropped")] {
             repo.write(
                 &format!("p/stories/{id}-s.md"),
-                &format!("---\nariane: 1\nnode: p\nid: {id}\ntitle: S\nstatus: {status}\nparent: E1\n---\n"),
+                &format!("---\nariane: 2\nnode: p\nid: {id}\ntitle: S\nstatus: {status}\nparent: E1\n---\n"),
             );
         }
         let tree = Tree::load(repo.root()).unwrap();

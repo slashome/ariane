@@ -32,7 +32,7 @@ Keys MUST be written in English, in lower case, with `_` as the word separator. 
 
 | Key | Type | Required | Values |
 |---|---|---|---|
-| `ariane` | integer | **MUST** | The schema version of this file. This specification defines version `1`. |
+| `ariane` | integer | **MUST** | The schema version of this file. This specification defines version `2`; version `1` also carried `milestone`, which `ariane migrate` turns into `release` ([ADR-0024](docs/adr/0024-remove-milestone-from-the-header.md)). |
 | `node` | string | **MUST** | The logical path of the node holding the file, e.g. `cmc/cmc-lib`. MUST equal the file's location under `tree/`; for an item of the home node, directly under `tree/`, it is the empty string `''`. |
 | `id` | string | **MUST** | Matches `^[A-Za-z][A-Za-z0-9-]*$`. Unique within the node. |
 | `title` | string | **MUST** | Non-empty. |
@@ -47,7 +47,6 @@ Keys MUST be written in English, in lower case, with `_` as the word separator. 
 | `rank` | integer | MAY; SHOULD NOT for ressources | The item's place in the manual order of its node and kind, negative values included (ADR-0022). |
 | `created` | date | SHOULD | ISO 8601 calendar date, `YYYY-MM-DD`. |
 | `release` | string | MAY | The release the item is delivered in, a `name` of the node's effective `[[release]]` list (§1.5); free when no list applies. On a task it is the decision; on a story or an epic, a provisional forecast for its tasks that carry none ([ADR-0023](docs/adr/0023-plan-by-releases-declared-in-order-per-node.md)). |
-| `milestone` | string | MAY | Free name of an intermediate target. |
 | `refs` | list of strings | MAY | Pointers to ADRs, pull requests, documents. |
 | `external` | list of strings | MAY | Links to external trackers, each of the form `<connector>:<id>`, e.g. `monday:2955884643` (ADR-0011). |
 | `branches` | list of strings | MAY | The git branches the item's work lives in, each of the form `<owner>/<repo>:<branch>`, e.g. `slashome/ariane:feat/web-node-select`; a task may span several repositories. |
@@ -158,7 +157,7 @@ name = "Responsable RH"
 | `ariane` lower than the version the CLI implements | error — remedy: `ariane migrate` |
 | `ariane` higher than the version the CLI implements | error — the CLI is outdated |
 | A required core key is missing | error |
-| A core key has a value of the wrong type (`rank` not an integer, `release` or `milestone` not a string, `refs` not a list, an `external` entry not `<connector>:<id>`, a `branches` entry not `<owner>/<repo>:<branch>`, a `pull_requests` entry not an `https://` URL) | error |
+| A core key has a value of the wrong type (`rank` not an integer, `release` not a string, `refs` not a list, an `external` entry not `<connector>:<id>`, a `branches` entry not `<owner>/<repo>:<branch>`, a `pull_requests` entry not an `https://` URL) | error |
 | `node` does not match the file's location | error |
 | `id` duplicated within the node | error |
 | `status` not in the node's effective workflow | error |
@@ -178,7 +177,7 @@ name = "Responsable RH"
 | A required custom key is missing | error |
 | A file name that does not begin with the item's `id`, `-` and a slug | error — remedy: `ariane fix` (renames to `<id>-<current name>` and rewrites the links); a human when the name is the bare id |
 | An item in `backlog/` or `archives/backlog/` | error — remedy: `ariane fix` (moves it into `tasks/` or `archives/tasks/` and rewrites the links) |
-| A custom key not declared in any applicable `node.toml` | warning |
+| A custom key not declared in any applicable `node.toml` | warning — `milestone` on a version `2` file is one ([ADR-0024](docs/adr/0024-remove-milestone-from-the-header.md)) |
 | A `[proxy]` table whose `host` is not a host name, whose `port` is 0, or whose `host` another node declares | error |
 | An `INDEX.md` anywhere in the tree | warning — remedy: move the node's description into the `description` of its `node.toml`, its judgment into the item it concerns, its rules into a ressource of the node, then delete the file |
 
@@ -188,7 +187,7 @@ An item, `tree/slashome/pharmakon/tasks/T038-blessure-au-couteau-et-compte-a-reb
 
 ```markdown
 ---
-ariane: 1
+ariane: 2
 node: slashome/pharmakon
 id: T038
 title: Blessure au couteau et compte à rebours
@@ -200,8 +199,7 @@ depends_on:
 size: M
 impact: high
 created: 2026-09-12
-release: "1.0"
-milestone: "0.1"
+release: "0.1"
 refs:
   - DR 0018
 branches:

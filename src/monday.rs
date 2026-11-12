@@ -833,7 +833,7 @@ mod tests {
 
     fn task(id: &str, ticket: u64, status: &str, extra: &str) -> String {
         format!(
-            "---\nariane: 1\nnode: p\nid: {id}\ntitle: {id}\nstatus: {status}\nexternal: [monday:{ticket}]\n{extra}---\n"
+            "---\nariane: 2\nnode: p\nid: {id}\ntitle: {id}\nstatus: {status}\nexternal: [monday:{ticket}]\n{extra}---\n"
         )
     }
 

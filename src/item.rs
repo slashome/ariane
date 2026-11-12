@@ -13,7 +13,7 @@ use serde::Serialize;
 use yaml_serde::{Mapping, Value};
 
 /// Schema version this binary implements: the value of the `ariane` key it writes and expects.
-pub const SCHEMA_VERSION: u64 = 1;
+pub const SCHEMA_VERSION: u64 = 2;
 
 /// The former item directory of backlog items, whose items are now tasks
 /// (SPEC.md §1.1): `doctor` reports them and `ariane fix` moves them into `tasks/`.

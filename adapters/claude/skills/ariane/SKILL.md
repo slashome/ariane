@@ -23,7 +23,7 @@ Every item (a Markdown file under `tasks/`, `epics/`, `stories/`, `reflexions/`,
 
 ```yaml
 ---
-ariane: 1
+ariane: 2
 node: acme/web
 id: T009
 title: Remplacer le carrousel de la page d'accueil
@@ -46,7 +46,7 @@ external:
 - `branches` (`<owner>/<repo>:<branch>`) and `pull_requests` (URLs): where the item's work lives. Recorded by the hook after `ariane focus`, not by hand.
 - `waiting_for` (handles of the node's `[people]`), `waiting_on` (`review`, `validation`, `answer`, `other`) and `waiting_since` (`YYYY-MM-DD`): only while the status is in the `waiting` category, which requires `waiting_for`.
 - `personas` (stories only): the ids of the personas the story is written for, e.g. `["cmc:dev", "user:rh"]`, each declared in an applicable `node.toml` as `[personas."cmc:dev"]` with `name = "Développeur CMC"`; inherited from the ancestors, the nearest declaration wins. A new persona goes into the `node.toml` of the highest node whose stories share it, its label asked of the user; `doctor` errors on an undeclared id and warns when a non-story carries the key ([ADR-0018](https://github.com/slashome/ariane/blob/develop/docs/adr/0018-name-the-personas-a-story-is-written-for.md)).
-- `release`: the release the item is delivered in, a `name` of the `[[release]]` list of the nearest `node.toml` that declares one (quote numbers: `release: "1.0"`). Decided on a task; on a story or an epic it is a forecast its tasks without one inherit, the nearest winning (task, story, epic). `ariane tasks --json` gives each item its `effective_release` and where it comes from; `doctor` errors on a name absent from the applicable list. Free when no node above declares releases ([ADR-0023](https://github.com/slashome/ariane/blob/develop/docs/adr/0023-plan-by-releases-declared-in-order-per-node.md)).
+- `release`: the release the item is delivered in, a `name` of the `[[release]]` list of the nearest `node.toml` that declares one (quote numbers: `release: "1.0"`). Decided on a task; on a story or an epic it is a forecast its tasks without one inherit, the nearest winning (task, story, epic). `ariane tasks --json` gives each item its `effective_release` and where it comes from; `doctor` errors on a name absent from the applicable list. Free when no node above declares releases ([ADR-0023](https://github.com/slashome/ariane/blob/develop/docs/adr/0023-plan-by-releases-declared-in-order-per-node.md)). There is no `milestone`: an intermediate target is a release of its own, declared in order ([ADR-0024](https://github.com/slashome/ariane/blob/develop/docs/adr/0024-remove-milestone-from-the-header.md)).
 - Unknown keys are preserved where they are.
 
 ## Operating rules
@@ -75,7 +75,7 @@ external:
 |---|---|
 | `ariane tasks --json` | State of the items: id, title, status and category, size, impact, priority, created, personas, path. |
 | `ariane doctor` | Check after every write. Exit `0` clean, `1` a command repairs it, `2` a human decision. Writes nothing. |
-| `ariane migrate` | Legacy items to the current header: dry run by default, `--apply` to write. |
+| `ariane migrate` | Legacy items to the current header: dry run by default, `--apply` to write. Ends with the releases each migrated node carries, those its `node.toml` does not declare marked: declare them by hand, in order. |
 | `ariane fix` | The repairs `doctor` names as `ariane fix`: file names after the id, links rewritten. Dry run by default, `--apply` to write. |
 | `ariane search <words> --all --json` | Finding an item by id, reference, title or body words, case and accents ignored, best first (exact id, then title, then body) with an excerpt. Before creating an item, to avoid a duplicate; `--kind`, `--node`, `--archived` narrow it. |
 | `ariane show <node>#<id> --json` | One item: header, body, parent, children, dependencies, dependents. |

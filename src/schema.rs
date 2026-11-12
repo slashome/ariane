@@ -1,6 +1,6 @@
 //! The core header schema, declared once as data (SPEC.md §1.3, ADR-0008).
 //!
-//! [`CORE_KEYS`](crate::schema::CORE_KEYS) describes each of the twenty-three core keys a single time: its value
+//! [`CORE_KEYS`](crate::schema::CORE_KEYS) describes each of the twenty-two core keys a single time: its value
 //! type, whether it is required depending on the item kind, and its place in the
 //! canonical key order. Everything else reads this table instead of keeping its
 //! own list:
@@ -214,7 +214,6 @@ pub const CORE_KEYS: &[CoreKey] = &[
     },
     key("created", ValueType::Date, Requirement::Should),
     key("release", ValueType::Name, Requirement::May),
-    key("milestone", ValueType::Name, Requirement::May),
     key("refs", ValueType::Texts, Requirement::May),
     key("external", ValueType::External, Requirement::May),
     key("branches", ValueType::Branches, Requirement::May),
@@ -305,14 +304,6 @@ pub fn core_key(name: &str) -> Option<&'static CoreKey> {
 /// Tells whether `name` is a core key; any other key is a custom key.
 pub fn is_core(name: &str) -> bool {
     core_key(name).is_some()
-}
-
-/// The names of the core keys whose value has the type `value`, lazily.
-pub fn keys_of_type(value: ValueType) -> impl Iterator<Item = &'static str> {
-    CORE_KEYS
-        .iter()
-        .filter(move |key| key.value == value)
-        .map(|key| key.name)
 }
 
 /// Letter that starts a new id for an item of `kind`: T task, E epic, S story, R reflexion, D ressource (SPEC.md §1.4).
@@ -454,7 +445,6 @@ mod tests {
                 "rank",
                 "created",
                 "release",
-                "milestone",
                 "refs",
                 "external",
                 "branches",

@@ -14,7 +14,6 @@ const shown = new Set([
   'rank',
   'created',
   'release',
-  'milestone',
   'refs',
   'external',
   'branches',

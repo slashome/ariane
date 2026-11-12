@@ -102,7 +102,7 @@ mod tests {
     /// An item of node `p` with `id` and extra header lines.
     fn item(id: &str, extra: &str) -> String {
         format!(
-            "---\nariane: 1\nnode: p\nid: {id}\ntitle: {id}\nstatus: todo\n{extra}---\n# {id}\n"
+            "---\nariane: 2\nnode: p\nid: {id}\ntitle: {id}\nstatus: todo\n{extra}---\n# {id}\n"
         )
     }
 

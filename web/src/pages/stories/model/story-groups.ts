@@ -1,10 +1,9 @@
 import { categoryOrder, childrenOf, groupBy, isClosed, progressOf, sortByManualOrder, type Group, type Progress } from '@/entities/item'
 import type { Item } from '@/shared/api'
 
-export type StoryGrouping = 'milestone' | 'release' | 'epic' | 'node' | 'status'
+export type StoryGrouping = 'release' | 'epic' | 'node' | 'status'
 
 export const groupings: { value: StoryGrouping; label: string }[] = [
-  { value: 'milestone', label: 'Release › milestone' },
   { value: 'release', label: 'Release' },
   { value: 'epic', label: 'Epic' },
   { value: 'node', label: 'Node' },
@@ -23,10 +22,6 @@ export interface StoryGroup extends Group<StoryRow> {
 
 function keyOf(grouping: StoryGrouping, story: Item): string | null {
   switch (grouping) {
-    case 'milestone':
-      return story.release === null && story.milestone === null
-        ? null
-        : [story.release ?? '—', story.milestone].filter((part) => part !== null).join(' › ')
     case 'release':
       return story.release
     case 'epic':
@@ -39,7 +34,6 @@ function keyOf(grouping: StoryGrouping, story: Item): string | null {
 }
 
 const noneLabels: Record<StoryGrouping, string> = {
-  milestone: 'No release or milestone',
   release: 'No release',
   epic: 'No epic',
   node: '(home)',

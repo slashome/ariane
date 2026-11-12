@@ -54,7 +54,7 @@ An item is a Markdown file whose name starts with its id. Its kind comes from it
 ```markdown
 <!-- ~/_ariane/tree/perso/tasks/T001-try-ariane.md -->
 ---
-ariane: 1
+ariane: 2
 node: perso
 id: T001
 title: Try Ariane

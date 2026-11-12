@@ -10,10 +10,18 @@
 //! command; it never commits, so the changes stay in the working tree for review.
 //! A file newer than this binary is reported and never touched. The exit code is
 //! `2` when at least one file needs a human, `0` otherwise.
+//!
+//! Since migration 1 → 2 turns milestones into releases (ADR-0024), the report
+//! ends with the distinct releases the items of each migrated node carry, those
+//! its `node.toml` does not declare marked, so that the owner writes the
+//! `[[release]]` list by hand: `node.toml` has no version, no migration writes it.
 
 /// Migration 0 → 1: from the legacy prose headers and pharmakon's French keys to the version-1 header.
 mod v1;
+/// Migration 1 → 2: `milestone` leaves the header and becomes the item's release.
+mod v2;
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::process::ExitCode;
 
 use anyhow::{Context, Result};
@@ -65,6 +73,8 @@ pub enum Outcome {
 pub struct Entry {
     /// Path relative to the repository root.
     pub path: String,
+    /// The node holding the item.
+    pub node: NodePath,
     /// Version found in the file; `None` when it cannot be read.
     pub from: Option<u64>,
     /// Version the file is brought to.
@@ -77,6 +87,9 @@ pub struct Entry {
     pub inferred: Vec<String>,
     /// Remarks of the migrations.
     pub notes: Vec<String>,
+    /// The item's `release` once migrated; `None` without one, or when the file
+    /// needs a human.
+    pub release: Option<String>,
     /// Text of the file before migration.
     #[serde(skip)]
     before: String,
@@ -111,6 +124,7 @@ pub fn run(tree: &Tree, args: &MigrateArgs, scope: Option<&NodePath>) -> Result<
         println!("{}", serde_json::to_string_pretty(&entries)?);
     } else {
         report(&entries, args.apply);
+        report_releases(tree, &entries);
     }
     let blocked = entries
         .iter()
@@ -133,7 +147,7 @@ pub fn run(tree: &Tree, args: &MigrateArgs, scope: Option<&NodePath>) -> Result<
 /// Fails when an item file cannot be read.
 pub fn plan(tree: &Tree, scope: Option<&NodePath>) -> Result<Vec<Entry>> {
     let zero_to_one = v1::ZeroToOne::new(tree, scope);
-    let migrations: [&dyn Migration; 1] = [&zero_to_one];
+    let migrations: [&dyn Migration; 2] = [&zero_to_one, &v2::OneToTwo];
     tree.items_within(scope)
         .map(|item| {
             let before = std::fs::read_to_string(&item.file)
@@ -148,12 +162,14 @@ pub fn plan(tree: &Tree, scope: Option<&NodePath>) -> Result<Vec<Entry>> {
 fn migrate(migrations: &[&dyn Migration], item: &Item, before: String) -> Entry {
     let mut entry = Entry {
         path: item.relative.to_string_lossy().into_owned(),
+        node: item.node.clone(),
         from: None,
         to: SCHEMA_VERSION,
         outcome: Outcome::Unchanged,
         reasons: Vec::new(),
         inferred: Vec::new(),
         notes: Vec::new(),
+        release: None,
         after: None,
         file: item.file.clone(),
         before,
@@ -185,6 +201,7 @@ fn migrate(migrations: &[&dyn Migration], item: &Item, before: String) -> Entry 
             Err(reasons) => return entry.needs_human(reasons),
         }
     }
+    entry.release = Document::parse(&text).text("release").map(str::to_owned);
     if text != entry.before {
         entry.outcome = Outcome::Migrated;
         entry.after = Some(text);
@@ -265,6 +282,65 @@ fn report(entries: &[Entry], applied: bool) {
     );
 }
 
+/// Prints, for every node with a migrated file, the distinct releases its
+/// items carry once migrated, in natural order, marking those the node's
+/// effective `[[release]]` list does not declare.
+fn report_releases(tree: &Tree, entries: &[Entry]) {
+    for (node, names) in releases_by_node(entries) {
+        let effective = tree.configs.effective(node);
+        let listed: Vec<String> = names
+            .iter()
+            .map(|name| match effective.release(name) {
+                Some(_) => (*name).to_owned(),
+                None => format!("{name} (undeclared)"),
+            })
+            .collect();
+        let label = if node.is_home() {
+            "(home)"
+        } else {
+            node.as_str()
+        };
+        println!("releases of {label}: {}", listed.join(", "));
+    }
+}
+
+/// The distinct releases the items of each node carry once migrated, in
+/// natural order, for the nodes where at least one file is migrated.
+fn releases_by_node(entries: &[Entry]) -> BTreeMap<&NodePath, Vec<&str>> {
+    let mut by_node: BTreeMap<&NodePath, BTreeSet<&str>> = BTreeMap::new();
+    for entry in entries {
+        if entry.outcome == Outcome::Migrated {
+            by_node.entry(&entry.node).or_default();
+        }
+    }
+    for entry in entries {
+        if let (Some(releases), Some(release)) =
+            (by_node.get_mut(&entry.node), entry.release.as_deref())
+        {
+            releases.insert(release);
+        }
+    }
+    by_node
+        .into_iter()
+        .filter(|(_, releases)| !releases.is_empty())
+        .map(|(node, releases)| {
+            let mut names: Vec<&str> = releases.into_iter().collect();
+            names.sort_by_key(|name| natural(name));
+            (node, names)
+        })
+        .collect()
+}
+
+/// A sort key that orders release names naturally: dot-separated numbers by
+/// value (`0.9` before `0.10`), then the names that are not numbers.
+fn natural(name: &str) -> (bool, Vec<u64>, &str) {
+    let numbers: Option<Vec<u64>> = name.split('.').map(|part| part.parse().ok()).collect();
+    match numbers {
+        Some(numbers) => (false, numbers, name),
+        None => (true, Vec::new(), name),
+    }
+}
+
 /// Unit tests of the engine: dry run, apply, idempotence, newer files, scope.
 #[cfg(test)]
 mod tests {
@@ -308,11 +384,63 @@ mod tests {
         let path = repo.root().join("tree/game/tasks/T001-forge.md");
         run(&Tree::load(repo.root()).unwrap(), &args(true), None).unwrap();
         let migrated = std::fs::read_to_string(&path).unwrap();
-        assert!(migrated.starts_with("---\nariane: 1\nnode: game\nid: T001\ntitle: Forger\nstatus: todo\nmod: Smithing\n---\n"));
+        assert!(migrated.starts_with("---\nariane: 2\nnode: game\nid: T001\ntitle: Forger\nstatus: todo\nmod: Smithing\n---\n"));
         let entries = plan(&Tree::load(repo.root()).unwrap(), None).unwrap();
         assert_eq!(entries[0].outcome, Outcome::Unchanged);
         run(&Tree::load(repo.root()).unwrap(), &args(true), None).unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), migrated);
+    }
+
+    #[test]
+    fn a_french_jalon_goes_from_version_0_to_its_release_in_one_run() {
+        let repo = Repo::new();
+        repo.write(
+            "game/tasks/T001-forge.md",
+            "---\nnode: game\nid: T001\ntitre: Forger\nstatut: todo\nrelease: 1.0\njalon: 0.10\nmod: Smithing\n---\n# T001\n",
+        );
+        let entries = plan(&Tree::load(repo.root()).unwrap(), None).unwrap();
+        assert_eq!(entries[0].from, Some(0));
+        assert_eq!(
+            entries[0].after.as_deref(),
+            Some(
+                "---\nariane: 2\nnode: game\nid: T001\ntitle: Forger\nstatus: todo\nrelease: '0.10'\nmod: Smithing\n---\n# T001\n"
+            )
+        );
+        assert_eq!(entries[0].release.as_deref(), Some("0.10"));
+    }
+
+    #[test]
+    fn the_releases_of_every_migrated_node_are_listed_in_natural_order() {
+        let repo = Repo::new();
+        let item = |id: &str, release: &str, milestone: &str| {
+            format!(
+                "---\nariane: 1\nnode: game\nid: {id}\ntitle: {id}\nstatus: todo\nrelease: '{release}'\n{milestone}---\n"
+            )
+        };
+        repo.write(
+            "game/tasks/T001-a.md",
+            &item("T001", "1.0", "milestone: '0.10'\n"),
+        )
+        .write(
+            "game/tasks/T002-b.md",
+            &item("T002", "1.0", "milestone: '0.9'\n"),
+        )
+        .write(
+            "game/archives/tasks/T003-c.md",
+            &item("T003", "plus-tard", ""),
+        )
+        .write("game/stories/S001-d.md", &item("S001", "2.0", ""))
+        .write(
+            "other/tasks/T001-e.md",
+            "---\nariane: 2\nnode: other\nid: T001\ntitle: E\nstatus: todo\nrelease: '9.0'\n---\n",
+        );
+        let entries = plan(&Tree::load(repo.root()).unwrap(), None).unwrap();
+        let releases = releases_by_node(&entries);
+        assert_eq!(releases.len(), 1);
+        assert_eq!(
+            releases[&NodePath::new("game")],
+            ["0.9", "0.10", "2.0", "plus-tard"]
+        );
     }
 
     #[test]

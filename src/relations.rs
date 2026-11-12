@@ -173,19 +173,19 @@ mod tests {
         let repo = Repo::new();
         repo.write(
             "p/stories/S1-s.md",
-            "---\nariane: 1\nnode: p\nid: S1\ntitle: S\nstatus: todo\n---\n",
+            "---\nariane: 2\nnode: p\nid: S1\ntitle: S\nstatus: todo\n---\n",
         )
         .write(
             "p/tasks/T1-a.md",
-            "---\nariane: 1\nnode: p\nid: T1\ntitle: A\nstatus: done\nparent: S1\n---\n",
+            "---\nariane: 2\nnode: p\nid: T1\ntitle: A\nstatus: done\nparent: S1\n---\n",
         )
         .write(
             "p/tasks/T2-b.md",
-            "---\nariane: 1\nnode: p\nid: T2\ntitle: B\nstatus: todo\nparent: p#S1\ndepends_on: [T1, q#T9, T404]\n---\n",
+            "---\nariane: 2\nnode: p\nid: T2\ntitle: B\nstatus: todo\nparent: p#S1\ndepends_on: [T1, q#T9, T404]\n---\n",
         )
         .write(
             "q/tasks/T9-z.md",
-            "---\nariane: 1\nnode: q\nid: T9\ntitle: Z\nstatus: todo\n---\n",
+            "---\nariane: 2\nnode: q\nid: T9\ntitle: Z\nstatus: todo\n---\n",
         );
         Tree::load(repo.root()).unwrap()
     }
@@ -210,19 +210,19 @@ mod tests {
         let repo = Repo::new();
         repo.write(
             "p/epics/E1-e.md",
-            "---\nariane: 1\nnode: p\nid: E1\ntitle: E\nstatus: todo\n---\n",
+            "---\nariane: 2\nnode: p\nid: E1\ntitle: E\nstatus: todo\n---\n",
         )
         .write(
             "p/stories/S1-s.md",
-            "---\nariane: 1\nnode: p\nid: S1\ntitle: S\nstatus: todo\nparent: E1\n---\n",
+            "---\nariane: 2\nnode: p\nid: S1\ntitle: S\nstatus: todo\nparent: E1\n---\n",
         )
         .write(
             "p/tasks/T1-a.md",
-            "---\nariane: 1\nnode: p\nid: T1\ntitle: A\nstatus: todo\nparent: S1\n---\n",
+            "---\nariane: 2\nnode: p\nid: T1\ntitle: A\nstatus: todo\nparent: S1\n---\n",
         )
         .write(
             "p/tasks/T2-b.md",
-            "---\nariane: 1\nnode: p\nid: T2\ntitle: B\nstatus: todo\n---\n",
+            "---\nariane: 2\nnode: p\nid: T2\ntitle: B\nstatus: todo\n---\n",
         );
         let tree = Tree::load(repo.root()).unwrap();
         let epic_of = |reference| epic(&tree, find(&tree, reference));

@@ -19,7 +19,7 @@ export function StoriesPage() {
   const { filters } = useItemFilters()
   const move = useMoveItem()
   const [params, setParams] = useSearchParams()
-  const grouping = (groupings.find((entry) => entry.value === params.get(groupParam))?.value ?? 'milestone') as StoryGrouping
+  const grouping = (groupings.find((entry) => entry.value === params.get(groupParam))?.value ?? 'release') as StoryGrouping
   const labels = (category: Category) => schema?.categories.find((entry) => entry.id === category)?.label ?? category
 
   const { items: stories, total } = useFilteredItems(items, { kinds: ['story'] })
@@ -43,8 +43,7 @@ export function StoriesPage() {
       details: ({ story, tasks }) => (
         <>
           {story.node !== filters.node && <span className="font-mono">{displayNode(story.node)}</span>}
-          {grouping !== 'milestone' && story.milestone && <span>milestone {story.milestone}</span>}
-          {grouping !== 'milestone' && grouping !== 'release' && story.release && <span>release {story.release}</span>}
+          {grouping !== 'release' && story.release && <span>release {story.release}</span>}
           <span>
             {tasks.length} {tasks.length === 1 ? 'task' : 'tasks'}
           </span>

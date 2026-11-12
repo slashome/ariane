@@ -183,10 +183,10 @@ label = "Validé"
 category = "done"
 "#;
 
-    /// The text of a version-1 task of `node` with id `id`, plus `extra` header lines.
+    /// The text of a version-2 task of `node` with id `id`, plus `extra` header lines.
     fn task(node: &str, id: &str, extra: &str) -> String {
         format!(
-            "---\nariane: 1\nnode: {node}\nid: {id}\ntitle: Title {id}\nstatus: a-faire\nmod: M\n{extra}---\n# {id}\n"
+            "---\nariane: 2\nnode: {node}\nid: {id}\ntitle: Title {id}\nstatus: a-faire\nmod: M\n{extra}---\n# {id}\n"
         )
     }
 
@@ -216,8 +216,8 @@ category = "done"
         let repo = base();
         repo.write("p/tasks/T1-a.md", &task("p", "T1", "tests: [a]\ntype: code\nparent: T2\n"))
             .write("p/tasks/T2-b.md", &task("p", "T2", "depends_on: [p#T1]\nsize: XS\nimpact: high\npriority: low\ncreated: 2026-10-20\nrelease: \"1.0\"\nexternal: [monday:12]\nrefs: [ADR-0008]\nbranches: [slashome/ariane:develop]\npull_requests: [https://github.com/slashome/ariane/pull/19]\n"))
-            .write("p/reflexions/R1-r.md", "---\nariane: 1\nnode: p\nid: R1\ntitle: R\nstatus: open\nmod: M\n---\n")
-            .write("p/ressources/S1-s.md", "---\nariane: 1\nnode: p\nid: S1\ntitle: S\nmod: M\n---\n")
+            .write("p/reflexions/R1-r.md", "---\nariane: 2\nnode: p\nid: R1\ntitle: R\nstatus: open\nmod: M\n---\n")
+            .write("p/ressources/S1-s.md", "---\nariane: 2\nnode: p\nid: S1\ntitle: S\nmod: M\n---\n")
             .write("p/archives/tasks/T3-c.md", &task("p", "T3", "").replace("a-faire", "valide"));
         assert_eq!(checks(&repo), vec![]);
         let tree = Tree::load(repo.root()).unwrap();
@@ -255,7 +255,7 @@ category = "done"
     }
 
     fn waiting_task(status: &str, extra: &str) -> String {
-        format!("---\nariane: 1\nnode: w\nid: T1\ntitle: A\nstatus: {status}\n{extra}---\n")
+        format!("---\nariane: 2\nnode: w\nid: T1\ntitle: A\nstatus: {status}\n{extra}---\n")
     }
 
     #[test]
@@ -315,7 +315,7 @@ category = "done"
     }
 
     fn story(extra: &str) -> String {
-        format!("---\nariane: 1\nnode: c/web\nid: S1\ntitle: A\nstatus: todo\n{extra}---\n")
+        format!("---\nariane: 2\nnode: c/web\nid: S1\ntitle: A\nstatus: todo\n{extra}---\n")
     }
 
     #[test]
@@ -357,7 +357,7 @@ category = "done"
     /// The text of a version-1 epic of node `p` with id `id`, plus `extra` header lines.
     fn epic(id: &str, extra: &str) -> String {
         format!(
-            "---\nariane: 1\nnode: p\nid: {id}\ntitle: Epic\nstatus: a-faire\nmod: M\n{extra}---\n"
+            "---\nariane: 2\nnode: p\nid: {id}\ntitle: Epic\nstatus: a-faire\nmod: M\n{extra}---\n"
         )
     }
 
@@ -397,7 +397,7 @@ category = "done"
         let repo = Repo::new();
         repo.write(
             "reflexions/R1-r.md",
-            "---\nariane: 1\nnode: ''\nid: R1\ntitle: R\nstatus: open\n---\n",
+            "---\nariane: 2\nnode: ''\nid: R1\ntitle: R\nstatus: open\n---\n",
         );
         assert_eq!(checks(&repo), vec![]);
     }
@@ -424,6 +424,37 @@ category = "done"
     }
 
     #[test]
+    fn a_version_1_milestone_is_left_to_migrate() {
+        let repo = base();
+        repo.write(
+            "p/tasks/T1-a.md",
+            &task("p", "T1", "release: '1.0'\nmilestone: '0.3'\n")
+                .replace("ariane: 2", "ariane: 1"),
+        );
+        let tree = Tree::load(repo.root()).unwrap();
+        let findings = diagnose(&tree, None, false);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].check, Check::OutdatedSchema);
+        assert_eq!(
+            findings[0].remedy,
+            Remedy::Command {
+                command: "ariane migrate --node p".to_owned()
+            }
+        );
+    }
+
+    #[test]
+    fn a_milestone_left_on_a_version_2_item_is_an_undeclared_key() {
+        let repo = base();
+        repo.write("p/tasks/T1-a.md", &task("p", "T1", "milestone: '0.3'\n"));
+        let tree = Tree::load(repo.root()).unwrap();
+        let findings = diagnose(&tree, None, false);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].check, Check::UndeclaredKey);
+        assert!(findings[0].message.contains("`milestone`"));
+    }
+
+    #[test]
     fn a_newer_schema_means_the_cli_is_outdated() {
         let repo = base();
         repo.write("p/tasks/x.md", "---\nariane: 9\n---\n");
@@ -442,7 +473,7 @@ category = "done"
         let repo = base();
         repo.write(
             "p/tasks/T1-a.md",
-            "---\nariane: 1\nnode: p\nid: T1\nstatus: a-faire\nmod: M\n---\n",
+            "---\nariane: 2\nnode: p\nid: T1\nstatus: a-faire\nmod: M\n---\n",
         );
         only(&repo, Check::MissingKey);
     }
@@ -546,7 +577,7 @@ category = "done"
         let repo = base();
         repo.write(
             "p/reflexions/R1-r.md",
-            "---\nariane: 1\nnode: p\nid: R1\ntitle: R\nstatus: a-faire\nmod: M\n---\n",
+            "---\nariane: 2\nnode: p\nid: R1\ntitle: R\nstatus: a-faire\nmod: M\n---\n",
         );
         only(&repo, Check::UnknownStatus);
     }
@@ -609,7 +640,7 @@ category = "done"
     #[test]
     fn a_reflexion_on_trial_is_live_but_not_closed() {
         let repo = base();
-        let reflexion = "---\nariane: 1\nnode: p\nid: R1\ntitle: R\nstatus: trial\nmod: M\n---\n";
+        let reflexion = "---\nariane: 2\nnode: p\nid: R1\ntitle: R\nstatus: trial\nmod: M\n---\n";
         repo.write("p/reflexions/R1-r.md", reflexion);
         assert_eq!(checks(&repo), vec![]);
         repo.write(
@@ -638,7 +669,7 @@ category = "done"
         let repo = base();
         repo.write(
             "p/ressources/S1-s.md",
-            "---\nariane: 1\nnode: p\nid: S1\ntitle: S\nstatus: open\nmod: M\n---\n",
+            "---\nariane: 2\nnode: p\nid: S1\ntitle: S\nstatus: open\nmod: M\n---\n",
         );
         only(&repo, Check::ForbiddenKey);
     }
@@ -649,7 +680,7 @@ category = "done"
         repo.write("p/archives/tasks/T1-a.md", &task("p", "T1", ""))
             .write(
                 "p/archives/reflexions/R1-r.md",
-                "---\nariane: 1\nnode: p\nid: R1\ntitle: R\nstatus: open\nmod: M\n---\n",
+                "---\nariane: 2\nnode: p\nid: R1\ntitle: R\nstatus: open\nmod: M\n---\n",
             );
         assert_eq!(
             checks(&repo),
