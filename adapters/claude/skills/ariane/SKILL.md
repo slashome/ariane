@@ -41,6 +41,7 @@ external:
 - File name: the id, a `-` and a slug of the title — `T009-login-form.md`. Never rename by hand: after a new id (promotion), `ariane fix --apply` renames the file and rewrites the links to it.
 - `status`: an id of the node's workflow (its `node.toml`, inherited from ancestors, else the default `backlog`, `todo`, `in_progress`, `blocked`, `done`, `dropped`). Reflexions use `open`, `trial` or `settled`; ressources have no status.
 - `size` `XS`…`XL`, `impact` and `priority` `low`/`medium`/`high`, `created` `YYYY-MM-DD` — only when actually known, never from git.
+- `closed` (`YYYY-MM-DD`, tasks, stories and epics): when the item entered a status of the `done` category. Whenever you change a status by hand, write `closed:` with today's date if the new status is in `done` and the former one was not, remove it if the new status is in another category, keep it between two `done` statuses. Never back-fill it from git or memory: an older finished item without it gets `closed_approx` in `ariane tasks --dates --json`, an approximation never written ([ADR-0027](https://github.com/slashome/ariane/blob/develop/docs/adr/0027-record-when-an-item-closes.md)). The interface writes it on its own.
 - `rank`: the item's place in the manual order of its node and kind, an integer ([ADR-0022](https://github.com/slashome/ariane/blob/develop/docs/adr/0022-order-items-by-a-sparse-rank-in-their-header.md)). Never written at creation nor on your own initiative: when the user says what comes before what, run `ariane rank`. Ranked items come first, then the unranked ones by `priority`.
 - `external`: the item's own ticket, `monday:<pulse id>` — never a board id, never another item's ticket.
 - `branches` (`<owner>/<repo>:<branch>`) and `pull_requests` (URLs): where the item's work lives. Recorded by the hook after `ariane focus`, not by hand.
@@ -73,7 +74,7 @@ external:
 
 | Command | Use |
 |---|---|
-| `ariane tasks --json` | State of the items: id, title, status and category, size, impact, priority, created, personas, path. |
+| `ariane tasks --json` | State of the items: id, title, status and category, size, impact, priority, created, closed, personas, path; `--dates` adds `updated` and, for a finished item without `closed`, `closed_approx`. |
 | `ariane doctor` | Check after every write. Exit `0` clean, `1` a command repairs it, `2` a human decision. Writes nothing. |
 | `ariane migrate` | Legacy items to the current header: dry run by default, `--apply` to write. Ends with the releases each migrated node carries, those its `node.toml` does not declare marked: declare them by hand, in order. |
 | `ariane fix` | The repairs `doctor` names as `ariane fix`: file names after the id, links rewritten. Dry run by default, `--apply` to write. |

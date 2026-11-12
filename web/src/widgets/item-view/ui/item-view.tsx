@@ -141,6 +141,13 @@ export function ItemView({
             {detail.type && <Field label="Type">{detail.type}</Field>}
             {detail.release && <Field label="Release">{detail.release}</Field>}
             <Field label="Created">{detail.created}</Field>
+            {detail.closed && <Field label="Closed">{detail.closed}</Field>}
+            {!detail.closed && detail.closed_approx && (
+              <Field label="Closed">
+                <span title="Approximated from the git history of the content; not written in the item">~{detail.closed_approx}</span>
+                <span className="text-muted-foreground"> (approximate)</span>
+              </Field>
+            )}
             {detail.external.length > 0 && (
               <Field label="External">
                 <Externals detail={detail} nodes={nodes} />

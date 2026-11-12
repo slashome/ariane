@@ -4,7 +4,9 @@
 //! `priority`, and the keys of waiting `waiting_for` (a list of the node's
 //! people), `waiting_on`, `waiting_since` — and nothing else. A status in the
 //! `waiting` category needs someone to wait for; leaving that category removes
-//! the keys of waiting. Every change carries the value the browser
+//! the keys of waiting. A status entering the `done` category writes today's
+//! date in `closed`, leaving that category removes it ([`closed::settle`],
+//! ADR-0027). Every change carries the value the browser
 //! last saw (`from`) next to the value it wants (`to`): when the file on disk no
 //! longer holds `from`, the whole edit is refused with the current values, and
 //! nothing is merged. Values are checked against the schema vocabularies and,
@@ -25,6 +27,7 @@ use serde::Deserialize;
 use serde_json::Value as Json;
 use yaml_serde::{Mapping, Value};
 
+use crate::closed;
 use crate::item::{self, Document, Header, Kind};
 use crate::node::Category;
 use crate::rank;
@@ -114,6 +117,7 @@ pub fn apply(tree: &Tree, patch: &Patch) -> Result<std::path::PathBuf, Refusal> 
         ));
     };
     check_fresh(&header, &document.body, &patch.changes)?;
+    let before = category(tree, item, &header);
     let mut body = document.body.clone();
     for (key, change) in &patch.changes {
         if key == "body" {
@@ -128,6 +132,10 @@ pub fn apply(tree: &Tree, patch: &Patch) -> Result<std::path::PathBuf, Refusal> 
         item::set_key(&mut header, key, wanted);
     }
     settle_waiting(tree, item, &mut header)?;
+    if patch.changes.contains_key("status") && closed::applies_to(item.kind) {
+        let after = category(tree, item, &header);
+        closed::settle(&mut header, before, after, &closed::today());
+    }
     let rewritten = item::render(&header, &body)
         .map_err(|error| Refusal::Failed(format!("rendering {}: {error}", patch.path)))?;
     std::fs::write(&item.file, rewritten)
@@ -287,6 +295,16 @@ fn check_fresh(
     }
 }
 
+/// The category of the status `header` carries, in the item's node workflow.
+fn category(tree: &Tree, item: &Item, header: &Mapping) -> Option<Category> {
+    let effective = tree.configs.effective(&item.node);
+    header
+        .get("status")
+        .and_then(Value::as_str)
+        .and_then(|status| effective.status(status))
+        .map(|status| status.category)
+}
+
 /// After the changes: an item whose status is in the `waiting` category must
 /// name someone in `waiting_for`; an item whose status is in another category
 /// loses the keys of waiting, which no longer mean anything.
@@ -294,12 +312,7 @@ fn settle_waiting(tree: &Tree, item: &Item, header: &mut Mapping) -> Result<(), 
     if item.kind == Kind::Reflexion {
         return Ok(());
     }
-    let effective = tree.configs.effective(&item.node);
-    let category = header
-        .get("status")
-        .and_then(Value::as_str)
-        .and_then(|status| effective.status(status))
-        .map(|status| status.category);
+    let category = category(tree, item, header);
     if category == Some(Category::Waiting) {
         let named = header
             .get("waiting_for")
@@ -598,8 +611,46 @@ mod tests {
         .unwrap();
         assert_eq!(
             read(&repo, "p/tasks/T001-a.md"),
-            "---\nariane: 2\nnode: p\nid: T001\ntitle: A\nstatus: valide\nsize: S\npriority: high\nrelease: '1.0'\nmod: Forge\n---\n# A\n\nBody  with  spaces\n"
+            format!(
+                "---\nariane: 2\nnode: p\nid: T001\ntitle: A\nstatus: valide\nsize: S\npriority: high\nclosed: {}\nrelease: '1.0'\nmod: Forge\n---\n# A\n\nBody  with  spaces\n",
+                closed::today()
+            )
         );
+    }
+
+    #[test]
+    fn leaving_done_removes_closed_and_other_edits_of_a_done_item_keep_it() {
+        let repo = sample();
+        repo.write(
+            "p/tasks/T002-b.md",
+            "---\nariane: 2\nnode: p\nid: T002\ntitle: B\nstatus: valide\nclosed: 2026-01-02\n---\n# B\n",
+        );
+        let path = "tree/p/tasks/T002-b.md";
+        let tree = Tree::load(repo.root()).unwrap();
+        apply(&tree, &patch(path, &[("size", Json::Null, json!("S"))])).unwrap();
+        assert!(read(&repo, "p/tasks/T002-b.md").contains("closed: 2026-01-02"));
+        let tree = Tree::load(repo.root()).unwrap();
+        apply(
+            &tree,
+            &patch(path, &[("status", json!("valide"), json!("a-faire"))]),
+        )
+        .unwrap();
+        assert!(!read(&repo, "p/tasks/T002-b.md").contains("closed"));
+    }
+
+    #[test]
+    fn a_reflexion_never_gets_a_closing_date() {
+        let repo = sample();
+        let tree = Tree::load(repo.root()).unwrap();
+        apply(
+            &tree,
+            &patch(
+                "tree/p/reflexions/R001-r.md",
+                &[("status", json!("open"), json!("settled"))],
+            ),
+        )
+        .unwrap();
+        assert!(!read(&repo, "p/reflexions/R001-r.md").contains("closed"));
     }
 
     #[test]
@@ -798,6 +849,10 @@ mod tests {
         rank(&tree, &moved).unwrap();
         let text = std::fs::read_to_string(repo.root().join(A)).unwrap();
         assert!(text.contains("status: valide"), "{text}");
+        assert!(
+            text.contains(&format!("closed: {}", closed::today())),
+            "{text}"
+        );
         assert_eq!(rank_in(&repo, A), Some(1500));
     }
 

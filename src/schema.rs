@@ -1,6 +1,6 @@
 //! The core header schema, declared once as data (SPEC.md §1.3, ADR-0008).
 //!
-//! [`CORE_KEYS`](crate::schema::CORE_KEYS) describes each of the twenty-two core keys a single time: its value
+//! [`CORE_KEYS`](crate::schema::CORE_KEYS) describes each of the twenty-three core keys a single time: its value
 //! type, whether it is required depending on the item kind, and its place in the
 //! canonical key order. Everything else reads this table instead of keeping its
 //! own list:
@@ -213,6 +213,15 @@ pub const CORE_KEYS: &[CoreKey] = &[
         by_kind: &[(Kind::Ressource, Requirement::ShouldNot)],
     },
     key("created", ValueType::Date, Requirement::Should),
+    CoreKey {
+        name: "closed",
+        value: ValueType::Date,
+        requirement: Requirement::May,
+        by_kind: &[
+            (Kind::Reflexion, Requirement::ShouldNot),
+            (Kind::Ressource, Requirement::MustNot),
+        ],
+    },
     key("release", ValueType::Name, Requirement::May),
     key("refs", ValueType::Texts, Requirement::May),
     key("external", ValueType::External, Requirement::May),
@@ -444,6 +453,7 @@ mod tests {
                 "priority",
                 "rank",
                 "created",
+                "closed",
                 "release",
                 "refs",
                 "external",

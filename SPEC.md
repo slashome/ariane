@@ -46,6 +46,7 @@ Keys MUST be written in English, in lower case, with `_` as the word separator. 
 | `priority` | string | MAY | `low`, `medium`, `high`. |
 | `rank` | integer | MAY; SHOULD NOT for ressources | The item's place in the manual order of its node and kind, negative values included (ADR-0022). |
 | `created` | date | SHOULD | ISO 8601 calendar date, `YYYY-MM-DD`. |
+| `closed` | date | MAY for tasks, epics and stories; SHOULD NOT for reflexions; MUST NOT for ressources | When the item last entered a status of the `done` category, `YYYY-MM-DD` ([ADR-0027](docs/adr/0027-record-when-an-item-closes.md)). Written by the tool that changes the status, never by hand from memory. |
 | `release` | string | MAY | The release the item is delivered in, a `name` of the node's effective `[[release]]` list (§1.5); free when no list applies. On a task it is the decision; on a story or an epic, a provisional forecast for its tasks that carry none ([ADR-0023](docs/adr/0023-plan-by-releases-declared-in-order-per-node.md)). |
 | `refs` | list of strings | MAY | Pointers to ADRs, pull requests, documents. |
 | `external` | list of strings | MAY | Links to external trackers, each of the form `<connector>:<id>`, e.g. `monday:2955884643` (ADR-0011). |
@@ -56,6 +57,8 @@ Keys MUST be written in English, in lower case, with `_` as the word separator. 
 | `waiting_since` | date | SHOULD when waiting; MUST NOT otherwise | When the wait began, `YYYY-MM-DD`. |
 
 **Order of items.** Items are ordered per node and per kind; the ranks of two nodes or two kinds are never compared. Within one node and kind, items carrying `rank` come first, by ascending `rank`; the others follow, by descending `priority` (`high`, `medium`, `low`, then none). Ties fall back to the ids in natural order (`T9` before `T10`). An item under `archives/` keeps its `rank` but the order ignores it. A tool that lists items across nodes keeps the nodes in tree order and applies this order within each. A tool that writes `rank` spaces ranks by 1000, takes the middle of the gap when an item is moved between two ranked items, re-spaces only the neighbours of the drop point when the gap is exhausted, and ranks every unranked item of the node and kind, in their displayed order, when an item is moved below one of them. A tool MUST NOT give an item a `rank` the user did not ask for.
+
+**Closing date.** Every tool that changes the status of a task, an epic or a story — the CLI, the interface, a tracker connector, a host repository's script, an agent editing the header — MUST write `closed` with the current date when the new status is in the `done` category and the former one was not, MUST remove `closed` when the new status is in another category, and MUST keep it when both are in `done`. A reopened and re-closed item keeps only its last date. Nothing back-fills the key: for an item in `done` without `closed`, `ariane tasks --dates --json`, `ariane show --json` and the interface give `closed_approx`, the date of the commit where git last saw its status enter the `done` category, renames followed; it is an approximation, shown as such and never written to the file, and it is absent when git gives nothing.
 
 **Effective release.** The release an item is planned in is its own `release`; for a task without one, its story's; for a task or a story still without one, the epic's. The nearest declaration wins: task, then story, then epic. Other kinds only have their own. `ariane tasks --json`, `ariane show --json` and the interface give each item its `effective_release`: the `name`, its `source` (`own`, `story` or `epic`), the item it comes `from` as `<node>#<id>`, its `position` in the delivery order of the item's node (from 0, `null` when the list lacks it or none applies) and whether it is `parking`; `null` when no header of the chain carries a release.
 
@@ -162,18 +165,19 @@ name = "Responsable RH"
 | `id` duplicated within the node | error |
 | `status` not in the node's effective workflow | error |
 | `release` not a `name` of the node's effective `[[release]]` list, on any kind, when a list applies | error |
-| A status present on a ressource | error |
+| A status or `closed` present on a ressource | error |
 | An item in `archives/` whose status category is neither `done` nor `dropped`, or a reflexion in `archives/` that is not `settled` | error |
 | `parent` or `depends_on` points to an item that does not exist | error |
 | `parent` on an epic | error |
 | `parent` points to an epic from an item that is not a story | error |
-| `size`, `impact`, `priority` or `created` outside its vocabulary or format | error |
+| `size`, `impact`, `priority`, `created` or `closed` outside its vocabulary or format | error |
 | A custom key declared in `node.toml` has a value of the wrong type | error |
 | A status in the `waiting` category without `waiting_for` | error |
 | A `waiting_for` handle declared under no applicable `[people]` | error |
 | A `personas` id declared under no applicable `[personas]` | error |
-| `personas` on an item that is not a story, or `rank` on a ressource | warning |
+| `personas` on an item that is not a story, `rank` on a ressource, or `closed` on a reflexion | warning |
 | `waiting_for`, `waiting_on` or `waiting_since` on an item whose status is not in the `waiting` category | warning |
+| `closed` on a task, an epic or a story whose status is not in the `done` category | warning — remedy: remove `closed`, or set a status of the `done` category |
 | A required custom key is missing | error |
 | A file name that does not begin with the item's `id`, `-` and a slug | error — remedy: `ariane fix` (renames to `<id>-<current name>` and rewrites the links); a human when the name is the bare id |
 | An item in `backlog/` or `archives/backlog/` | error — remedy: `ariane fix` (moves it into `tasks/` or `archives/tasks/` and rewrites the links) |

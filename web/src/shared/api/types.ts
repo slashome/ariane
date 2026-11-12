@@ -28,6 +28,7 @@ export interface Item {
   priority: string | null
   rank: number | null
   created: string | null
+  closed: string | null
   type: string | null
   personas: string[]
   release: string | null
@@ -45,6 +46,7 @@ export interface Item {
   version: number | null
   path: string
   updated?: string | null
+  closed_approx?: string | null
   body?: string
 }
 

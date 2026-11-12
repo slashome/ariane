@@ -21,6 +21,7 @@ const item: Item = {
   priority: null,
   rank: null,
   created: null,
+  closed: null,
   reference: null,
   type: null,
   personas: [],

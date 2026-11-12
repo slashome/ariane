@@ -24,6 +24,8 @@
 
 /// Command-line arguments, declared with `clap`.
 mod cli;
+/// The closing date `closed`: when it is written, and how it is approximated.
+mod closed;
 /// `config.toml` and `ariane config`.
 mod config;
 /// `ariane doctor`: validation of items and nodes.
@@ -32,7 +34,7 @@ mod doctor;
 mod fix;
 /// `ariane focus`: the item an agent session works on.
 mod focus;
-/// When each item file last changed, according to git.
+/// What git remembers of each item file: its latest change, the statuses it went through.
 mod history;
 /// `ariane hook`: what Ariane does inside an agent's harness.
 mod hook;

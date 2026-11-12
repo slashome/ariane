@@ -393,6 +393,30 @@ category = "done"
     }
 
     #[test]
+    fn a_closing_date_on_an_item_that_is_not_done_is_a_warning() {
+        let repo = waiting_base();
+        repo.write(
+            "w/tasks/T1-a.md",
+            &waiting_task("in_progress", "closed: 2026-11-12\n"),
+        );
+        only(&repo, Check::StaleClosed);
+        let tree = Tree::load(repo.root()).unwrap();
+        let findings = diagnose(&tree, None, false);
+        assert_eq!(findings[0].severity, Severity::Warning);
+        repo.write(
+            "w/tasks/T1-a.md",
+            &waiting_task("done", "closed: 2026-11-12\n"),
+        );
+        let tree = Tree::load(repo.root()).unwrap();
+        assert!(diagnose(&tree, None, false).is_empty());
+        repo.write(
+            "w/tasks/T1-a.md",
+            &waiting_task("done", "closed: 12/11/2026\n"),
+        );
+        only(&repo, Check::OutOfVocabulary);
+    }
+
+    #[test]
     fn an_item_of_the_home_node_carries_an_empty_node() {
         let repo = Repo::new();
         repo.write(

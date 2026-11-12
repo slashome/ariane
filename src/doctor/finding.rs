@@ -137,6 +137,8 @@ pub enum Check {
     DiscouragedKey,
     /// `waiting_*` keys left on an item that no longer waits.
     StaleWaiting,
+    /// `closed` on an item whose status is not in the `done` category.
+    StaleClosed,
     /// A `[proxy]` table whose host is not a host name, whose port is 0, or
     /// whose host another node already declares.
     InvalidProxy,

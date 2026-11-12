@@ -135,7 +135,10 @@ pub struct TasksArgs {
     #[arg(long, help = "Add each item's Markdown body to the JSON rows")]
     pub body: bool,
 
-    #[arg(long, help = "Add the date of each item's latest commit (`updated`)")]
+    #[arg(
+        long,
+        help = "Add the date of each item's latest commit (`updated`) and, for a finished item without `closed`, its closing date approximated from git (`closed_approx`)"
+    )]
     pub dates: bool,
 
     #[arg(long)]

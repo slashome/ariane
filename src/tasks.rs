@@ -5,16 +5,17 @@
 //! without the interface reads a node's state with
 //! `ariane tasks --node <node> --json`. `--kind` keeps some kinds only,
 //! `--body` adds each item's Markdown body and `--dates` the date of its
-//! latest commit.
+//! latest commit, with, for a finished item without `closed`, the closing date
+//! approximated from git (ADR-0027).
 
-use std::collections::HashMap;
-use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::Result;
 use serde::Serialize;
 
 use crate::cli::TasksArgs;
+use crate::closed;
+use crate::history::History;
 use crate::item::Kind;
 use crate::node::Category;
 use crate::rank;
@@ -46,6 +47,9 @@ pub struct Row<'a> {
     /// The manual order within the node and kind (ADR-0022); `None` when unranked.
     pub rank: Option<i64>,
     pub created: Option<&'a str>,
+    /// When the item entered a status of the `done` category, as written in
+    /// its header (ADR-0027).
+    pub closed: Option<&'a str>,
     /// The node's classification of the item (`type` in the header).
     pub r#type: Option<&'a str>,
     /// Ids of the personas a story is written for, from the node's `[personas]`.
@@ -82,6 +86,11 @@ pub struct Row<'a> {
     /// for a file never committed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub updated: Option<String>,
+    /// With `--dates`, for an item in the `done` category without `closed`:
+    /// the date git first saw it enter that category for the last time, an
+    /// approximation never written to the file (ADR-0027); `None` otherwise.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub closed_approx: Option<String>,
     /// The Markdown body, with `--body`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub body: Option<&'a str>,
@@ -96,9 +105,9 @@ pub struct Selection<'a> {
     pub kinds: &'a [Kind],
     /// Add the Markdown body to each row.
     pub body: bool,
-    /// The date of the latest commit of each file, by path relative to the
-    /// repository root; `None` leaves `updated` out.
-    pub dates: Option<&'a HashMap<PathBuf, String>>,
+    /// What git remembers of each file; `None` leaves `updated` and
+    /// `closed_approx` out.
+    pub dates: Option<&'a History>,
 }
 
 /// The rows of the items of `scope` that `selection` keeps: nodes and kinds in
@@ -118,8 +127,8 @@ pub fn rows<'a>(
             if selection.body {
                 row.body = Some(&item.document.body);
             }
-            if let Some(dates) = selection.dates {
-                row.updated = dates.get(&item.relative).cloned();
+            if let Some(history) = selection.dates {
+                date(tree, item, &mut row, history);
             }
             row
         })
@@ -135,7 +144,7 @@ pub fn rows<'a>(
 ///
 /// Fails only if the rows cannot be serialized to JSON.
 pub fn run(tree: &Tree, args: &TasksArgs, scope: Option<&NodePath>) -> Result<ExitCode> {
-    let dates = args.dates.then(|| crate::history::file_dates(&tree.root));
+    let dates = args.dates.then(|| History::read(&tree.root));
     let selection = Selection {
         archived: args.archived,
         kinds: &args.kind,
@@ -173,6 +182,7 @@ pub fn row<'a>(tree: &'a Tree, item: &'a Item) -> Row<'a> {
         priority: document.text("priority"),
         rank: document.integer("rank"),
         created: document.text("created"),
+        closed: document.text(closed::KEY),
         r#type: document.text("type"),
         personas: document.texts("personas"),
         release: document.text("release"),
@@ -189,8 +199,29 @@ pub fn row<'a>(tree: &'a Tree, item: &'a Item) -> Row<'a> {
         version: document.version(),
         path: item.relative.to_string_lossy().into_owned(),
         updated: None,
+        closed_approx: None,
         body: None,
     }
+}
+
+/// Dates `row`, the row of `item`, from `history`: its latest commit and, when
+/// it is finished without `closed`, its approximate closing date.
+pub fn date(tree: &Tree, item: &Item, row: &mut Row, history: &History) {
+    row.updated = history.updated.get(&item.relative).cloned();
+    if row.closed.is_some()
+        || row.category != Some(Category::Done)
+        || !closed::applies_to(item.kind)
+    {
+        return;
+    }
+    let config = tree.configs.effective(&item.node);
+    let is_done = |status: &str| {
+        config
+            .status(status)
+            .is_some_and(|status| status.category == Category::Done)
+    };
+    row.closed_approx =
+        closed::approximate(history.transitions(&item.relative), is_done).map(str::to_owned);
 }
 
 /// Prints the rows as aligned columns, followed by a count of unversioned items.
@@ -231,6 +262,8 @@ fn print_table(rows: &[Row]) {
 mod tests {
     use super::*;
     use crate::tree::fixture::Repo;
+    use std::collections::HashMap;
+    use std::path::PathBuf;
 
     #[test]
     fn a_row_resolves_the_status_category_through_the_node_workflow() {
@@ -269,10 +302,13 @@ mod tests {
             "---\nariane: 2\nnode: p\nid: S2\ntitle: Old\nstatus: done\n---\n",
         );
         let tree = Tree::load(repo.root()).unwrap();
-        let dates = HashMap::from([(
-            PathBuf::from("tree/p/stories/S1-s.md"),
-            "2026-10-22".to_owned(),
-        )]);
+        let dates = History {
+            updated: HashMap::from([(
+                PathBuf::from("tree/p/stories/S1-s.md"),
+                "2026-10-22".to_owned(),
+            )]),
+            ..History::default()
+        };
         let stories = rows(
             &tree,
             None,
@@ -312,6 +348,64 @@ mod tests {
             })
         );
         assert!(json.get("body").is_none());
+        assert!(json.get("closed_approx").is_none());
         assert_eq!(json["type"], serde_json::Value::Null);
+        assert_eq!(json["closed"], serde_json::Value::Null);
+    }
+
+    #[test]
+    fn a_finished_item_shows_its_closed_date_or_else_the_one_git_approaches() {
+        let repo = Repo::new();
+        repo.write(
+            "p/tasks/T1-a.md",
+            "---\nariane: 2\nnode: p\nid: T1\ntitle: A\nstatus: done\nclosed: 2026-11-12\n---\n",
+        )
+        .write(
+            "p/archives/tasks/T2-b.md",
+            "---\nariane: 2\nnode: p\nid: T2\ntitle: B\nstatus: done\n---\n",
+        )
+        .write(
+            "p/tasks/T3-c.md",
+            "---\nariane: 2\nnode: p\nid: T3\ntitle: C\nstatus: todo\n---\n",
+        );
+        let tree = Tree::load(repo.root()).unwrap();
+        let steps = |statuses: &[(&str, &str)]| {
+            statuses
+                .iter()
+                .map(|(date, status)| crate::history::Transition {
+                    date: (*date).to_owned(),
+                    status: Some((*status).to_owned()),
+                })
+                .collect::<Vec<_>>()
+        };
+        let finished = steps(&[("2026-10-01", "todo"), ("2026-10-09", "done")]);
+        let history = History {
+            statuses: HashMap::from([
+                (PathBuf::from("tree/p/tasks/T1-a.md"), finished.clone()),
+                (
+                    PathBuf::from("tree/p/archives/tasks/T2-b.md"),
+                    finished.clone(),
+                ),
+                (PathBuf::from("tree/p/tasks/T3-c.md"), finished),
+            ]),
+            ..History::default()
+        };
+        let all = rows(
+            &tree,
+            None,
+            &Selection {
+                archived: true,
+                dates: Some(&history),
+                ..Selection::default()
+            },
+        );
+        let by_id = |id: &str| all.iter().find(|row| row.id == Some(id)).unwrap();
+        assert_eq!(by_id("T1").closed, Some("2026-11-12"));
+        assert_eq!(by_id("T1").closed_approx, None);
+        assert_eq!(by_id("T2").closed, None);
+        assert_eq!(by_id("T2").closed_approx.as_deref(), Some("2026-10-09"));
+        assert_eq!(by_id("T3").closed_approx, None);
+        let json = serde_json::to_value(by_id("T2")).unwrap();
+        assert_eq!(json["closed_approx"], "2026-10-09");
     }
 }

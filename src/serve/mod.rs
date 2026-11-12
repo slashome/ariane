@@ -26,7 +26,7 @@ pub mod git;
 mod watch;
 mod write;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -39,6 +39,7 @@ use tokio::sync::{broadcast, watch as signal};
 
 use crate::cli::ServeArgs;
 use crate::config::Config;
+use crate::history::History;
 use crate::proxy::machine::Machine;
 use crate::tree::{NodePath, Tree};
 
@@ -56,9 +57,10 @@ pub struct State {
     pub tree: RwLock<Tree>,
     /// Date of the latest commit under each node, recomputed with every load.
     pub last_change: RwLock<BTreeMap<NodePath, Option<String>>>,
-    /// Date of the latest commit of each item file, by path relative to the
-    /// root, recomputed with every load.
-    pub dates: RwLock<HashMap<PathBuf, String>>,
+    /// What git remembers of each item file — its latest commit, the statuses
+    /// it went through — by path relative to the root, recomputed with every
+    /// load.
+    pub dates: RwLock<History>,
     /// Held for the whole of a write or a git action, so that two of them never
     /// interleave.
     pub busy: Mutex<()>,
@@ -84,7 +86,7 @@ impl State {
         let (changes, _) = broadcast::channel(16);
         let (stopping, _) = signal::channel(false);
         let last_change = RwLock::new(last_changes(&root, &tree));
-        let dates = RwLock::new(crate::history::file_dates(&root));
+        let dates = RwLock::new(History::read(&root));
         Arc::new(State {
             root,
             tree: RwLock::new(tree),
@@ -109,7 +111,7 @@ impl State {
     pub fn reload(&self) -> Result<()> {
         let fresh = Tree::load(&self.root)?;
         let nodes = last_changes(&self.root, &fresh);
-        let files = crate::history::file_dates(&self.root);
+        let files = History::read(&self.root);
         *self
             .tree
             .write()
@@ -485,7 +487,7 @@ mod tests {
         assert_eq!(status, StatusCode::OK);
         let tree = Tree::load(repo.root()).unwrap();
         let item = crate::show::find(&tree, "p#T001", None).unwrap();
-        let dates = crate::history::file_dates(repo.root());
+        let dates = History::read(repo.root());
         let expected = serde_json::to_value(crate::show::shown(&tree, item, Some(&dates))).unwrap();
         assert_eq!(json(&body), expected);
         assert_eq!(
@@ -510,7 +512,7 @@ mod tests {
         let (status, body, _) = get(&repo, "/api/search?q=t001").await;
         assert_eq!(status, StatusCode::OK);
         let tree = Tree::load(repo.root()).unwrap();
-        let dates = crate::history::file_dates(repo.root());
+        let dates = History::read(repo.root());
         let options = crate::search::Options {
             dates: Some(&dates),
             ..crate::search::Options::default()

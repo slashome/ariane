@@ -22,6 +22,7 @@ function item(overrides: Partial<Item>): Item {
     priority: null,
     rank: null,
     created: null,
+    closed: null,
     reference: null,
     type: null,
     personas: [],

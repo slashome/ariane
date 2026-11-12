@@ -8,14 +8,13 @@
 //! interface can follow them without a second command. An item with children,
 //! such as an epic and its stories, also carries their [`Progress`].
 
-use std::collections::HashMap;
-use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::{Result, bail};
 use serde::Serialize;
 
 use crate::cli::ShowArgs;
+use crate::history::History;
 use crate::node::Category;
 use crate::relations::{self, Relations};
 use crate::tasks::{self, Row};
@@ -64,13 +63,11 @@ impl Progress {
 }
 
 /// Builds what `show` prints for `item`, dated by `dates` when given.
-pub fn shown<'a>(
-    tree: &'a Tree,
-    item: &'a Item,
-    dates: Option<&HashMap<PathBuf, String>>,
-) -> Shown<'a> {
+pub fn shown<'a>(tree: &'a Tree, item: &'a Item, dates: Option<&History>) -> Shown<'a> {
     let mut row = tasks::row(tree, item);
-    row.updated = dates.and_then(|dates| dates.get(&item.relative).cloned());
+    if let Some(history) = dates {
+        tasks::date(tree, item, &mut row, history);
+    }
     let relations = relations::of(tree, item);
     Shown {
         progress: Progress::of(&relations.children),
@@ -122,7 +119,7 @@ pub fn find<'a>(tree: &'a Tree, raw: &str, here: Option<&NodePath>) -> Result<&'
 /// serialized.
 pub fn run(tree: &Tree, args: &ShowArgs, here: Option<&NodePath>) -> Result<ExitCode> {
     let item = find(tree, &args.reference, here)?;
-    let dates = crate::history::file_dates(&tree.root);
+    let dates = History::read(&tree.root);
     let shown = shown(tree, item, Some(&dates));
     if args.json {
         println!("{}", serde_json::to_string_pretty(&shown)?);
@@ -144,6 +141,10 @@ fn print_text(shown: &Shown) {
         row.size.map(|size| format!("size {size}")),
         row.impact.map(|impact| format!("impact {impact}")),
         row.archived.then(|| "archived".to_owned()),
+        row.closed.map(|date| format!("closed {date}")),
+        row.closed_approx
+            .as_ref()
+            .map(|date| format!("closed ~{date} (approximate, from git)")),
     ]
     .into_iter()
     .flatten()

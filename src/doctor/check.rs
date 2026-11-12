@@ -197,6 +197,7 @@ fn check_item(
     report.status(mapping, &effective);
     report.release(mapping, &effective);
     report.waiting(mapping, &effective);
+    report.closed(mapping, &effective);
     report.personas(mapping, &effective);
     report.custom(mapping, &effective);
     report.file_name(mapping);
@@ -649,6 +650,50 @@ impl Reporter<'_> {
                 ]),
             );
         }
+    }
+
+    /// Checks `closed` (ADR-0027): only an item whose status is in the `done`
+    /// category carries a closing date. An unknown status is reported by
+    /// [`Self::status`], and `closed` on a reflexion or a ressource by its
+    /// requirement.
+    fn closed(&mut self, mapping: &Mapping, effective: &Effective) {
+        if !crate::closed::applies_to(self.item.kind) || !mapping.contains_key(crate::closed::KEY) {
+            return;
+        }
+        let Some(status) = mapping.get("status").and_then(Value::as_str) else {
+            return;
+        };
+        let Some(found) = effective.status(status) else {
+            return;
+        };
+        if found.category == crate::node::Category::Done {
+            return;
+        }
+        let done: Vec<&str> = effective
+            .workflow
+            .iter()
+            .filter(|status| status.category == crate::node::Category::Done)
+            .map(|status| status.id.as_str())
+            .collect();
+        let mut resolutions = vec![format!(
+            "remove `{}`: the item was reopened and is no longer done",
+            crate::closed::KEY
+        )];
+        if !done.is_empty() {
+            resolutions.push(format!(
+                "set `status` to a status of the done category: {}",
+                done.join(", ")
+            ));
+        }
+        self.push(
+            Check::StaleClosed,
+            Severity::Warning,
+            format!(
+                "`{}` on an item whose status `{status}` is not in the done category",
+                crate::closed::KEY
+            ),
+            Remedy::human(resolutions),
+        );
     }
 
     /// Checks that every id of `personas` is declared under `[personas]` of an

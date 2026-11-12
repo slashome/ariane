@@ -9,14 +9,13 @@
 //! and the ranges of the excerpt to highlight, so the command line, the
 //! interface (`GET /api/search`) and an agent all read the same answer.
 
-use std::collections::HashMap;
-use std::path::PathBuf;
 use std::process::ExitCode;
 
 use anyhow::Result;
 use serde::Serialize;
 
 use crate::cli::SearchArgs;
+use crate::history::History;
 use crate::item::Kind;
 use crate::tasks::{self, Row};
 use crate::tree::{Item, NodePath, Tree};
@@ -62,8 +61,8 @@ pub struct Options<'a> {
     pub archived: bool,
     /// Keep only these kinds; every kind when empty.
     pub kinds: &'a [Kind],
-    /// The date of the latest commit of each file, as for `ariane tasks --dates`.
-    pub dates: Option<&'a HashMap<PathBuf, String>>,
+    /// What git remembers of each file, as for `ariane tasks --dates`.
+    pub dates: Option<&'a History>,
 }
 
 /// The items of `scope` that `text` finds, best first. The command and
@@ -85,8 +84,8 @@ pub fn search<'a>(
         .filter(|item| options.kinds.is_empty() || options.kinds.contains(&item.kind))
         .filter_map(|item| {
             let mut hit = hit(tree, item, &words, &whole)?;
-            if let Some(dates) = options.dates {
-                hit.row.updated = dates.get(&item.relative).cloned();
+            if let Some(history) = options.dates {
+                crate::tasks::date(tree, item, &mut hit.row, history);
             }
             Some(hit)
         })

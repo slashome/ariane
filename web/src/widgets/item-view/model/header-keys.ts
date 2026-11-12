@@ -13,6 +13,7 @@ const shown = new Set([
   'priority',
   'rank',
   'created',
+  'closed',
   'release',
   'refs',
   'external',

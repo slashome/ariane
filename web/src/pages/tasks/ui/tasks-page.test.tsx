@@ -33,6 +33,7 @@ const base: Item = {
   priority: null,
   rank: null,
   created: '2030-01-02',
+  closed: null,
   reference: null,
   type: null,
   personas: [],
