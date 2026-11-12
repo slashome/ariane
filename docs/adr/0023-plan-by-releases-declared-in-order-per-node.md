@@ -1,6 +1,6 @@
 # ADR-0023 — Plan by releases declared in order per node
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-11
 - **Concerns:** SPEC §1.3, §1.5, §1.6; reflexion `slashome/ariane#R010`; [ADR-0019](0019-group-stories-into-epics.md), [ADR-0022](0022-order-items-by-a-sparse-rank-in-their-header.md)
 

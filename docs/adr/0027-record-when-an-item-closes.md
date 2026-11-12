@@ -1,6 +1,6 @@
 # ADR-0027 — Record when an item closes
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-11
 - **Concerns:** SPEC §1.3, §1.6; reflexion `slashome/ariane#R010`; [ADR-0022](0022-order-items-by-a-sparse-rank-in-their-header.md), [ADR-0023](0023-plan-by-releases-declared-in-order-per-node.md)
 

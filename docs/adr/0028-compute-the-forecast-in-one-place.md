@@ -1,6 +1,6 @@
 # ADR-0028 — Compute the forecast in one place, and keep its warnings in the roadmap
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-11
 - **Concerns:** SPEC §1.3, §1.6; reflexion `slashome/ariane#R010`; [ADR-0004](0004-write-or-judge.md), [ADR-0012](0012-serve-the-interface-from-the-binary.md), [ADR-0022](0022-order-items-by-a-sparse-rank-in-their-header.md), [ADR-0023](0023-plan-by-releases-declared-in-order-per-node.md) to [ADR-0027](0027-record-when-an-item-closes.md)
 

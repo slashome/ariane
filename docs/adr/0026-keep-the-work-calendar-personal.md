@@ -1,6 +1,6 @@
 # ADR-0026 — Keep the work calendar personal, in the personal content repository
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-11
 - **Concerns:** PLAN §3, §9; reflexion `slashome/ariane#R010`; [ADR-0013](0013-define-the-configuration-schema-in-code.md), [ADR-0021](0021-share-content-through-team-repositories.md), [ADR-0025](0025-estimate-in-hours-of-focused-work-per-node.md)
 

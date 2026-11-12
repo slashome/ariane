@@ -1,6 +1,6 @@
 # ADR-0025 — Estimate in hours of focused work, declared per node
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-11
 - **Concerns:** SPEC §1.3, §1.5; reflexion `slashome/ariane#R010`; [ADR-0023](0023-plan-by-releases-declared-in-order-per-node.md), [ADR-0026](0026-keep-the-work-calendar-personal.md)
 

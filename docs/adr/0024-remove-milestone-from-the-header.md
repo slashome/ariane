@@ -1,6 +1,6 @@
 # ADR-0024 — Remove `milestone` from the header
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-11
 - **Concerns:** SPEC §1.3, §1.6, §1.7; [ADR-0008](0008-give-every-item-a-versioned-front-matter.md), [ADR-0009](0009-migrate-content-with-versioned-migrations.md), [ADR-0023](0023-plan-by-releases-declared-in-order-per-node.md)
 

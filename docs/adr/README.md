@@ -56,12 +56,12 @@ A closing *Revisit if* section names the conditions under which the decision wou
 | [0020](0020-ship-a-method-skillset-under-arianes-authority.md) | Ship a method skillset under Ariane's authority | Proposed | 2026-10-28 |
 | [0021](0021-share-content-through-team-repositories.md) | Share content through team content repositories, never through the host repository | Proposed | 2026-10-31 |
 | [0022](0022-order-items-by-a-sparse-rank-in-their-header.md) | Order items by a sparse rank in their header | Accepted | 2026-10-31 |
-| [0023](0023-plan-by-releases-declared-in-order-per-node.md) | Plan by releases declared in order per node | Proposed | 2026-11-11 |
-| [0024](0024-remove-milestone-from-the-header.md) | Remove `milestone` from the header | Proposed | 2026-11-11 |
-| [0025](0025-estimate-in-hours-of-focused-work-per-node.md) | Estimate in hours of focused work, declared per node | Proposed | 2026-11-11 |
-| [0026](0026-keep-the-work-calendar-personal.md) | Keep the work calendar personal, in the personal content repository | Proposed | 2026-11-11 |
-| [0027](0027-record-when-an-item-closes.md) | Record when an item closes | Proposed | 2026-11-11 |
-| [0028](0028-compute-the-forecast-in-one-place.md) | Compute the forecast in one place, and keep its warnings in the roadmap | Proposed | 2026-11-11 |
+| [0023](0023-plan-by-releases-declared-in-order-per-node.md) | Plan by releases declared in order per node | Accepted | 2026-11-11 |
+| [0024](0024-remove-milestone-from-the-header.md) | Remove `milestone` from the header | Accepted | 2026-11-11 |
+| [0025](0025-estimate-in-hours-of-focused-work-per-node.md) | Estimate in hours of focused work, declared per node | Accepted | 2026-11-11 |
+| [0026](0026-keep-the-work-calendar-personal.md) | Keep the work calendar personal, in the personal content repository | Accepted | 2026-11-11 |
+| [0027](0027-record-when-an-item-closes.md) | Record when an item closes | Accepted | 2026-11-11 |
+| [0028](0028-compute-the-forecast-in-one-place.md) | Compute the forecast in one place, and keep its warnings in the roadmap | Accepted | 2026-11-11 |
 
 ## Archived
 
