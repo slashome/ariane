@@ -23,7 +23,7 @@ export interface StoryGroup extends Group<StoryRow> {
 function keyOf(grouping: StoryGrouping, story: Item): string | null {
   switch (grouping) {
     case 'release':
-      return story.release
+      return story.effective_release?.name ?? null
     case 'epic':
       return story.epic
     case 'node':
@@ -31,6 +31,13 @@ function keyOf(grouping: StoryGrouping, story: Item): string | null {
     case 'status':
       return story.category
   }
+}
+
+function releasePosition(group: Group<StoryRow>): number {
+  if (group.key === '') {
+    return Number.MAX_SAFE_INTEGER
+  }
+  return group.items[0]?.story.effective_release?.position ?? Number.MAX_SAFE_INTEGER - 1
 }
 
 const noneLabels: Record<StoryGrouping, string> = {
@@ -54,6 +61,9 @@ export function groupStories(stories: Item[], tasks: Item[], grouping: StoryGrou
   const groups = groupBy(rows, (row) => keyOf(grouping, row.story), noneLabels[grouping], label)
   if (grouping === 'status') {
     groups.sort((left, right) => categoryOrder.indexOf(left.key as never) - categoryOrder.indexOf(right.key as never))
+  }
+  if (grouping === 'release') {
+    groups.sort((left, right) => releasePosition(left) - releasePosition(right))
   }
   return groups.map((group) => ({ ...group, progress: progressOf(group.items.flatMap((row) => row.tasks)) }))
 }

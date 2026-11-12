@@ -2,12 +2,16 @@ import { makeItem } from '@/shared/api'
 import { groupStories } from './story-groups'
 
 const story = (id: string, extra = {}) => makeItem({ id, kind: 'story', ...extra })
+const planned = (name: string, position: number | null = null, source: 'own' | 'epic' = 'own') => ({
+  release: source === 'own' ? name : null,
+  effective_release: { name, source, from: null, position, parking: false },
+})
 
 describe('groupStories', () => {
   const stories = [
-    story('S3', { release: '0.10' }),
-    story('S1', { release: '0.9', category: 'done', status: 'done' }),
-    story('S2', { release: '0.9', category: 'in_progress', status: 'in_progress' }),
+    story('S3', planned('0.10')),
+    story('S1', { ...planned('0.9'), category: 'done', status: 'done' }),
+    story('S2', { ...planned('0.9'), category: 'in_progress', status: 'in_progress' }),
     story('S4'),
   ]
   const tasks = [
@@ -20,6 +24,17 @@ describe('groupStories', () => {
     const groups = groupStories(stories, tasks, 'release')
     expect(groups.map((group) => group.label)).toEqual(['0.9', '0.10', 'No release'])
     expect(groups[0]?.items.map((row) => row.story.id)).toEqual(['S2', 'S1'])
+  })
+
+  it('groups a story by the release its epic gives it when it carries none', () => {
+    const groups = groupStories([story('S5', planned('1.0', null, 'epic')), story('S6', { release: '2.0' })], [], 'release')
+    expect(groups.map((group) => group.label)).toEqual(['1.0', 'No release'])
+  })
+
+  it('orders the release groups by the release order the node declares, undeclared ones after', () => {
+    const declared = [story('S5', planned('plus-tard', 2)), story('S6', planned('0.10', 0)), story('S7', planned('0.9', 1)), story('S8', planned('9.9'))]
+    const groups = groupStories(declared, [], 'release')
+    expect(groups.map((group) => group.label)).toEqual(['0.10', '0.9', 'plus-tard', '9.9'])
   })
 
   it('measures each story and each group by the tasks whose parent it is', () => {
