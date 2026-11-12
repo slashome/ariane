@@ -111,6 +111,8 @@ pub enum Check {
     DuplicateId,
     /// A `status` absent from the node's workflow.
     UnknownStatus,
+    /// A `release` absent from the node's declared releases (ADR-0023).
+    UnknownRelease,
     /// A key forbidden for this kind, such as `status` on a ressource.
     ForbiddenKey,
     /// An archived item whose status is not closed.

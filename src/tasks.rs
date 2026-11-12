@@ -19,6 +19,7 @@ use crate::item::Kind;
 use crate::node::Category;
 use crate::rank;
 use crate::relations;
+use crate::release::{self, EffectiveRelease};
 use crate::tree::{Item, NodePath, Tree};
 
 /// One item as listed by `ariane tasks`, and as serialized with `--json`.
@@ -49,7 +50,12 @@ pub struct Row<'a> {
     pub r#type: Option<&'a str>,
     /// Ids of the personas a story is written for, from the node's `[personas]`.
     pub personas: Vec<&'a str>,
+    /// `release` as written in the item's own header.
     pub release: Option<&'a str>,
+    /// The release the item is planned in: its own, else its story's, else its
+    /// epic's, with where it comes from and its place in the node's declared
+    /// order (ADR-0023); `None` when none of them carries one.
+    pub effective_release: Option<EffectiveRelease<'a>>,
     pub milestone: Option<&'a str>,
     /// `parent` as `<node>#<id>`.
     pub parent: Option<String>,
@@ -147,16 +153,13 @@ pub fn run(tree: &Tree, args: &TasksArgs, scope: Option<&NodePath>) -> Result<Ex
 }
 
 /// Builds the row of one item, resolving its status category through the
-/// node's effective workflow (inherited `node.toml` files, SPEC.md §1.5).
-pub fn row<'a>(tree: &Tree, item: &'a Item) -> Row<'a> {
+/// node's effective workflow and its release through its story, its epic and
+/// the node's declared releases (inherited `node.toml` files, SPEC.md §1.5).
+pub fn row<'a>(tree: &'a Tree, item: &'a Item) -> Row<'a> {
     let document = &item.document;
+    let config = tree.configs.effective(&item.node);
     let status = document.text("status");
-    let category = status.and_then(|status| {
-        tree.configs
-            .effective(&item.node)
-            .status(status)
-            .map(|status| status.category)
-    });
+    let category = status.and_then(|status| config.status(status).map(|status| status.category));
     Row {
         node: &item.node,
         id: document.text("id"),
@@ -174,6 +177,7 @@ pub fn row<'a>(tree: &Tree, item: &'a Item) -> Row<'a> {
         r#type: document.text("type"),
         personas: document.texts("personas"),
         release: document.text("release"),
+        effective_release: release::effective(tree, item, &config),
         milestone: document.text("milestone"),
         parent: relations::parent(item),
         epic: relations::epic(tree, item),
@@ -299,6 +303,16 @@ mod tests {
         assert_eq!(task.release, Some("1.0"));
         assert!(task.body.is_none());
         let json = serde_json::to_value(task).unwrap();
+        assert_eq!(
+            json["effective_release"],
+            serde_json::json!({
+                "name": "1.0",
+                "source": "own",
+                "from": "p#T1",
+                "position": null,
+                "parking": false,
+            })
+        );
         assert!(json.get("body").is_none());
         assert_eq!(json["type"], serde_json::Value::Null);
     }

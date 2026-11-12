@@ -21,6 +21,7 @@ export function makeItem(overrides: Partial<Item> = {}): Item {
     type: null,
     personas: [],
     release: null,
+    effective_release: null,
     milestone: null,
     parent: null,
     epic: null,

@@ -10,6 +10,10 @@
 //! - `ariane schema --json` exports it, so that the interface never redeclares a
 //!   vocabulary in TypeScript.
 //!
+//! [`RELEASE_KEYS`](crate::schema::RELEASE_KEYS) does the same for the `[[release]]` entries of a
+//! `node.toml` (ADR-0023), which `ariane schema --json` publishes with how they
+//! are inherited and how an item's effective release is resolved.
+//!
 //! The fixed vocabularies (sizes, levels, reflexion statuses), the id prefixes by
 //! kind and the small format checks shared by those commands live here too.
 
@@ -224,6 +228,65 @@ pub const CORE_KEYS: &[CoreKey] = &[
     key("waiting_since", ValueType::Date, Requirement::May),
 ];
 
+/// One key of a `[[release]]` entry of `node.toml`.
+#[derive(Debug, Clone, Copy)]
+pub struct ReleaseKey {
+    /// The key as written in the entry.
+    pub name: &'static str,
+    /// Its type in `ariane schema` output.
+    pub value: &'static str,
+    /// Whether an entry must carry it.
+    pub requirement: Requirement,
+    /// What it means.
+    pub doc: &'static str,
+}
+
+/// Every key of a `[[release]]` entry, in the order they are written.
+pub const RELEASE_KEYS: &[ReleaseKey] = &[
+    ReleaseKey {
+        name: "name",
+        value: "string",
+        requirement: Requirement::Must,
+        doc: "The name items write in `release`, free and unique in the list: `1.8.0`, `0.3`, `mango`.",
+    },
+    ReleaseKey {
+        name: "parking",
+        value: "boolean",
+        requirement: Requirement::May,
+        doc: "`true` marks a release that is never scheduled and never closed, such as `plus-tard`; defaults to `false`.",
+    },
+    ReleaseKey {
+        name: "target",
+        value: "date",
+        requirement: Requirement::May,
+        doc: "The desired date, `YYYY-MM-DD`: it checks a forecast and never changes the order.",
+    },
+];
+
+/// The `[[release]]` declaration as JSON: its keys, that the order of the
+/// entries is the delivery order, that the nearest list replaces the inherited
+/// one, and the kinds whose `release` an item takes, nearest first.
+fn release_declaration() -> Json {
+    let keys: Vec<Json> = RELEASE_KEYS
+        .iter()
+        .map(|key| {
+            json!({
+                "name": key.name,
+                "type": key.value,
+                "requirement": key.requirement,
+                "doc": key.doc,
+            })
+        })
+        .collect();
+    json!({
+        "table": "[[release]]",
+        "keys": keys,
+        "order": "declaration",
+        "inheritance": "replace",
+        "precedence": [kind_id(Kind::Task), kind_id(Kind::Story), kind_id(Kind::Epic)],
+    })
+}
+
 /// Every item kind, in the order `ariane schema --json` lists them.
 pub const KINDS: [Kind; 6] = [
     Kind::Task,
@@ -319,7 +382,7 @@ pub fn is_external(entry: &str) -> bool {
 
 /// The schema as JSON, as printed by `ariane schema --json`: version, keys with
 /// their type, requirement per kind and vocabulary, status categories,
-/// reflexion statuses and id prefixes.
+/// reflexion statuses, id prefixes and the `node.toml` release declaration.
 pub fn export() -> Json {
     let keys: Vec<Json> = CORE_KEYS
         .iter()
@@ -353,6 +416,7 @@ pub fn export() -> Json {
         "categories": categories,
         "reflexion_statuses": REFLEXION_STATUSES,
         "id_prefixes": prefixes,
+        "node_toml": { "release": release_declaration() },
     })
 }
 
@@ -488,6 +552,24 @@ mod tests {
             json!(["open", "trial", "settled"])
         );
         assert_eq!(exported["id_prefixes"]["ressource"], json!("D"));
+    }
+
+    #[test]
+    fn the_export_describes_the_release_declaration_its_inheritance_and_parking() {
+        let release = &export()["node_toml"]["release"];
+        assert_eq!(release["table"], json!("[[release]]"));
+        assert_eq!(release["inheritance"], json!("replace"));
+        assert_eq!(release["order"], json!("declaration"));
+        assert_eq!(release["precedence"], json!(["task", "story", "epic"]));
+        let names: Vec<&str> = release["keys"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|key| key["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(names, ["name", "parking", "target"]);
+        assert_eq!(release["keys"][0]["requirement"], json!("must"));
+        assert_eq!(release["keys"][1]["type"], json!("boolean"));
     }
 
     #[test]

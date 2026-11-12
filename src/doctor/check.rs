@@ -195,6 +195,7 @@ fn check_item(
     }
     report.node(mapping);
     report.status(mapping, &effective);
+    report.release(mapping, &effective);
     report.waiting(mapping, &effective);
     report.personas(mapping, &effective);
     report.custom(mapping, &effective);
@@ -538,6 +539,49 @@ impl Reporter<'_> {
             }
             Some(_) => {}
         }
+    }
+
+    /// Checks `release` against the node's declared releases, on every kind
+    /// (ADR-0023). A node with no `[[release]]` list above it keeps free values;
+    /// a value that is not a string is reported by its type.
+    fn release(&mut self, mapping: &Mapping, effective: &Effective) {
+        let (Some(releases), Some(from)) = (&effective.releases, &effective.releases_from) else {
+            return;
+        };
+        let Some(name) = mapping.get("release").and_then(Value::as_str) else {
+            return;
+        };
+        if effective.release(name).is_some() {
+            return;
+        }
+        let names: Vec<&str> = releases
+            .iter()
+            .map(|release| release.name.as_str())
+            .collect();
+        let origin = format!("tree/{}/{NODE_FILE}", from.as_str());
+        let mut resolutions = Vec::new();
+        if !names.is_empty() {
+            resolutions.push(format!("set `release` to one of: {}", names.join(", ")));
+        }
+        resolutions.push(format!(
+            "declare `[[release]]` with `name = \"{name}\"` in {origin}, at its place in the delivery order"
+        ));
+        resolutions.push(match self.item.kind {
+            Kind::Task | Kind::Story => {
+                "remove `release`, so that the item takes its story's or its epic's".to_owned()
+            }
+            _ => "remove `release`".to_owned(),
+        });
+        let declared = if names.is_empty() {
+            "none".to_owned()
+        } else {
+            names.join(", ")
+        };
+        self.error(
+            Check::UnknownRelease,
+            format!("`release: {name}` is not a release declared in {origin} ({declared})"),
+            Remedy::human(resolutions),
+        );
     }
 
     /// Checks the keys of waiting (SPEC.md §1.3): an item whose status is in

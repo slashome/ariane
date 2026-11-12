@@ -1,11 +1,14 @@
 //! `node.toml`: what a node declares about its items (SPEC.md §1.5, ADR-0008).
 //!
 //! A node may carry a `node.toml` at the root of its directory: a top-level
-//! `description` of the node in Markdown, never inherited, and six tables:
+//! `description` of the node in Markdown, never inherited, and seven tables:
 //!
 //! - `[fields.<key>]` declares a custom header key and its type;
 //! - `[[workflow]]` lists the statuses its items may take, each with a stable
 //!   `id`, a free `label` and one of the seven fixed categories;
+//! - `[[release]]` lists the node's releases in delivery order, each with a
+//!   `name`, an optional `parking` marker and an optional `target` date
+//!   (ADR-0023);
 //! - `[people.<handle>]` names the people an item may wait for, with their ids
 //!   in the node's trackers;
 //! - `[personas."<id>"]` names the personas a user story is written for
@@ -14,16 +17,19 @@
 //! - `[proxy]` gives the node's development server a local name (ADR-0016).
 //!
 //! A node inherits from its ancestors: fields, people and personas accumulate (the nearest
-//! declaration wins), a workflow replaces the inherited one as a whole, and a node with no
-//! workflow above it uses the default one, one status per category.
+//! declaration wins), a workflow or a release list replaces the inherited one as a whole, and
+//! a node with no workflow above it uses the default one, one status per category. A node with
+//! no release list above it has none: its items keep free `release` values.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
+use serde::de::Error as _;
+use serde::{Deserialize, Deserializer, Serialize};
 use toml_edit::DocumentMut;
 
+use crate::schema::is_date;
 use crate::tree::NodePath;
 
 /// Name of the file a node declares itself in.
@@ -107,6 +113,64 @@ pub struct Status {
     pub category: Category,
 }
 
+/// One release of a node, as declared in a `[[release]]` entry (ADR-0023): a
+/// delivered version of the product, even internal. The order of the entries is
+/// the delivery order.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Release {
+    /// The name items write in `release`, free: `1.8.0`, `0.3`, `mango`.
+    pub name: String,
+    /// Marks a release that is never scheduled and never closed, such as `plus-tard`.
+    #[serde(default)]
+    pub parking: bool,
+    /// The desired date, `YYYY-MM-DD`, written as a TOML date or a string; it
+    /// only checks a forecast, never changes the order (ADR-0028).
+    #[serde(default, deserialize_with = "target")]
+    pub target: Option<String>,
+}
+
+/// Reads a release's `target`, a TOML date such as `2027-03-01` or the same
+/// date as a string, and refuses anything else.
+fn target<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
+    let text = match toml::Value::deserialize(deserializer)? {
+        toml::Value::Datetime(date) => date.to_string(),
+        toml::Value::String(text) => text,
+        other => {
+            return Err(D::Error::custom(format!(
+                "`target = {other}` is not a YYYY-MM-DD date"
+            )));
+        }
+    };
+    if !is_date(&text) {
+        return Err(D::Error::custom(format!(
+            "`target = {text}` is not a YYYY-MM-DD date"
+        )));
+    }
+    Ok(Some(text))
+}
+
+/// Reads a `[[release]]` list, refusing a blank name and a name declared twice:
+/// a name is what items write, and its place in the list is its order.
+fn releases<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Vec<Release>>, D::Error> {
+    let releases = Vec::<Release>::deserialize(deserializer)?;
+    for (index, release) in releases.iter().enumerate() {
+        if release.name.trim().is_empty() {
+            return Err(D::Error::custom("a `[[release]]` has a blank `name`"));
+        }
+        if releases[..index]
+            .iter()
+            .any(|earlier| earlier.name == release.name)
+        {
+            return Err(D::Error::custom(format!(
+                "the release `{}` is declared twice",
+                release.name
+            )));
+        }
+    }
+    Ok(Some(releases))
+}
+
 /// Type of a custom key, as written in `type = "…"` of a `[fields.<key>]` table.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 pub enum FieldType {
@@ -187,6 +251,9 @@ pub struct NodeFile {
     pub fields: BTreeMap<String, FieldDecl>,
     /// The workflow declared by this file, if any.
     pub workflow: Option<Vec<Status>>,
+    /// The releases declared by this file in delivery order, if any.
+    #[serde(default, deserialize_with = "releases")]
+    pub release: Option<Vec<Release>>,
     /// The people declared by this file, by handle.
     #[serde(default)]
     pub people: BTreeMap<String, Person>,
@@ -219,6 +286,11 @@ pub struct Effective {
     pub workflow: Vec<Status>,
     /// Node that declared the workflow; `None` for the default workflow.
     pub workflow_from: Option<NodePath>,
+    /// The nearest release list, in delivery order; `None` when no node above
+    /// declares one, and `release` values stay free.
+    pub releases: Option<Vec<Release>>,
+    /// Node that declared the release list.
+    pub releases_from: Option<NodePath>,
     /// People of the node and its ancestors, by handle; the nearest wins.
     pub people: BTreeMap<String, Person>,
     /// Personas of the node and its ancestors, by id; the nearest wins.
@@ -233,6 +305,16 @@ impl Effective {
     /// The workflow status whose id is `id`, if the workflow has one.
     pub fn status(&self, id: &str) -> Option<&Status> {
         self.workflow.iter().find(|status| status.id == id)
+    }
+
+    /// The place of the release named `name` in the delivery order, from 0,
+    /// with its declaration; `None` when no list applies or it lacks `name`.
+    pub fn release(&self, name: &str) -> Option<(usize, &Release)> {
+        self.releases
+            .as_ref()?
+            .iter()
+            .enumerate()
+            .find(|(_, release)| release.name == name)
     }
 }
 
@@ -280,13 +362,15 @@ impl Configs {
     }
 
     /// Combines the files from the home node down to `node` (SPEC.md §1.5): fields,
-    /// people and personas accumulate, the nearest workflow and tracker replace
-    /// inherited ones.
+    /// people and personas accumulate, the nearest workflow, release list and
+    /// tracker replace inherited ones.
     pub fn effective(&self, node: &NodePath) -> Effective {
         let mut effective = Effective {
             fields: BTreeMap::new(),
             workflow: default_workflow(),
             workflow_from: None,
+            releases: None,
+            releases_from: None,
             people: BTreeMap::new(),
             personas: BTreeMap::new(),
             tracker: None,
@@ -314,6 +398,10 @@ impl Configs {
             if let Some(workflow) = &file.workflow {
                 effective.workflow = workflow.clone();
                 effective.workflow_from = Some(ancestor.clone());
+            }
+            if let Some(releases) = &file.release {
+                effective.releases = Some(releases.clone());
+                effective.releases_from = Some(ancestor.clone());
             }
             if let Some(tracker) = &file.tracker {
                 effective.tracker = Some(tracker.clone());
@@ -540,6 +628,73 @@ category = "done"
             .find(|status| status.category == Category::Waiting)
             .unwrap();
         assert_eq!(waiting.id, "waiting");
+    }
+
+    /// A project `node.toml` declaring three releases, the last one parked.
+    const RELEASES: &str = r#"
+[[release]]
+name = "0.9"
+target = 2027-01-15
+
+[[release]]
+name = "1.0"
+target = "2027-03-01"
+
+[[release]]
+name = "plus-tard"
+parking = true
+"#;
+
+    #[test]
+    fn releases_keep_their_declared_order_and_the_nearest_list_replaces_the_inherited_one() {
+        let repo = Repo::new();
+        repo.write("p/node.toml", RELEASES)
+            .write("p/a/tasks/t.md", "# t\n")
+            .write("p/b/node.toml", "[[release]]\nname = \"mango\"\n")
+            .write("p/b/tasks/t.md", "# t\n");
+        let tree = Tree::load(repo.root()).unwrap();
+        assert!(tree.configs.errors.is_empty(), "{:?}", tree.configs.errors);
+        let inherited = tree.configs.effective(&NodePath::new("p/a"));
+        let names: Vec<_> = inherited
+            .releases
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|release| release.name.as_str())
+            .collect();
+        assert_eq!(names, ["0.9", "1.0", "plus-tard"]);
+        assert_eq!(inherited.releases_from, Some(NodePath::new("p")));
+        let (position, parked) = inherited.release("plus-tard").unwrap();
+        assert_eq!(position, 2);
+        assert!(parked.parking);
+        assert_eq!(
+            inherited.release("0.9").unwrap().1.target.as_deref(),
+            Some("2027-01-15")
+        );
+        assert_eq!(
+            inherited.release("1.0").unwrap().1.target.as_deref(),
+            Some("2027-03-01")
+        );
+        let replaced = tree.configs.effective(&NodePath::new("p/b"));
+        assert_eq!(replaced.releases.as_ref().unwrap().len(), 1);
+        assert!(replaced.release("1.0").is_none());
+        assert_eq!(replaced.releases_from, Some(NodePath::new("p/b")));
+        let free = tree.configs.effective(&NodePath::new("q"));
+        assert!(free.releases.is_none());
+        assert!(free.release("1.0").is_none());
+    }
+
+    #[test]
+    fn a_release_list_refuses_duplicate_names_blank_names_and_bad_targets() {
+        for text in [
+            "[[release]]\nname = \"1.0\"\n\n[[release]]\nname = \"1.0\"\n",
+            "[[release]]\nname = \" \"\n",
+            "[[release]]\nname = \"1.0\"\ntarget = \"mars\"\n",
+            "[[release]]\nname = \"1.0\"\ntarget = 2027-03-01T10:00:00\n",
+            "[[release]]\nname = \"1.0\"\nwhen = \"soon\"\n",
+        ] {
+            assert!(toml::from_str::<NodeFile>(text).is_err(), "{text}");
+        }
     }
 
     #[test]

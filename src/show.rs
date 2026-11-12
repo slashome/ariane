@@ -160,6 +160,14 @@ fn print_text(shown: &Shown) {
     if !row.personas.is_empty() {
         println!("personas:   {}", row.personas.join(", "));
     }
+    if let Some(release) = &row.effective_release {
+        match (release.source, &release.from) {
+            (crate::release::Source::Own, _) | (_, None) => {
+                println!("release:    {}", release.name)
+            }
+            (_, Some(from)) => println!("release:    {} (from {from})", release.name),
+        }
+    }
     if let Some(parent) = &relations.parent {
         println!("parent:     {}", list(std::slice::from_ref(parent)));
     }

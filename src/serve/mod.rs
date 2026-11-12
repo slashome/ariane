@@ -368,7 +368,7 @@ mod tests {
         let repo = Repo::new();
         repo.write(
                 "p/node.toml",
-                "description = \"The *p* project.\"\n\n[[workflow]]\nid = \"a-faire\"\nlabel = \"À faire\"\ncategory = \"todo\"\n\n[tracker]\nkind = \"monday\"\nboard = 7\n",
+                "description = \"The *p* project.\"\n\n[[workflow]]\nid = \"a-faire\"\nlabel = \"À faire\"\ncategory = \"todo\"\n\n[[release]]\nname = \"1.0\"\ntarget = 2027-03-01\n\n[[release]]\nname = \"plus-tard\"\nparking = true\n\n[tracker]\nkind = \"monday\"\nboard = 7\n",
             )
             .write(
                 "p/tasks/T001-a.md",
@@ -535,7 +535,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn nodes_carry_their_item_count_and_effective_workflow() {
+    async fn nodes_carry_their_item_count_effective_workflow_and_releases() {
         let repo = sample();
         let (status, body, _) = get(&repo, "/api/nodes").await;
         assert_eq!(status, StatusCode::OK);
@@ -551,6 +551,14 @@ mod tests {
         assert_eq!(node["description"], "The *p* project.");
         assert_eq!(node["workflow"][0]["id"], "a-faire");
         assert_eq!(node["workflow"][0]["category"], "todo");
+        assert_eq!(
+            node["releases"],
+            serde_json::json!([
+                {"name": "1.0", "parking": false, "target": "2027-03-01"},
+                {"name": "plus-tard", "parking": true, "target": null},
+            ])
+        );
+        assert_eq!(node["releases_from"], "p");
         assert_eq!(node["tracker"]["kind"], "monday");
         assert_eq!(node["tracker"]["board"], 7);
         let root = nodes
@@ -561,6 +569,7 @@ mod tests {
             .unwrap();
         assert!(root["tracker"].is_null());
         assert!(root["description"].is_null());
+        assert!(root["releases"].is_null());
     }
 
     #[tokio::test]

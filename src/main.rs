@@ -58,6 +58,8 @@ mod proxy;
 mod rank;
 /// Parents, children, dependencies and dependents of items.
 mod relations;
+/// The effective release of an item, through its story and epic.
+mod release;
 /// Discovery of the content repository on disk.
 mod repo;
 /// The core header schema, declared once as data.

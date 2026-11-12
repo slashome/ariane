@@ -480,6 +480,68 @@ category = "done"
     }
 
     #[test]
+    fn a_release_must_be_declared_by_the_nearest_list_on_every_kind_once_a_list_applies() {
+        let repo = base();
+        repo.write("p/epics/E1-e.md", &epic("E1", "release: \"2.0\"\n"))
+            .write(
+                "p/stories/S1-s.md",
+                &task("p", "S1", "parent: E1\nrelease: \"2.0\"\n"),
+            )
+            .write(
+                "p/tasks/T1-a.md",
+                &task("p", "T1", "parent: S1\nrelease: \"0.3\"\n"),
+            );
+        assert_eq!(checks(&repo), vec![]);
+        repo.write(
+            "p/node.toml",
+            &format!(
+                "{WORKFLOW}\n[[release]]\nname = \"1.0\"\n\n[[release]]\nname = \"2.0\"\n\n[[release]]\nname = \"plus-tard\"\nparking = true\n"
+            ),
+        );
+        only(&repo, Check::UnknownRelease);
+        repo.write(
+            "p/tasks/T1-a.md",
+            &task("p", "T1", "parent: S1\nrelease: plus-tard\n"),
+        )
+        .write("p/epics/E1-e.md", &epic("E1", "release: \"3.0\"\n"));
+        only(&repo, Check::UnknownRelease);
+        repo.write("p/epics/E1-e.md", &epic("E1", ""))
+            .write("p/child/node.toml", "[[release]]\nname = \"mango\"\n")
+            .write(
+                "p/child/tasks/T1-a.md",
+                &task("p/child", "T1", "release: \"1.0\"\n"),
+            );
+        let tree = Tree::load(repo.root()).unwrap();
+        let findings = diagnose(&tree, None, false);
+        assert_eq!(findings.len(), 1);
+        let finding = &findings[0];
+        assert_eq!(finding.check, Check::UnknownRelease);
+        assert_eq!(finding.severity, Severity::Error);
+        assert_eq!(finding.node, Some(NodePath::new("p/child")));
+        assert!(
+            finding.message.contains("tree/p/child/node.toml (mango)"),
+            "{}",
+            finding.message
+        );
+        let Remedy::Human { resolutions } = &finding.remedy else {
+            panic!("a human chooses the release");
+        };
+        assert_eq!(resolutions[0], "set `release` to one of: mango");
+        assert_eq!(resolutions.len(), 3);
+    }
+
+    #[test]
+    fn a_release_list_that_does_not_parse_is_an_invalid_node_toml() {
+        let repo = base();
+        repo.write(
+            "p/node.toml",
+            &format!("{WORKFLOW}\n[[release]]\nname = \"1.0\"\n\n[[release]]\nname = \"1.0\"\n"),
+        )
+        .write("p/tasks/T1-a.md", &task("p", "T1", ""));
+        assert!(checks(&repo).contains(&Check::InvalidNodeToml));
+    }
+
+    #[test]
     fn a_reflexion_only_accepts_open_or_settled() {
         let repo = base();
         repo.write(

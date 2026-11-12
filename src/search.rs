@@ -138,7 +138,7 @@ fn label(hit: &Hit) -> String {
 
 /// Matches one item against the folded `words`, or `None` when a word is in
 /// neither its header nor its body.
-fn hit<'a>(tree: &Tree, item: &'a Item, words: &[Vec<char>], whole: &[char]) -> Option<Hit<'a>> {
+fn hit<'a>(tree: &'a Tree, item: &'a Item, words: &[Vec<char>], whole: &[char]) -> Option<Hit<'a>> {
     let row = tasks::row(tree, item);
     let title = row.title.unwrap_or_default();
     let title_folded = fold(title).0;

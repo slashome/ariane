@@ -4,6 +4,16 @@ export type WaitingReason = 'review' | 'validation' | 'answer' | 'other'
 
 export type Kind = 'task' | 'epic' | 'story' | 'reflexion' | 'ressource' | 'unknown'
 
+export type ReleaseSource = 'own' | 'story' | 'epic'
+
+export interface EffectiveRelease {
+  name: string
+  source: ReleaseSource
+  from: string | null
+  position: number | null
+  parking: boolean
+}
+
 export interface Item {
   node: string
   id: string | null
@@ -21,6 +31,7 @@ export interface Item {
   type: string | null
   personas: string[]
   release: string | null
+  effective_release: EffectiveRelease | null
   milestone: string | null
   parent: string | null
   // The epic of a story, or of a task's story, as `<node>#<id>`.
@@ -96,11 +107,19 @@ export interface Persona {
   name: string
 }
 
+export interface Release {
+  name: string
+  parking: boolean
+  target: string | null
+}
+
 export interface NodeSummary {
   path: string
   description?: string | null
   items: number
   workflow: WorkflowStatus[]
+  releases?: Release[] | null
+  releases_from?: string | null
   people?: Record<string, Person>
   personas?: Record<string, Persona>
   tracker_from?: string | null

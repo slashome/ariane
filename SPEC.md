@@ -2,7 +2,7 @@
 
 > This document states what the method **requires**. It progressively supersedes [`PLAN.md`](PLAN.md), one concept at a time, starting with the item header. Where the two disagree on a concept specified here, this document is authoritative. The reasons behind each rule live in [`docs/adr/`](docs/adr/).
 
-The core keys of this section are also published by `ariane schema --json`, generated from the same table the CLI validates against.
+The core keys of this section, and the keys of a `[[release]]` entry of `node.toml` with their inheritance, are also published by `ariane schema --json`, generated from the same tables the CLI validates against.
 
 The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT** and **MAY** are to be interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 
@@ -46,7 +46,7 @@ Keys MUST be written in English, in lower case, with `_` as the word separator. 
 | `priority` | string | MAY | `low`, `medium`, `high`. |
 | `rank` | integer | MAY; SHOULD NOT for ressources | The item's place in the manual order of its node and kind, negative values included (ADR-0022). |
 | `created` | date | SHOULD | ISO 8601 calendar date, `YYYY-MM-DD`. |
-| `release` | string | MAY | Free name of a delivery target. |
+| `release` | string | MAY | The release the item is delivered in, a `name` of the node's effective `[[release]]` list (§1.5); free when no list applies. On a task it is the decision; on a story or an epic, a provisional forecast for its tasks that carry none ([ADR-0023](docs/adr/0023-plan-by-releases-declared-in-order-per-node.md)). |
 | `milestone` | string | MAY | Free name of an intermediate target. |
 | `refs` | list of strings | MAY | Pointers to ADRs, pull requests, documents. |
 | `external` | list of strings | MAY | Links to external trackers, each of the form `<connector>:<id>`, e.g. `monday:2955884643` (ADR-0011). |
@@ -57,6 +57,8 @@ Keys MUST be written in English, in lower case, with `_` as the word separator. 
 | `waiting_since` | date | SHOULD when waiting; MUST NOT otherwise | When the wait began, `YYYY-MM-DD`. |
 
 **Order of items.** Items are ordered per node and per kind; the ranks of two nodes or two kinds are never compared. Within one node and kind, items carrying `rank` come first, by ascending `rank`; the others follow, by descending `priority` (`high`, `medium`, `low`, then none). Ties fall back to the ids in natural order (`T9` before `T10`). An item under `archives/` keeps its `rank` but the order ignores it. A tool that lists items across nodes keeps the nodes in tree order and applies this order within each. A tool that writes `rank` spaces ranks by 1000, takes the middle of the gap when an item is moved between two ranked items, re-spaces only the neighbours of the drop point when the gap is exhausted, and ranks every unranked item of the node and kind, in their displayed order, when an item is moved below one of them. A tool MUST NOT give an item a `rank` the user did not ask for.
+
+**Effective release.** The release an item is planned in is its own `release`; for a task without one, its story's; for a task or a story still without one, the epic's. The nearest declaration wins: task, then story, then epic. Other kinds only have their own. `ariane tasks --json`, `ariane show --json` and the interface give each item its `effective_release`: the `name`, its `source` (`own`, `story` or `epic`), the item it comes `from` as `<node>#<id>`, its `position` in the delivery order of the item's node (from 0, `null` when the list lacks it or none applies) and whether it is `parking`; `null` when no header of the chain carries a release.
 
 Any other key is a **custom key**. A custom key SHOULD be declared in the node's `node.toml` (§1.5). A tool that reads an item MUST preserve every key it does not know, unchanged, when it writes the item back.
 
@@ -72,7 +74,7 @@ The body of the item MUST NOT restate in prose a fact the header carries.
 
 ### 1.5 `node.toml`
 
-A node MAY carry a `node.toml` file at the root of its directory. It describes the node, declares custom fields, the status workflow, the people items wait for and the personas stories are written for, and may name the node's development server.
+A node MAY carry a `node.toml` file at the root of its directory. It describes the node, declares custom fields, the status workflow, the releases, the people items wait for and the personas stories are written for, and may name the node's development server.
 
 **Description.** A top-level `description` key MAY describe the node: its role, its host repository, its stack, its sources of truth. It is a Markdown string, multi-line with TOML's `"""`, and it is **not inherited**: it describes the node whose `node.toml` holds it ([ADR-0017](docs/adr/0017-keep-a-nodes-judgment-in-its-items.md), amended). Durable rules and conventions of the node belong in its ressources, not here.
 
@@ -99,6 +101,27 @@ Shared front-end library of the `cmc` apps, hosted in `choosemycompany/cmc-lib`.
 
 The order of entries is the display order.
 
+**Releases.** Each `[[release]]` entry declares one release of the node, a delivered version of the product, even internal ([ADR-0023](docs/adr/0023-plan-by-releases-declared-in-order-per-node.md)):
+
+- `name` MUST be given, non-blank and unique within the list; it is free (`1.8.0`, `0.3`, `mango`) and is the value items write in `release`.
+- `parking` MAY be `true` to mark a release that is never scheduled and never closed, such as `plus-tard`; it defaults to `false`.
+- `target` MAY give a desired date, `YYYY-MM-DD`, as a TOML date or a string. It only checks a forecast; it never changes the order.
+
+No other key is allowed. The order of entries is the delivery order.
+
+```toml
+[[release]]
+name = "1.0"
+target = 2027-03-01
+
+[[release]]
+name = "2.0"
+
+[[release]]
+name = "plus-tard"
+parking = true
+```
+
 **People.** Each `[people.<handle>]` table declares one person an item may wait for: `name` MUST be given, free text; every other key is the person's id in a tracker, such as `monday = 58294966`. A handle matches `^[a-z][a-z0-9-]*$`.
 
 **Personas.** Each `[personas."<id>"]` table declares one persona a story may be written for ([ADR-0018](docs/adr/0018-name-the-personas-a-story-is-written-for.md)): `name` MUST be given, free text, the readable label; no other key is allowed. An id SHOULD read `<group>:<role>`, such as `cmc:dev` or `user:rh`; it is a quoted TOML key because of its colon:
@@ -115,6 +138,7 @@ name = "Responsable RH"
 
 - `[fields]`, `[people]` and `[personas]` accumulate. A descendant MAY redeclare a key, a person or a persona inherited from an ancestor, and the descendant's declaration wins.
 - A `[[workflow]]` declared in a node replaces the inherited workflow **as a whole**; entries are never merged.
+- A `[[release]]` list declared in a node replaces the inherited list **as a whole**, the same way. A node with no list anywhere above it has none, and its items keep free `release` values.
 - `description` and `[proxy]` are never inherited.
 - A node with no workflow anywhere above it uses the **default workflow**: one status per category, whose `id` equals the category.
 
@@ -138,6 +162,7 @@ name = "Responsable RH"
 | `node` does not match the file's location | error |
 | `id` duplicated within the node | error |
 | `status` not in the node's effective workflow | error |
+| `release` not a `name` of the node's effective `[[release]]` list, on any kind, when a list applies | error |
 | A status present on a ressource | error |
 | An item in `archives/` whose status category is neither `done` nor `dropped`, or a reflexion in `archives/` that is not `settled` | error |
 | `parent` or `depends_on` points to an item that does not exist | error |
