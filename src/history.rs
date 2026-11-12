@@ -20,6 +20,10 @@ use crate::item::Document;
 /// Separates the date of a commit from the files it touched in the log output.
 const DATE_MARK: char = '\u{0}';
 
+/// The keys a header gave its status under, current first, then the French
+/// key of the pharmakon headers before the migration to version 1 (ADR-0009).
+const STATUS_KEYS: [&str; 2] = ["status", "statut"];
+
 /// One status a file took, from the commit that gave it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Transition {
@@ -230,12 +234,21 @@ fn read_batch(mut reader: impl BufRead) -> HashMap<String, Option<String>> {
                 break;
             }
             let text = String::from_utf8_lossy(&content[..size]);
-            let status = Document::parse(&text).text("status").map(str::to_owned);
-            statuses.insert((*id).to_owned(), status);
+            statuses.insert((*id).to_owned(), status_of(&Document::parse(&text)));
         }
         line.clear();
     }
     statuses
+}
+
+/// The status a version of an item file gives: its `status`, else the legacy
+/// French `statut` its header carried before the migration to version 1, so an
+/// item finished before that migration keeps the date it was really finished.
+fn status_of(document: &Document) -> Option<String> {
+    STATUS_KEYS
+        .iter()
+        .find_map(|key| document.text(key))
+        .map(str::to_owned)
 }
 
 /// Unit tests of the log parsing and of the walk over a real repository.
@@ -332,5 +345,14 @@ mod tests {
             .collect();
         assert_eq!(statuses, [Some("todo"), Some("done")]);
         assert!(history.updated.contains_key(archived));
+    }
+
+    #[test]
+    fn a_version_before_the_migration_gives_its_status_under_the_french_key() {
+        let batch = "b0 blob 38\n---\nnode: p\nid: T1\nstatut: valide\n---\n\nb1 blob 38\n---\nnode: p\nid: T1\nstatus: valide\n---\n\nb2 blob 23\n---\nnode: p\nid: T1\n---\n\n";
+        let statuses = read_batch(batch.as_bytes());
+        assert_eq!(statuses["b0"].as_deref(), Some("valide"));
+        assert_eq!(statuses["b1"].as_deref(), Some("valide"));
+        assert_eq!(statuses["b2"], None);
     }
 }
