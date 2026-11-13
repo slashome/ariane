@@ -73,6 +73,15 @@ describe('the navigation', () => {
     expect(router.state.location.search).toBe('?node=p')
   })
 
+  it('opens the Roadmap section on its Gantt, the node scope kept', async () => {
+    const router = renderAt('/roadmap?node=p')
+    await waitFor(() => expect(router.state.location.pathname).toBe('/roadmap/gantt'))
+    expect(router.state.location.search).toBe('?node=p')
+    const nav = screen.getByRole('navigation', { name: 'Main' })
+    expect(within(nav).getByRole('link', { name: 'Gantt' })).toHaveAttribute('href', '/roadmap/gantt?node=p')
+    expect(within(nav).getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/roadmap/settings?node=p')
+  })
+
   it('counts each menu entry and the status bar shows the branch and the uncommitted files', async () => {
     renderAt('/tasks/backlog')
     const nav = screen.getByRole('navigation', { name: 'Main' })

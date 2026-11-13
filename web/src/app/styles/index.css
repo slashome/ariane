@@ -107,6 +107,14 @@
   }
 }
 
+@utility hatched {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 3px,
+    color-mix(in oklab, var(--color-background) 55%, transparent) 3px 5px
+  );
+}
+
 :root {
   --theme-primary: #3760c9;
   --theme-secondary: #3760c9;

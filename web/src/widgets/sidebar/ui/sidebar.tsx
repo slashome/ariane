@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  ChartGantt,
   ChevronDown,
   Columns3,
   FolderGit2,
@@ -17,6 +18,7 @@ import {
   Network,
   Pin,
   Settings,
+  SlidersHorizontal,
   Users,
   type LucideIcon,
 } from 'lucide-react'
@@ -217,6 +219,10 @@ export function Sidebar() {
           <Entry to={routes.kanban} label="Kanban" icon={Columns3} count={counts.open} search={scope} nested />
           <Entry to={routes.matrix} label="Size × impact" icon={Grid2x2} count={counts.toEstimate} search={scope} nested />
           <Entry to={routes.backlog} label="Backlog" icon={Inbox} count={counts.backlog} search={scope} nested />
+        </Section>
+        <Section id="roadmap" label="Roadmap" icon={ChartGantt} collapsed={collapsed.has('roadmap')} onToggle={() => toggle('roadmap')}>
+          <Entry to={routes.gantt} label="Gantt" icon={ChartGantt} search={scope} nested />
+          <Entry to={routes.roadmapSettings} label="Settings" icon={SlidersHorizontal} search={scope} nested />
         </Section>
         <Entry to={routes.epics} label="Epics" icon={Layers} count={counts.epics} search={scope} />
         <Entry to={routes.stories} label="Stories" icon={BookOpen} count={counts.stories} search={scope} />

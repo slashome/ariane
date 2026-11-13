@@ -11,6 +11,7 @@ import { JournalPage, ReflexionsPage } from '@/pages/reflexions'
 import { PeoplePage } from '@/pages/people'
 import { ProxyPage } from '@/pages/proxy'
 import { RepoPage } from '@/pages/repo'
+import { GanttPage, RoadmapSettingsPage } from '@/pages/roadmap'
 import { RessourcesPage } from '@/pages/ressources'
 import { SettingsPage } from '@/pages/settings'
 import { StoriesPage } from '@/pages/stories'
@@ -39,6 +40,9 @@ export const routeTree: RouteObject[] = [
       { path: 'tasks/matrix', element: <MatrixPage /> },
       { path: 'tasks/backlog', element: <BacklogPage /> },
       { path: 'tasks/*', element: <ItemPage sectionLabel="Tasks" /> },
+      { path: 'roadmap', element: <Moved to={routes.gantt} /> },
+      { path: 'roadmap/gantt', element: <GanttPage /> },
+      { path: 'roadmap/settings', element: <RoadmapSettingsPage /> },
       { path: 'epics', element: <EpicsPage /> },
       { path: 'epics/*', element: <EpicPage /> },
       { path: 'stories', element: <StoriesPage /> },

@@ -7,6 +7,8 @@ export const views: { path: string; title: string; keywords: string[] }[] = [
   { path: routes.kanban, title: 'Kanban', keywords: ['board', 'tasks'] },
   { path: routes.matrix, title: 'Size × impact', keywords: ['matrix', 'estimate', 'tasks'] },
   { path: routes.backlog, title: 'Backlog', keywords: ['triage', 'tasks'] },
+  { path: routes.gantt, title: 'Gantt', keywords: ['roadmap', 'releases', 'forecast', 'timeline'] },
+  { path: routes.roadmapSettings, title: 'Roadmap settings', keywords: ['releases', 'calendar'] },
   { path: routes.stories, title: 'Stories', keywords: [] },
   { path: routes.reflexions, title: 'Reflexions', keywords: ['board'] },
   { path: routes.journal, title: 'Journal', keywords: ['reflexions', 'settled'] },
