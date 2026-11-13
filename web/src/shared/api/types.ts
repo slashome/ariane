@@ -14,6 +14,33 @@ export interface EffectiveRelease {
   parking: boolean
 }
 
+export type EstimateBasis = 'size' | 'provisional' | 'default' | 'tasks'
+
+export type Tester = 'owner' | 'others'
+
+export interface Estimate {
+  hours: number
+  remaining_hours: number
+  test_hours: number
+  remaining_test_hours: number
+  tester: Tester
+  basis: EstimateBasis
+  size: string | null
+  parts: number
+  guessed: number
+}
+
+export interface Pricing {
+  XS: number
+  S: number
+  M: number
+  L: number
+  XL: number
+  default: string
+  test_ratio: number
+  tester: Tester
+}
+
 export interface Item {
   node: string
   id: string | null
@@ -24,6 +51,7 @@ export interface Item {
   status: string | null
   category: Category | null
   size: string | null
+  estimate: Estimate | null
   impact: string | null
   priority: string | null
   rank: number | null
@@ -121,6 +149,7 @@ export interface NodeSummary {
   workflow: WorkflowStatus[]
   releases?: Release[] | null
   releases_from?: string | null
+  estimates?: Pricing
   people?: Record<string, Person>
   personas?: Record<string, Persona>
   tracker_from?: string | null

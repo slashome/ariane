@@ -1,19 +1,22 @@
 import { useMemo, useState } from 'react'
-import { changesFor, ItemCard, useItems, useUpdateItem } from '@/entities/item'
+import { changesFor, formatHours, ItemCard, useItems, useUpdateItem } from '@/entities/item'
+import { useNodes } from '@/entities/node'
 import { useSchema } from '@/entities/schema'
 import { QueryField, useFilteredItems } from '@/features/filter-items'
 import { DragArea, Draggable, Switch, type DragEndEvent } from '@/shared/ui'
-import { parseCellId, placeItems } from '../model/placement'
+import { parseCellId, placeItems, sharedPricing, sizeHours } from '../model/placement'
 import { ImpactRow } from './impact-row'
 
 export function MatrixPage() {
   const { data: items = [], isPending } = useItems()
   const { data: schema } = useSchema()
+  const { data: nodes = [] } = useNodes()
   const update = useUpdateItem()
   const [includeClosed, setIncludeClosed] = useState(false)
 
   const { items: scoped, total } = useFilteredItems(items, { kinds: ['task'] })
   const matrix = useMemo(() => placeItems(scoped, schema, includeClosed), [scoped, schema, includeClosed])
+  const pricing = useMemo(() => sharedPricing(nodes, scoped), [nodes, scoped])
 
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     const item = scoped.find((entry) => entry.path === active.id)
@@ -57,11 +60,15 @@ export function MatrixPage() {
           style={{ gridTemplateColumns: `6rem repeat(${matrix.sizes.length}, minmax(11rem, 1fr))` }}
         >
           <div />
-          {matrix.sizes.map((size) => (
-            <div key={size} className="text-center text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-              {size}
-            </div>
-          ))}
+          {matrix.sizes.map((size) => {
+            const hours = sizeHours(pricing, size)
+            return (
+              <div key={size} className="text-center text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                {size}
+                {hours !== null && <span className="ml-1.5 font-mono font-normal normal-case">{formatHours(hours)}</span>}
+              </div>
+            )
+          })}
           {matrix.impacts.map((impact) => (
             <ImpactRow key={impact} impact={impact} matrix={matrix} />
           ))}

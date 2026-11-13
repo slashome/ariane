@@ -1,5 +1,5 @@
-import type { Item, Schema } from '@/shared/api'
-import { cellId, isQuickWin, parseCellId, placeItems } from './placement'
+import type { Item, NodeSummary, Pricing, Schema } from '@/shared/api'
+import { cellId, isQuickWin, parseCellId, placeItems, sharedPricing, sizeHours } from './placement'
 
 const schema = {
   keys: [
@@ -28,6 +28,7 @@ function item(overrides: Partial<Item>): Item {
     personas: [],
     release: null,
     effective_release: null,
+    estimate: null,
     parent: null,
     epic: null,
     depends_on: [],
@@ -77,5 +78,16 @@ describe('placeItems', () => {
     expect(isQuickWin(matrix, 'medium', 'XS')).toBe(false)
     expect(parseCellId(cellId('medium', 'XL'))).toEqual({ impact: 'medium', size: 'XL' })
     expect(parseCellId('tray')).toBeNull()
+  })
+
+  it('prices the columns only when every node shown prices sizes alike', () => {
+    const pricing: Pricing = { XS: 2, S: 4, M: 12, L: 24, XL: 48, default: 'M', test_ratio: 0.25, tester: 'owner' }
+    const node = (path: string, estimates?: Pricing): NodeSummary => ({ path, items: 1, workflow: [], estimates })
+    const nodes = [node('game', pricing), node('site', pricing), node('other', { ...pricing, M: 8 }), node('bare')]
+    const shared = sharedPricing(nodes, [item({ node: 'game' }), item({ node: 'site' })])
+    expect(sizeHours(shared, 'M')).toBe(12)
+    expect(sharedPricing(nodes, [item({ node: 'game' }), item({ node: 'other' })])).toBeNull()
+    expect(sharedPricing(nodes, [item({ node: 'bare' })])).toBeNull()
+    expect(sizeHours(null, 'M')).toBeNull()
   })
 })

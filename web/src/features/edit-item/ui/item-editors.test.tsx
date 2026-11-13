@@ -71,4 +71,19 @@ describe('ItemEditors', () => {
     await screen.findByText('Status').catch(() => null)
     expect(screen.queryByRole('combobox', { name: 'Status' })).not.toBeInTheDocument()
   })
+
+  it('shows the hours of the size, and the sum of a split story with its guesses', async () => {
+    renderEditors(
+      makeItem({
+        kind: 'story',
+        size: 'XS',
+        estimate: { hours: 36, remaining_hours: 24, test_hours: 9, remaining_test_hours: 6, tester: 'others', basis: 'tasks', size: null, parts: 3, guessed: 1 },
+      }),
+    )
+    const estimate = await screen.findByLabelText('Estimate')
+    expect(within(estimate).getByText('~36 h')).toHaveAttribute('data-guessed', 'true')
+    expect(estimate).toHaveTextContent('Sum of 3 parts, 1 guessed from a default or provisional size')
+    expect(estimate).toHaveTextContent('+9 h of testing by others, as a delay')
+    expect(estimate).toHaveTextContent('24 h remaining')
+  })
 })

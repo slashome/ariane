@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { idColumn, statusColumn, titleColumn, useMoveItem } from '@/entities/item'
+import { EstimateChip, idColumn, statusColumn, titleColumn, useMoveItem } from '@/entities/item'
 import { statusLabel, useNodes } from '@/entities/node'
 import { enumValues, kindLabel, useSchema } from '@/entities/schema'
 import type { Item, NodeSummary, Schema } from '@/shared/api'
@@ -54,7 +54,11 @@ function buildColumns(schema: Schema | undefined, nodes: NodeSummary[], order: M
     { id: 'kind', header: 'Kind', sortValue: (item) => kindLabel(item.kind), cell: (item) => kindLabel(item.kind) },
     statusColumn(itself, (item) => statusLabel(nodes, item.node, item.status)),
     ranked('priority', 'Priority'),
-    ranked('size', 'Size'),
+    {
+      ...ranked('size', 'Size'),
+      sortValue: (item) => item.estimate?.hours ?? rank(schema, 'size', item.size),
+      cell: (item) => (item.estimate || item.size ? <EstimateChip item={item} /> : <span className="text-muted-foreground">—</span>),
+    },
     ranked('impact', 'Impact'),
     {
       id: 'created',

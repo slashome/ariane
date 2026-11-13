@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react'
-import { changesFor, today, useUpdateItem } from '@/entities/item'
+import { changesFor, EstimateDetail, today, useUpdateItem } from '@/entities/item'
 import { peopleOf, useNodes, workflowOf } from '@/entities/node'
 import { enumValues, useSchema } from '@/entities/schema'
 import type { Item } from '@/shared/api'
@@ -84,6 +84,7 @@ export function ItemEditors({ item }: { item: Item }) {
           </Row>
           <Row label="Size">
             <Segmented label="Size" values={enumValues(schema, 'size')} value={item.size} onChange={(value) => setField('size', value)} />
+            {item.estimate && <EstimateDetail estimate={item.estimate} className="mt-1" />}
           </Row>
           <Row label="Impact">
             <Segmented label="Impact" values={enumValues(schema, 'impact')} value={item.impact} onChange={(value) => setField('impact', value)} />

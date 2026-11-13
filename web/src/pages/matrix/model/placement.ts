@@ -1,6 +1,6 @@
 import { enumValues } from '@/entities/schema'
 import { isClosed, isWorkItem } from '@/entities/item'
-import type { Item, Schema } from '@/shared/api'
+import type { Item, NodeSummary, Pricing, Schema } from '@/shared/api'
 
 export interface Matrix {
   sizes: string[]
@@ -20,6 +20,21 @@ export function parseCellId(id: string): { impact: string; size: string } | null
 
 export function isQuickWin(matrix: Pick<Matrix, 'sizes' | 'impacts'>, impact: string, size: string): boolean {
   return matrix.sizes.slice(0, 2).includes(size) && matrix.impacts[0] === impact
+}
+
+export function sharedPricing(nodes: NodeSummary[], items: Item[]): Pricing | null {
+  const paths = new Set(items.map((item) => item.node))
+  const pricings = nodes.filter((node) => paths.has(node.path)).map((node) => node.estimates)
+  const [first] = pricings
+  if (!first || pricings.some((pricing) => !pricing || JSON.stringify(pricing) !== JSON.stringify(first))) {
+    return null
+  }
+  return first
+}
+
+export function sizeHours(pricing: Pricing | null, size: string): number | null {
+  const hours = pricing?.[size as keyof Pricing]
+  return typeof hours === 'number' ? hours : null
 }
 
 export function placeItems(items: Item[], schema: Schema | undefined, includeClosed: boolean): Matrix {
