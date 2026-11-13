@@ -323,7 +323,8 @@ pub enum ProblemKind {
     Invalid,
     /// Two blocks share time: an hour counts once.
     Overlap,
-    /// A `[node."<path>"]` table names no node of the tree.
+    /// A `[node."<path>"]` table names no node of the tree, perhaps a node
+    /// renamed or moved: its blocks still count.
     UnknownNode,
     /// A node table without blocks: its `focus` and `days_off` are never used.
     Unused,
@@ -336,14 +337,27 @@ pub struct Problem {
     pub kind: ProblemKind,
     /// The node table concerned, when there is one.
     pub node: Option<NodePath>,
+    /// The other node of an overlap between two nodes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub other: Option<NodePath>,
     /// What is wrong, in one sentence.
     pub message: String,
 }
 
 impl Problem {
-    /// Tells whether the problem makes the file invalid; an unused table does not.
+    /// Tells whether the problem makes the file invalid; an unused table or
+    /// an unknown node does not.
     pub fn is_error(&self) -> bool {
-        self.kind != ProblemKind::Unused
+        !matches!(self.kind, ProblemKind::Unused | ProblemKind::UnknownNode)
+    }
+
+    /// Tells whether the problem concerns `scope` or one of its descendants:
+    /// either node of an overlap does.
+    pub fn concerns(&self, scope: &NodePath) -> bool {
+        [&self.node, &self.other]
+            .into_iter()
+            .flatten()
+            .any(|node| node.is_within(scope))
     }
 }
 
@@ -406,7 +420,10 @@ pub fn check(text: &str, known: impl Fn(&NodePath) -> bool) -> Checked {
             problems.push(Problem {
                 kind: ProblemKind::UnknownNode,
                 node: Some(node.clone()),
-                message: format!("`[node.\"{path}\"]` names no node of the tree"),
+                other: None,
+                message: format!(
+                    "`[node.\"{path}\"]` names no node of the tree: was the node renamed or moved? Its blocks still count, against overlaps too"
+                ),
             });
         }
         let checked = node_calendar(&node, entry, &mut problems);
@@ -452,6 +469,7 @@ fn node_calendar(node: &NodePath, entry: RawNode, problems: &mut Vec<Problem>) -
         problems.push(Problem {
             kind: ProblemKind::Unused,
             node: Some(node.clone()),
+            other: None,
             message: format!(
                 "{here} has no blocks: its focus and days off are never used, the node works on the blocks of its nearest ancestor that has some"
             ),
@@ -616,6 +634,7 @@ fn overlaps(nodes: &BTreeMap<NodePath, NodeCalendar>, problems: &mut Vec<Problem
             problems.push(Problem {
                 kind: ProblemKind::Overlap,
                 node: Some((*node).clone()),
+                other: (node != other_node).then(|| (*other_node).clone()),
                 message,
             });
         }
@@ -627,6 +646,7 @@ fn invalid(node: Option<&NodePath>, message: String) -> Problem {
     Problem {
         kind: ProblemKind::Invalid,
         node: node.cloned(),
+        other: None,
         message,
     }
 }
@@ -1242,6 +1262,9 @@ blocks = [
             |node| node.as_str() == "real",
         );
         assert_eq!(checked.problems[0].kind, ProblemKind::UnknownNode);
+        assert_eq!(checked.errors().count(), 0);
+        let ghost = &checked.calendar.unwrap().nodes[&NodePath::new("ghost")];
+        assert_eq!(ghost.weekly_hours(), 1.0);
         assert!(
             only("version = 2\ntimezone = \"UTC\"\n")
                 .message
@@ -1387,6 +1410,50 @@ blocks = [
             saved.contains("from = \"12:00\", to = \"13:00\""),
             "{saved}"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_unknown_node_does_not_stop_an_edit_from_being_saved() {
+        let (repo, tree, editor) = editing(
+            "printf '[node.\"renamed\"]\nblocks = [{ days = \"tue\", from = \"20:00\", to = \"23:00\" }]\n' >> \"$1\"",
+        );
+        assert_eq!(
+            edit_with(repo.root(), &tree, &editor).unwrap(),
+            Edited::Saved
+        );
+        assert_eq!(rounds(&repo), 1);
+        let saved = std::fs::read_to_string(path(repo.root())).unwrap();
+        assert!(saved.contains("[node.\"renamed\"]"), "{saved}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_overlap_with_an_unknown_node_is_refused() {
+        let (repo, tree, editor) = editing(
+            "if [ \"$n\" = 1 ]; then printf '[node.\"a\"]\nblocks = [{ days = \"mon\", from = \"09:00\", to = \"12:00\" }]\n[node.\"ghost\"]\nblocks = [{ days = \"mon\", from = \"10:00\", to = \"11:00\" }]\n' >> \"$1\"; else : > \"$1\"; fi",
+        );
+        assert_eq!(
+            edit_with(repo.root(), &tree, &editor).unwrap(),
+            Edited::Abandoned
+        );
+        assert_eq!(rounds(&repo), 2);
+        assert!(!path(repo.root()).exists());
+    }
+
+    #[test]
+    fn an_overlap_names_both_its_nodes_and_concerns_either() {
+        let overlap = only(&with(
+            "[node.\"a/b\"]\nblocks = [{ days = \"mon\", from = \"09:00\", to = \"12:00\" }]\n[node.\"c\"]\nblocks = [{ days = \"mon\", from = \"11:00\", to = \"13:00\" }]\n",
+        ));
+        assert_eq!(
+            (overlap.node.as_ref(), overlap.other.as_ref()),
+            (Some(&NodePath::new("a/b")), Some(&NodePath::new("c")))
+        );
+        for scope in ["a", "a/b", "c"] {
+            assert!(overlap.concerns(&NodePath::new(scope)), "{scope}");
+        }
+        assert!(!overlap.concerns(&NodePath::new("d")));
     }
 
     #[cfg(unix)]

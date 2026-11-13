@@ -323,7 +323,7 @@ blocks = [
 | `version` | integer | MUST | `1`. Changed only by `ariane migrate`. |
 | `timezone` | string | MUST | An IANA time zone, such as `Europe/Paris`. Every block is written in it. |
 | `days_off` | list of strings | MAY | Days off of every node: dates `YYYY-MM-DD` and inclusive ranges `YYYY-MM-DD..YYYY-MM-DD`, the first day not after the last. |
-| `node."<path>"` | table | MAY | One per node with hours of its own; `<path>` MUST be a node of the tree, quoted. |
+| `node."<path>"` | table | MAY | One per node with hours of its own; `<path>` SHOULD be a node of the tree, quoted. |
 | `node."<path>".focus` | number | MAY | The share of the blocks that is focused work, above `0` and at most `1`. Default `1`. |
 | `node."<path>".blocks` | list of tables | MAY | The node's weekly blocks of work. |
 | `node."<path>".blocks[].days` | string | MUST | Days `mon` to `sun`, as single days, ranges and lists: `mon-fri`, `tue,thu`, `sat`, `mon,wed-fri`. A range does not wrap around the week. |
@@ -341,7 +341,7 @@ A node works on the blocks of the nearest node, itself or an ancestor, whose tab
 
 ### 2.4 Validation
 
-`ariane doctor` checks the personal calendar along with the tree. The findings of a node's table belong to that node's scope; the others are reported when the whole tree is checked.
+`ariane doctor` checks the personal calendar along with the tree. The findings of a node's table belong to that node's scope, and an overlap between two nodes to the scope of each of them; the others are reported when the whole tree is checked. Each finding is reported once.
 
 | Finding | Severity |
 |---|---|
@@ -352,6 +352,6 @@ A node works on the blocks of the nearest node, itself or an ancestor, whose tab
 | `focus` outside `]0, 1]` | error |
 | Two blocks of **different** nodes that share time on a day: an hour counts once | error |
 | Two blocks of one node that overlap; blocks MAY touch (`12:00` ends one, starts the other) | error |
-| A `node."<path>"` table that names no node of the tree | error |
+| A `node."<path>"` table that names no node of the tree, such as a node renamed or moved | warning — its blocks still count, and still take part in the overlap checks |
 | A `node."<path>"` table without blocks: its `focus` and `days_off` are never used | warning |
 | A `calendar.toml` in a content repository that is not the personal one | warning — it is never read |

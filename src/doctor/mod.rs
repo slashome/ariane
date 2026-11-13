@@ -840,9 +840,9 @@ category = "done"
         assert_eq!(
             checks,
             [
-                (Check::UnknownCalendarNode, Severity::Error),
+                (Check::UnknownCalendarNode, Severity::Warning),
                 (Check::UnusedCalendarNode, Severity::Warning),
-                (Check::UnknownCalendarNode, Severity::Error),
+                (Check::UnknownCalendarNode, Severity::Warning),
                 (Check::InvalidCalendar, Severity::Error),
                 (Check::CalendarOverlap, Severity::Error),
             ]
@@ -857,7 +857,71 @@ category = "done"
             .into_iter()
             .map(|finding| finding.check)
             .collect();
-        assert_eq!(scoped, [Check::UnknownCalendarNode, Check::InvalidCalendar]);
+        assert_eq!(
+            scoped,
+            [
+                Check::UnknownCalendarNode,
+                Check::InvalidCalendar,
+                Check::CalendarOverlap
+            ]
+        );
+    }
+
+    #[test]
+    fn an_overlap_is_reported_once_and_in_the_scope_of_either_of_its_nodes() {
+        let repo = Repo::new();
+        repo.write("a/node.toml", "")
+            .write("a/b/node.toml", "")
+            .write("c/node.toml", "")
+            .write("d/node.toml", "");
+        std::fs::write(
+            repo.root().join("calendar.toml"),
+            "version = 1\ntimezone = \"Europe/Paris\"\n\n[node.\"a/b\"]\nblocks = [{ days = \"mon\", from = \"09:00\", to = \"12:00\" }]\n\n[node.\"c\"]\nblocks = [{ days = \"mon\", from = \"11:00\", to = \"13:00\" }]\n\n[node.\"d\"]\nblocks = [{ days = \"mon\", from = \"13:00\", to = \"14:00\" }]\n",
+        )
+        .unwrap();
+        let overlaps = |scope: Option<&str>| {
+            calendar_findings(&repo, repo.root(), scope)
+                .into_iter()
+                .filter(|finding| finding.check == Check::CalendarOverlap)
+                .count()
+        };
+        assert_eq!(overlaps(None), 1);
+        assert_eq!(overlaps(Some("a/b")), 1);
+        assert_eq!(overlaps(Some("a")), 1);
+        assert_eq!(overlaps(Some("c")), 1);
+        assert_eq!(overlaps(Some("d")), 0);
+    }
+
+    #[test]
+    fn an_unknown_calendar_node_is_a_warning_whose_blocks_still_overlap() {
+        let repo = base();
+        std::fs::write(
+            repo.root().join("calendar.toml"),
+            "version = 1\ntimezone = \"Europe/Paris\"\n\n[node.\"p\"]\nblocks = [{ days = \"tue\", from = \"09:00\", to = \"12:00\" }]\n\n[node.\"renamed\"]\nblocks = [{ days = \"tue\", from = \"10:00\", to = \"11:00\" }]\n",
+        )
+        .unwrap();
+        let found = calendar_findings(&repo, repo.root(), None);
+        let checks: Vec<(Check, Severity)> = found
+            .iter()
+            .map(|finding| (finding.check, finding.severity))
+            .collect();
+        assert_eq!(
+            checks,
+            [
+                (Check::UnknownCalendarNode, Severity::Warning),
+                (Check::CalendarOverlap, Severity::Error),
+            ]
+        );
+        assert!(
+            found[0].message.contains("renamed or moved"),
+            "{}",
+            found[0].message
+        );
+        assert_eq!(
+            calendar_findings(&repo, repo.root(), Some("p")).len(),
+            1,
+            "the overlap, in the scope of p"
+        );
     }
 
     #[test]

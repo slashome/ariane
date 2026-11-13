@@ -59,8 +59,9 @@ pub fn findings(tree: &Tree, scope: Option<&NodePath>) -> Vec<Finding> {
 /// `tree` is the personal repository `personal`; in any other repository, a
 /// `calendar.toml` is reported as never read. A missing calendar is fine.
 ///
-/// A problem of a node's table is in the scope of that node; the others only
-/// when the whole tree is checked.
+/// A problem of a node's table is in the scope of that node, and an overlap
+/// in the scope of both its nodes; the others only when the whole tree is
+/// checked. Each problem is reported once.
 pub(super) fn calendar(
     tree: &Tree,
     scope: Option<&NodePath>,
@@ -103,12 +104,7 @@ pub(super) fn calendar(
         }
     };
     for problem in overview.problems {
-        let in_scope = match (&problem.node, scope) {
-            (_, None) => true,
-            (Some(node), Some(scope)) => node.is_within(scope),
-            (None, Some(_)) => false,
-        };
-        if !in_scope {
+        if scope.is_some_and(|scope| !problem.concerns(scope)) {
             continue;
         }
         let (check, severity, remedy) = calendar_rule(problem.kind);
@@ -144,10 +140,10 @@ fn calendar_rule(kind: crate::calendar::ProblemKind) -> (Check, Severity, Remedy
         ),
         ProblemKind::UnknownNode => (
             Check::UnknownCalendarNode,
-            Severity::Error,
+            Severity::Warning,
             Remedy::human([
-                "write the path of an existing node in the `[node.\"<path>\"]` table",
-                "remove the table",
+                "write the node's new path in the `[node.\"<path>\"]` table, if it was renamed or moved",
+                "remove the table, if the node is gone",
             ]),
         ),
         ProblemKind::Unused => (
