@@ -153,6 +153,13 @@ struct RawBlock {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Clock(u16);
 
+impl Clock {
+    /// Minutes since midnight, `1440` for `24:00`.
+    pub fn minutes(self) -> u16 {
+        self.0
+    }
+}
+
 /// Written `HH:MM`, as in the file.
 impl std::fmt::Display for Clock {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -171,6 +178,11 @@ impl Serialize for Clock {
 pub struct Weekdays([bool; 7]);
 
 impl Weekdays {
+    /// Tells whether the set holds the day `index`, Monday being 0.
+    pub fn holds(self, index: usize) -> bool {
+        self.0.get(index).copied().unwrap_or(false)
+    }
+
     /// How many days the set holds.
     pub fn count(self) -> usize {
         self.0.iter().filter(|day| **day).count()

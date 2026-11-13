@@ -48,6 +48,7 @@ Keys MUST be written in English, in lower case, with `_` as the word separator. 
 | `created` | date | SHOULD | ISO 8601 calendar date, `YYYY-MM-DD`. |
 | `closed` | date | MAY for tasks, epics and stories; SHOULD NOT for reflexions; MUST NOT for ressources | When the item last entered a status of the `done` category, `YYYY-MM-DD` ([ADR-0027](docs/adr/0027-record-when-an-item-closes.md)). Written by the tool that changes the status, never by hand from memory. |
 | `release` | string | MAY | The release the item is delivered in, a `name` of the node's effective `[[release]]` list (§1.5); free when no list applies. On a task it is the decision; on a story or an epic, a provisional forecast for its tasks that carry none ([ADR-0023](docs/adr/0023-plan-by-releases-declared-in-order-per-node.md)). |
+| `target` | date | MAY | The desired date of a task, a story or an epic, `YYYY-MM-DD`. The forecast checks it and never reorders for it (§3, [ADR-0028](docs/adr/0028-compute-the-forecast-in-one-place.md)). |
 | `refs` | list of strings | MAY | Pointers to ADRs, pull requests, documents. |
 | `external` | list of strings | MAY | Links to external trackers, each of the form `<connector>:<id>`, e.g. `monday:2955884643` (ADR-0011). |
 | `branches` | list of strings | MAY | The git branches the item's work lives in, each of the form `<owner>/<repo>:<branch>`, e.g. `slashome/ariane:feat/web-node-select`; a task may span several repositories. |
@@ -193,7 +194,7 @@ name = "Responsable RH"
 | `parent` or `depends_on` points to an item that does not exist | error |
 | `parent` on an epic | error |
 | `parent` points to an epic from an item that is not a story | error |
-| `size`, `impact`, `priority`, `created` or `closed` outside its vocabulary or format | error |
+| `size`, `impact`, `priority`, `created`, `closed` or `target` outside its vocabulary or format | error |
 | A custom key declared in `node.toml` has a value of the wrong type | error |
 | A status in the `waiting` category without `waiting_for` | error |
 | A `waiting_for` handle declared under no applicable `[people]` | error |
@@ -355,3 +356,54 @@ A node works on the blocks of the nearest node, itself or an ancestor, whose tab
 | A `node."<path>"` table that names no node of the tree, such as a node renamed or moved | warning — its blocks still count, and still take part in the overlap checks |
 | A `node."<path>"` table without blocks: its `focus` and `days_off` are never used | warning |
 | A `calendar.toml` in a content repository that is not the personal one | warning — it is never read |
+
+## 3. Forecast
+
+Decided in [ADR-0028](docs/adr/0028-compute-the-forecast-in-one-place.md). The forecast says when each release of a node should be delivered. One engine computes it, in the binary; every reader gets its result, and nothing it computes is written to a file.
+
+### 3.1 Scope
+
+The forecast of a node runs on the node's **carrier** (§2.3) over every task, story and epic below the carrier, archived ones included: one sequence, shared by its descendants. Without a carrier, it runs on the node itself and its descendants, in hours from now and without dates.
+
+### 3.2 Work
+
+- A **piece of work** is a task, or a story or an epic not split yet (a story without tasks, an epic without stories), which counts as one block at its provisional size, else at the default size (§1.5).
+- Its hours are those of §1.5: for open work its remaining hours and testing, the whole of them for work in progress, since partial progress is not recorded.
+- Its release is its effective release (§1.3). Work of a parking release, work without effective release and work whose release no applicable list declares is listed as **unscheduled**, with the reason, and never scheduled. When the carrier's descendants declare release lists of their own, a release is identified by its name and the node declaring its list; releases are ordered by their place in their list, then by the path of that node.
+- Dropped work is left out. Finished work (`done` category) takes no hours: it is shown in its release at its `closed` date, else at the date approximated from git (§1.3, marked approximate), else without a date.
+
+### 3.3 Order
+
+Releases come in their declared order. Within a release, work is grouped by epic, then by story, each level and the work in the order of items (§1.3), nodes in the order of their paths; the work without epic, and within an epic the work without story, comes last. `depends_on` is a constraint, the grouping a preference: the scheduler always takes the first piece of work in that order whose dependencies are delivered, and passes over the ones that are not, so a group can show a gap. A dependency on a story or an epic is a dependency on all its work; the `depends_on` of a story and of an epic apply to every piece of work inside them. A dependency on finished work is met; one on open work that is never scheduled (parking, no release, out of scope) is ignored and warned about. Work caught in a dependency cycle, and work waiting on it, stays unscheduled, and the cycle is warned about.
+
+### 3.4 Scheduling
+
+One person works in sequence, from now on. The scheduler counts in **focused hours from now**. A piece of work takes its hours, then its testing:
+
+- with `tester = "owner"`, the testing takes the owner's hours right after the work;
+- with `tester = "others"`, the testing is a **validation** that elapses from the end of the work, measured in the carrier's focused hours, while the owner goes on with the next piece of work; the work is delivered, and its release can end, only after it.
+
+Work in a status of the `waiting` category takes none of the owner's hours: it is a validation from now that lasts its testing hours. Statuses of the `backlog`, `todo` and `blocked` categories are scheduled alike.
+
+With a carrier, focused hours become moments: the carrier's weekly blocks are laid out from now in the calendar's time zone, the global days off and the carrier's skipped, each block worth its length times `focus`, the hours accruing evenly over the block. A piece of work spread over several blocks has one segment per block. Moments are written RFC 3339 with the offset of the calendar's time zone; work further than ten years ahead has hours and no moment.
+
+### 3.5 Result
+
+The result gives, per release in delivery order, its epics then their stories then their work, each with its hours left, its span (from the start of its first scheduled work to the delivery of its last) and the first and last closing dates of its finished work. Each piece of work has its place in the sequence, its start, its end, its delivery, its segments (work and testing) and its validation. Every moment carries its focused hours from now and, with a carrier, its date. Without a carrier the same sequence comes in hours only (“+36 h”).
+
+### 3.6 Warnings
+
+The forecast carries its own warnings, counted by kind with the items they concern; `doctor` reports none of them ([ADR-0028](docs/adr/0028-compute-the-forecast-in-one-place.md) §5):
+
+| Kind | Flags |
+|---|---|
+| `unsized` | A scheduled task without `size`, counted at the default size |
+| `provisional` | A scheduled story or epic not split yet, weighed by its provisional or the default size |
+| `without_story` | An open task without story |
+| `without_epic` | A story with open work and without epic |
+| `without_release` | Open work without effective release |
+| `undeclared_release` | Open work whose release no applicable list declares |
+| `missed_target` | Work, a story, an epic or a release whose `target` is earlier than its forecast delivery, or than its closing date for finished work; checked on future work only when dated |
+| `contradictory_target` | A `target` later than the `target` of the story, the epic or the release that contains the work, or a story's later than its epic's |
+| `dependency_cycle` | Work caught in a dependency cycle, left unscheduled |
+| `unscheduled_dependency` | Work depending on open work that is never scheduled; the dependency is ignored |

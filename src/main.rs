@@ -39,6 +39,12 @@ mod estimate;
 mod fix;
 /// `ariane focus`: the item an agent session works on.
 mod focus;
+/// The forecast engine: when each release should be delivered (ADR-0028).
+#[allow(
+    dead_code,
+    reason = "read by `ariane roadmap` and its API route, which come next (T122)"
+)]
+mod forecast;
 /// What git remembers of each item file: its latest change, the statuses it went through.
 mod history;
 /// `ariane hook`: what Ariane does inside an agent's harness.
