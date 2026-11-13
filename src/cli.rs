@@ -107,6 +107,10 @@ pub enum Command {
         about = "When each release should be delivered: the forecast of a node, with its warnings"
     )]
     Roadmap(RoadmapArgs),
+    #[command(
+        about = "Declare, order, rename and remove a node's releases, and plan items in them"
+    )]
+    Release(ReleaseArgs),
     #[command(about = "Keep `ariane serve` running in the background (launchd, systemd)")]
     Service(ServiceArgs),
 }
@@ -334,6 +338,101 @@ pub enum PeopleCommand {
         account: String,
         name: String,
     },
+}
+
+/// Arguments of `ariane release`: one subcommand, each writing at once.
+#[derive(Args)]
+pub struct ReleaseArgs {
+    #[command(subcommand)]
+    pub command: ReleaseCommand,
+}
+
+/// The subcommands of `ariane release`. Those that change the list name the
+/// node that declares it.
+#[derive(Subcommand)]
+pub enum ReleaseCommand {
+    #[command(about = "Declare a release in a node's node.toml, last unless placed")]
+    Add(ReleaseAddArgs),
+    #[command(about = "Move a release to another place of the delivery order")]
+    Move(ReleaseMoveArgs),
+    #[command(about = "Rename a release, in node.toml and in every item that names it")]
+    Rename {
+        node: String,
+        name: String,
+        to: String,
+    },
+    #[command(about = "Remove a release no item names any more")]
+    Remove { node: String, name: String },
+    #[command(about = "Plan an epic, a story or a task in a release, or in none")]
+    Assign(ReleaseAssignArgs),
+}
+
+/// Arguments of `ariane release add`: the node, the name, an optional place,
+/// and the release's optional marks.
+#[derive(Args)]
+#[command(group(clap::ArgGroup::new("place").multiple(false)))]
+pub struct ReleaseAddArgs {
+    #[arg(help = "The node that declares the release list")]
+    pub node: String,
+    pub name: String,
+
+    #[arg(long, group = "place", help = "Place it right before this release")]
+    pub before: Option<String>,
+
+    #[arg(long, group = "place", help = "Place it right after this release")]
+    pub after: Option<String>,
+
+    #[arg(long, group = "place", help = "Place it first")]
+    pub top: bool,
+
+    #[arg(
+        long,
+        help = "A release that is never scheduled nor closed, such as `plus-tard`"
+    )]
+    pub parking: bool,
+
+    #[arg(long, help = "The desired date, YYYY-MM-DD")]
+    pub target: Option<String>,
+}
+
+/// Arguments of `ariane release move`: the node, the release, and exactly one
+/// place for it.
+#[derive(Args)]
+#[command(group(clap::ArgGroup::new("place").required(true).multiple(false)))]
+pub struct ReleaseMoveArgs {
+    #[arg(help = "The node that declares the release list")]
+    pub node: String,
+    pub name: String,
+
+    #[arg(long, group = "place", help = "Place it right before this release")]
+    pub before: Option<String>,
+
+    #[arg(long, group = "place", help = "Place it right after this release")]
+    pub after: Option<String>,
+
+    #[arg(long, group = "place", help = "Place it first")]
+    pub top: bool,
+
+    #[arg(long, group = "place", help = "Place it last")]
+    pub bottom: bool,
+}
+
+/// Arguments of `ariane release assign`: the item, and a release or `none`.
+#[derive(Args)]
+#[command(group(clap::ArgGroup::new("release").required(true).multiple(false)))]
+pub struct ReleaseAssignArgs {
+    #[arg(help = "The item: `<node>#<id>`, or a bare id within the node of the current directory")]
+    pub reference: String,
+
+    #[arg(group = "release", help = "A release of the item's node")]
+    pub name: Option<String>,
+
+    #[arg(
+        long,
+        group = "release",
+        help = "Remove its release: it takes its story's or its epic's"
+    )]
+    pub none: bool,
 }
 
 /// The trackers Ariane has a connector for (ADR-0011).

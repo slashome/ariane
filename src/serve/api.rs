@@ -14,6 +14,7 @@
 //!
 //! The writing endpoints — `PATCH /api/items`, `PUT /api/dashboard`,
 //! `PUT /api/settings/theme`, `PUT` and `DELETE /api/proxy/routes`,
+//! `POST`, `PATCH` and `DELETE /api/releases` (`ariane release`),
 //! `POST /api/commit`, `POST /api/push`, `POST /api/pull`, `POST /api/discard` — run on the
 //! blocking pool under the state's `busy` lock, one at a time, and never commit
 //! unless asked.
@@ -37,7 +38,8 @@ use super::State;
 use super::git;
 use super::write::{self, Move, Patch, Refusal};
 use crate::item::Kind;
-use crate::tree::Tree;
+use crate::release::declare::{self, Place, Refusal as ReleaseRefusal};
+use crate::tree::{NodePath, Tree};
 
 /// Interval between the keep-alive comments of an event stream.
 const KEEP_ALIVE: Duration = Duration::from_secs(15);
@@ -850,6 +852,197 @@ pub async fn remove_persona(
             tree,
             &crate::tree::NodePath::new(&request.node),
             &request.id,
+        )
+    })
+    .await
+}
+
+/// Where `POST` and `PATCH /api/releases` place a release.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReleasePlace {
+    /// Right before the release `other` names.
+    Before,
+    /// Right after the release `other` names.
+    After,
+    /// First of the list.
+    Top,
+    /// Last of the list.
+    Bottom,
+}
+
+/// The body of the writes of `/api/releases`.
+#[derive(Debug, Deserialize)]
+pub struct ReleaseRequest {
+    /// The node that declares the list.
+    pub node: String,
+    /// The release to add, move, rename or remove.
+    pub name: String,
+    /// Where to add or move it: last when absent on an add, unmoved on a change.
+    #[serde(default)]
+    pub place: Option<ReleasePlace>,
+    /// The release it is placed before or after.
+    #[serde(default)]
+    pub other: Option<String>,
+    #[serde(default)]
+    pub parking: bool,
+    #[serde(default)]
+    pub target: Option<String>,
+    /// A new name, rewritten in the items that name the release.
+    #[serde(default)]
+    pub rename_to: Option<String>,
+}
+
+impl ReleaseRequest {
+    /// The place the request asks for, `None` when it asks none; refuses
+    /// `before` or `after` without `other`.
+    fn place(&self) -> Result<Option<Place<'_>>, String> {
+        let other = || {
+            self.other
+                .as_deref()
+                .ok_or_else(|| "`before` and `after` need `other`".to_owned())
+        };
+        Ok(match self.place {
+            None => None,
+            Some(ReleasePlace::Top) => Some(Place::Top),
+            Some(ReleasePlace::Bottom) => Some(Place::Bottom),
+            Some(ReleasePlace::Before) => Some(Place::Before(other()?)),
+            Some(ReleasePlace::After) => Some(Place::After(other()?)),
+        })
+    }
+}
+
+/// What a change of releases did: the items it rewrote, or why it did nothing.
+type ReleaseOutcome = anyhow::Result<Result<Vec<String>, ReleaseRefusal>>;
+
+/// Runs one change of a release list, reloads the tree and answers the list
+/// the node plans against: `node`, `releases_from`, `releases` in delivery
+/// order and the items a rename `rewritten`. `400` for a malformed request,
+/// `422` for a refused change (with `declared_in` when the node inherits its
+/// list), `409` with the `items` that still name a release to remove.
+async fn change_releases(
+    state: Arc<State>,
+    request: ReleaseRequest,
+    change: impl FnOnce(&Tree, &ReleaseRequest) -> Result<ReleaseOutcome, String> + Send + 'static,
+) -> Response {
+    exclusive(state, move |state| {
+        let outcome = match state.tree.read() {
+            Ok(tree) => change(&tree, &request),
+            Err(_) => {
+                return error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "the tree lock is poisoned",
+                );
+            }
+        };
+        let rewritten = match outcome {
+            Err(malformed) => return error(StatusCode::BAD_REQUEST, &malformed),
+            Ok(Err(failure)) => {
+                return error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}"));
+            }
+            Ok(Ok(Err(refusal))) => return refused_release(&refusal),
+            Ok(Ok(Ok(rewritten))) => rewritten,
+        };
+        if let Err(failure) = state.reload() {
+            return error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}"));
+        }
+        let node = NodePath::new(&request.node);
+        with_tree(state, |tree| {
+            let (from, releases) = declare::effective_list(tree, &node);
+            json!({
+                "node": node,
+                "releases_from": from,
+                "releases": releases,
+                "rewritten": rewritten,
+            })
+        })
+    })
+    .await
+}
+
+/// The response to a refused change of releases.
+fn refused_release(refusal: &ReleaseRefusal) -> Response {
+    let (status, extra) = match refusal {
+        ReleaseRefusal::Invalid(_) => (StatusCode::UNPROCESSABLE_ENTITY, json!({})),
+        ReleaseRefusal::Inherited { from, .. } => (
+            StatusCode::UNPROCESSABLE_ENTITY,
+            json!({ "declared_in": from }),
+        ),
+        ReleaseRefusal::Used { items, .. } => (StatusCode::CONFLICT, json!({ "items": items })),
+    };
+    let mut body = extra;
+    body["error"] = Value::String(refusal.to_string());
+    (status, Json(body)).into_response()
+}
+
+/// `POST /api/releases`: declares a release at its place, last by default,
+/// as `ariane release add`.
+pub async fn add_release(
+    Shared(state): Shared<Arc<State>>,
+    Json(request): Json<ReleaseRequest>,
+) -> Response {
+    change_releases(state, request, |tree, request| {
+        let place = request.place()?.unwrap_or(Place::Bottom);
+        let declaration = declare::Declaration {
+            name: request.name.clone(),
+            parking: request.parking,
+            target: request.target.clone(),
+        };
+        Ok(
+            declare::add(tree, &NodePath::new(&request.node), &declaration, place)
+                .map(|outcome| outcome.map(|()| Vec::new())),
+        )
+    })
+    .await
+}
+
+/// `PATCH /api/releases`: moves a release when `place` is given, then renames
+/// it (items rewritten) when `rename_to` is, as `ariane release move` and
+/// `rename`.
+pub async fn change_release(
+    Shared(state): Shared<Arc<State>>,
+    Json(request): Json<ReleaseRequest>,
+) -> Response {
+    change_releases(state, request, |tree, request| {
+        let node = NodePath::new(&request.node);
+        let place = request.place()?;
+        if place.is_none() && request.rename_to.is_none() {
+            return Err("nothing to change: give `place` or `rename_to`".to_owned());
+        }
+        Ok(move_then_rename(tree, &node, request, place))
+    })
+    .await
+}
+
+/// Moves the release `request` names to `place`, if any, then renames it to
+/// `rename_to`, if any.
+fn move_then_rename(
+    tree: &Tree,
+    node: &NodePath,
+    request: &ReleaseRequest,
+    place: Option<Place>,
+) -> ReleaseOutcome {
+    if let Some(place) = place
+        && let Err(refusal) = declare::move_to(tree, node, &request.name, place)?
+    {
+        return Ok(Err(refusal));
+    }
+    match request.rename_to.as_deref() {
+        Some(to) => declare::rename(tree, node, &request.name, to),
+        None => Ok(Ok(Vec::new())),
+    }
+}
+
+/// `DELETE /api/releases`: removes a release no item names, as `ariane
+/// release remove`.
+pub async fn remove_release(
+    Shared(state): Shared<Arc<State>>,
+    Json(request): Json<ReleaseRequest>,
+) -> Response {
+    change_releases(state, request, |tree, request| {
+        Ok(
+            declare::remove(tree, &NodePath::new(&request.node), &request.name)
+                .map(|outcome| outcome.map(|()| Vec::new())),
         )
     })
     .await

@@ -5,7 +5,10 @@
 //! none. The nearest declaration wins, task, then story, then epic. This module
 //! resolves that precedence once, for `ariane tasks --json`, `ariane show
 //! --json` and the interface, and places the result in the node's declared
-//! order.
+//! order. [`declare`] writes releases, [`command`] is `ariane release`.
+
+pub mod command;
+pub mod declare;
 
 use serde::Serialize;
 

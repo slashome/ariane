@@ -181,6 +181,16 @@ name = "Responsable RH"
 
 **Proxy.** A `[proxy]` table gives the node's development server a local name (ADR-0016): `host` MUST be a host name — labels of lowercase letters, digits and inner hyphens, separated by dots, such as `dreamcatchr.local` — and `port` MUST be the port it listens on, on `127.0.0.1`, from 1 to 65535. A node that runs several servers declares one `[[proxy]]` entry per server instead, each with its own `host` and `port`. No two entries of the tree MAY declare the same `host`. Routes are not inherited.
 
+**Changing releases.** A release list is changed only in the `node.toml` that declares it, through `ariane release` or the interface (`POST`, `PATCH` and `DELETE /api/releases`, and `release` in `PATCH /api/items`), which run the same code; both write at once and never commit:
+
+- `ariane release add <node> <name>` declares a release, last unless `--top`, `--before <release>` or `--after <release>` places it, with `--parking` and `--target YYYY-MM-DD`. The name is trimmed; a blank name, a name the list already has or a target that is not a date is refused. A node with no list anywhere above it starts its own.
+- `ariane release move <node> <name>` with one of `--top`, `--bottom`, `--before <release>`, `--after <release>` changes its place in the delivery order.
+- `ariane release rename <node> <old> <new>` renames it and rewrites `release` in every item, archived ones included, whose own value is the old name and whose node plans against that list.
+- `ariane release remove <node> <name>` removes it, and is refused while an item of that scope still names it, listing them. Removing the last entry removes the list: the node then plans against its ancestors' list, or none.
+- `ariane release assign <node>#<id> <name>` writes `release` on an epic, a story or a task that is not archived, and `--none` removes it. A name the item's effective list does not declare is refused, and so is any name when no list applies.
+
+A node that inherits its list cannot change it: the change is refused, naming the node that declares the list, rather than copying the list down. Every change of `node.toml` keeps its comments, the order of its tables and the keys Ariane does not know, touches only the lines it changes, and writes nothing when the result would not be a valid `node.toml`.
+
 **Changing a workflow.** Renaming a status id MUST go through `ariane status rename <node> <old> <new>`; removing a status still in use MUST go through `ariane status remove <node> <id> --into <other>`. Both commands rewrite `node.toml` and every affected item in one operation.
 
 ### 1.6 Validation

@@ -1,8 +1,10 @@
 //! Edits of item headers requested by the interface (ADR-0012, "Writing").
 //!
-//! The interface may change seven keys of an item — `status`, `size`, `impact`,
-//! `priority`, and the keys of waiting `waiting_for` (a list of the node's
-//! people), `waiting_on`, `waiting_since` — and nothing else. A status in the
+//! The interface may change eight keys of an item — `status`, `size`, `impact`,
+//! `priority`, `release` (a release of the node's effective list, on an epic,
+//! a story or a task, checked by [`crate::release::declare::check_assignable`]),
+//! and the keys of waiting `waiting_for` (a list of the node's people),
+//! `waiting_on`, `waiting_since` — and the body, nothing else. A status in the
 //! `waiting` category needs someone to wait for; leaving that category removes
 //! the keys of waiting. A status entering the `done` category writes today's
 //! date in `closed`, leaving that category removes it ([`closed::settle`],
@@ -35,12 +37,13 @@ use crate::schema::{self, LEVELS, REFLEXION_STATUSES, SIZES, WAITING_REASONS};
 use crate::tree::{Item, Tree};
 
 /// The keys the interface is allowed to change.
-pub const EDITABLE: [&str; 8] = [
+pub const EDITABLE: [&str; 9] = [
     "body",
     "status",
     "size",
     "impact",
     "priority",
+    "release",
     "waiting_for",
     "waiting_on",
     "waiting_since",
@@ -384,7 +387,8 @@ fn wanted(key: &str, to: &Json) -> Result<Option<Value>, Refusal> {
     }
 }
 
-/// Checks a wanted value against the schema and, for `status`, the workflow.
+/// Checks a wanted value against the schema and, for `status` and `release`,
+/// the node's workflow and release list.
 ///
 /// A status is required on tasks, stories, backlog items and reflexions, so it
 /// cannot be removed there; a ressource carries none (SPEC §1.3).
@@ -409,6 +413,10 @@ fn validate(tree: &Tree, item: &Item, key: &str, wanted: Option<&Value>) -> Resu
         };
     }
     let wanted = wanted.and_then(Value::as_str);
+    if key == "release" {
+        return crate::release::declare::check_assignable(tree, item, wanted)
+            .map_err(|refusal| Refusal::Invalid(refusal.to_string()));
+    }
     if key == "waiting_since" {
         return match wanted {
             Some(date) if !schema::is_date(date) => Err(Refusal::Invalid(format!(

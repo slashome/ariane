@@ -175,6 +175,12 @@ pub fn router(state: Arc<State>) -> Router {
                 .patch(api::change_persona)
                 .delete(api::remove_persona),
         )
+        .route(
+            "/api/releases",
+            post(api::add_release)
+                .patch(api::change_release)
+                .delete(api::remove_release),
+        )
         .route("/api/monday/users", get(api::monday_users))
         .route("/api/push", post(api::push))
         .route("/api/pull", post(api::pull))
@@ -937,6 +943,160 @@ mod tests {
         )
         .await;
         assert_eq!(status, StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn releases_are_added_moved_renamed_and_kept_while_named() {
+        let repo = sample();
+        repo.write(
+            "p/tasks/T002-b.md",
+            "---\nariane: 2\nnode: p\nid: T002\ntitle: B\nstatus: a-faire\nrelease: '1.0'\n---\n",
+        );
+        let names = |body: &serde_json::Value| -> Vec<String> {
+            body["releases"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|release| release["name"].as_str().unwrap().to_owned())
+                .collect()
+        };
+        let (status, body) = send(
+            &repo,
+            "POST",
+            "/api/releases",
+            serde_json::json!({ "node": "p", "name": "0.9", "place": "top", "target": "2027-01-15" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["releases_from"], "p");
+        assert_eq!(names(&body), ["0.9", "1.0", "plus-tard"]);
+        assert_eq!(body["releases"][0]["target"], "2027-01-15");
+        let (status, body) = send(
+            &repo,
+            "PATCH",
+            "/api/releases",
+            serde_json::json!({ "node": "p", "name": "1.0", "place": "before", "other": "0.9", "rename_to": "mango" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(names(&body), ["mango", "0.9", "plus-tard"]);
+        assert_eq!(body["rewritten"], serde_json::json!(["p#T002"]));
+        let task = std::fs::read_to_string(repo.root().join("tree/p/tasks/T002-b.md")).unwrap();
+        assert!(task.contains("release: mango\n"), "{task}");
+        let (status, body) = send(
+            &repo,
+            "DELETE",
+            "/api/releases",
+            serde_json::json!({ "node": "p", "name": "mango" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body["items"], serde_json::json!(["p#T002"]));
+        let (status, body) = send(
+            &repo,
+            "DELETE",
+            "/api/releases",
+            serde_json::json!({ "node": "p", "name": "0.9" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(names(&body), ["mango", "plus-tard"]);
+        let text = std::fs::read_to_string(repo.root().join("tree/p/node.toml")).unwrap();
+        assert!(text.starts_with("description = \"The *p* project.\"\n\n[[workflow]]"));
+        assert!(
+            text.ends_with("[tracker]\nkind = \"monday\"\nboard = 7\n"),
+            "{text}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_release_write_is_refused_with_its_reason_and_an_inherited_list_names_its_node() {
+        let repo = sample();
+        repo.write(
+            "p/c/tasks/T001-c.md",
+            "---\nariane: 2\nnode: p/c\nid: T001\ntitle: C\nstatus: a-faire\n---\n",
+        );
+        let (status, body) = send(
+            &repo,
+            "POST",
+            "/api/releases",
+            serde_json::json!({ "node": "p/c", "name": "2.0" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(body["declared_in"], "p");
+        assert!(body["error"].as_str().unwrap().contains("`p`"), "{body}");
+        for (method, body) in [
+            ("POST", serde_json::json!({ "node": "p", "name": "1.0" })),
+            ("POST", serde_json::json!({ "node": "p", "name": " " })),
+            (
+                "POST",
+                serde_json::json!({ "node": "p", "name": "2.0", "target": "soon" }),
+            ),
+            (
+                "PATCH",
+                serde_json::json!({ "node": "p", "name": "9.9", "place": "top" }),
+            ),
+        ] {
+            let (status, answer) = send(&repo, method, "/api/releases", body.clone()).await;
+            assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body} {answer}");
+            assert!(answer["error"].is_string());
+        }
+        for body in [
+            serde_json::json!({ "node": "p", "name": "1.0" }),
+            serde_json::json!({ "node": "p", "name": "1.0", "place": "after" }),
+        ] {
+            let (status, _) = send(&repo, "PATCH", "/api/releases", body.clone()).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "{body}");
+        }
+    }
+
+    #[tokio::test]
+    async fn an_item_is_planned_in_a_release_through_the_item_patch_and_browsers_are_told() {
+        let repo = sample();
+        let path = "tree/p/tasks/T001-a.md";
+        let plan = |from: serde_json::Value, to: serde_json::Value| serde_json::json!({ "path": path, "changes": { "release": { "from": from, "to": to } } });
+        let none = serde_json::Value::Null;
+        let state = state(&repo);
+        let mut changes = state.changes.subscribe();
+        let request = Request::builder()
+            .method("PATCH")
+            .uri("/api/items")
+            .header("content-type", "application/json")
+            .body(Body::from(plan(none.clone(), "1.0".into()).to_string()))
+            .unwrap();
+        let response = router(state.clone()).oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(changes.try_recv().is_ok());
+        let bytes = response.into_body().collect().await.unwrap().to_bytes();
+        let row: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(row["release"], "1.0");
+        assert_eq!(row["effective_release"]["position"], 0);
+        let (status, body) = send(
+            &repo,
+            "PATCH",
+            "/api/items",
+            plan("1.0".into(), "9.9".into()),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(
+            body["error"].as_str().unwrap().contains("1.0, plus-tard"),
+            "{body}"
+        );
+        let (status, body) = send(
+            &repo,
+            "PATCH",
+            "/api/items",
+            plan(none.clone(), "plus-tard".into()),
+        )
+        .await;
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(body["current"]["release"], "1.0");
+        let (status, _) = send(&repo, "PATCH", "/api/items", plan("1.0".into(), none)).await;
+        assert_eq!(status, StatusCode::OK);
+        let text = std::fs::read_to_string(repo.root().join(path)).unwrap();
+        assert!(!text.contains("release"), "{text}");
     }
 
     #[tokio::test]

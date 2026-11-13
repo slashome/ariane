@@ -24,6 +24,8 @@ import type {
   RouteChange,
   RouteRemoval,
   RouteTable,
+  ReleaseChange,
+  ReleaseList,
   Roadmap,
   Settings,
   SyncReport,
@@ -99,6 +101,10 @@ export const fetchPeople = () => request<Directory[]>('GET', '/api/people')
 export const addPerson = (person: PersonChange) => request<Directory[]>('POST', '/api/people', person)
 export const changePerson = (person: PersonChange) => request<Directory[]>('PATCH', '/api/people', person)
 export const removePerson = (person: Pick<PersonChange, 'node' | 'handle'>) => request<Directory[]>('DELETE', '/api/people', person)
+export const addRelease = (release: ReleaseChange) => request<ReleaseList>('POST', '/api/releases', release)
+export const changeRelease = (release: ReleaseChange) => request<ReleaseList>('PATCH', '/api/releases', release)
+export const removeRelease = (release: Pick<ReleaseChange, 'node' | 'name'>) =>
+  request<ReleaseList>('DELETE', '/api/releases', release)
 export const fetchPersonas = () => request<PersonaDirectory[]>('GET', '/api/personas')
 export const addPersona = (persona: PersonaChange) => request<PersonaDirectory[]>('POST', '/api/personas', persona)
 export const changePersona = (persona: PersonaChange) => request<PersonaDirectory[]>('PATCH', '/api/personas', persona)

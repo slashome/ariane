@@ -68,7 +68,8 @@ mod proxy;
 mod rank;
 /// Parents, children, dependencies and dependents of items.
 mod relations;
-/// The effective release of an item, through its story and epic.
+/// The effective release of an item, through its story and epic, and
+/// `ariane release`, which writes releases.
 mod release;
 /// Discovery of the content repository on disk.
 mod repo;
@@ -176,6 +177,9 @@ fn run() -> Result<ExitCode> {
         cli::Command::Settings(args) => settings::run(&location.root, &args),
         cli::Command::Calendar(args) => calendar::run(&location.root, &tree, &args, here),
         cli::Command::Roadmap(args) => roadmap::run(&location.root, &tree, &args, here),
+        cli::Command::Release(args) => {
+            release::command::run(&tree, &args, here.filter(|node| !node.is_home()))
+        }
         cli::Command::Focus(args) => focus::run(&tree, &args, here.filter(|node| !node.is_home())),
         cli::Command::Links(args) => {
             let scope = scope(args.node.as_deref(), args.all, here);

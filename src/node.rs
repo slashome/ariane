@@ -549,13 +549,14 @@ pub fn default_workflow() -> Vec<Status> {
         .collect()
 }
 
-/// Edits the `node.toml` at `file` in place, comments and order kept; a
-/// missing file starts empty. A change that refuses writes nothing and hands
-/// back its refusal.
+/// Edits the `node.toml` at `file` in place, comments, order and unknown keys
+/// kept: only the lines the change touches differ. A missing file starts
+/// empty. A change that refuses writes nothing and hands back its refusal.
 ///
 /// # Errors
 ///
-/// Fails when the file cannot be read, parsed or written.
+/// Fails when the file cannot be read, parsed or written, and writes nothing
+/// when the edited file would no longer be a valid `node.toml`.
 pub fn edit<E>(
     file: &Path,
     change: impl FnOnce(&mut DocumentMut) -> Result<(), E>,
@@ -571,8 +572,14 @@ pub fn edit<E>(
     if let Err(refusal) = change(&mut document) {
         return Ok(Err(refusal));
     }
-    std::fs::write(file, document.to_string())
-        .with_context(|| format!("writing {}", file.display()))?;
+    let edited = document.to_string();
+    toml::from_str::<NodeFile>(&edited).with_context(|| {
+        format!(
+            "the edit would leave {} invalid; nothing written",
+            file.display()
+        )
+    })?;
+    std::fs::write(file, edited).with_context(|| format!("writing {}", file.display()))?;
     Ok(Ok(()))
 }
 
@@ -917,6 +924,28 @@ parking = true
             tree.configs.effective(&child).workflow[0].stage,
             Some(Stage::Testing)
         );
+    }
+
+    #[test]
+    fn an_edit_changes_only_the_lines_it_touches_and_never_leaves_the_file_invalid() {
+        let repo = Repo::new();
+        let original = "# the team\ndescription = \"\"\"\nA node.\n\"\"\"\n\n[tracker]\nkind = \"monday\"  # bound\nboard = 1\nfuture = { a = 1 }\n\n[people.ann]\nname = \"Ann\"\n";
+        repo.write("cmc/node.toml", original);
+        let file = repo.root().join("tree/cmc/node.toml");
+        edit(&file, |document| {
+            document["tracker"]["board"] = toml_edit::value(2);
+            Ok::<(), ()>(())
+        })
+        .unwrap()
+        .unwrap();
+        let edited = std::fs::read_to_string(&file).unwrap();
+        assert_eq!(edited, original.replace("board = 1", "board = 2"));
+        let refused = edit(&file, |document| {
+            document["people"]["ann"]["name"] = toml_edit::value(3);
+            Ok::<(), ()>(())
+        });
+        assert!(refused.is_err());
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), edited);
     }
 
     #[test]

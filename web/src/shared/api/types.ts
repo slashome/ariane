@@ -145,6 +145,25 @@ export interface Release {
   target: string | null
 }
 
+export type ReleasePlace = 'before' | 'after' | 'top' | 'bottom'
+
+export interface ReleaseChange {
+  node: string
+  name: string
+  place?: ReleasePlace
+  other?: string
+  parking?: boolean
+  target?: string
+  rename_to?: string
+}
+
+export interface ReleaseList {
+  node: string
+  releases_from: string | null
+  releases: Release[]
+  rewritten: string[]
+}
+
 export interface NodeSummary {
   path: string
   description?: string | null
@@ -186,7 +205,16 @@ export interface Repo {
   uncommitted: UncommittedFile[]
 }
 
-export type EditableField = 'body' | 'status' | 'size' | 'impact' | 'priority' | 'waiting_for' | 'waiting_on' | 'waiting_since'
+export type EditableField =
+  | 'body'
+  | 'status'
+  | 'size'
+  | 'impact'
+  | 'priority'
+  | 'release'
+  | 'waiting_for'
+  | 'waiting_on'
+  | 'waiting_since'
 
 export type FieldValue = string | string[] | null
 
