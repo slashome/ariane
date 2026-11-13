@@ -16,6 +16,8 @@
 //!   above; without stories, its provisional `size`, else the default size.
 //!
 //! Dropped work leaves both sums; finished work leaves the remaining hours only.
+//! A story or an epic whose children are all dropped is split all the same and
+//! weighs zero hours, never its provisional or default size.
 
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -293,14 +295,16 @@ pub fn effective(tree: &Tree, item: &Item) -> Option<Estimate> {
 }
 
 /// A story or an epic: the sum of its live children of kind `part` when it has
-/// some, else its own size as a provisional estimate.
+/// children, zero hours when all of them are dropped, else its own size as a
+/// provisional estimate.
 fn split(tree: &Tree, item: &Item, pricing: &Pricing, part: Kind) -> Estimate {
-    let children: Vec<&Item> = children(tree, item, part)
-        .filter(|child| category(tree, child) != Some(Category::Dropped))
-        .collect();
-    if children.is_empty() {
+    let all: Vec<&Item> = children(tree, item, part).collect();
+    if all.is_empty() {
         return single(tree, item, pricing, Basis::Provisional);
     }
+    let children = all
+        .into_iter()
+        .filter(|child| category(tree, child) != Some(Category::Dropped));
     let mut sum = Estimate {
         hours: 0.0,
         remaining_hours: 0.0,
@@ -512,6 +516,28 @@ mod tests {
         assert_eq!(epic.hours, 16.0 + 24.0);
         assert_eq!(epic.remaining_hours, 14.0 + 24.0);
         assert_eq!((epic.parts, epic.guessed), (4, 2));
+    }
+
+    #[test]
+    fn a_story_or_epic_whose_children_are_all_dropped_weighs_nothing() {
+        let repo = Repo::new();
+        repo.write("p/epics/E1-e.md", &item("E1", "todo", "size: XL\n"))
+            .write(
+                "p/stories/S1-a.md",
+                &item("S1", "dropped", "parent: E1\nsize: L\n"),
+            )
+            .write("p/stories/S2-b.md", &item("S2", "todo", "size: L\n"))
+            .write(
+                "p/tasks/T1-a.md",
+                &item("T1", "dropped", "parent: S2\nsize: S\n"),
+            );
+        let tree = Tree::load(repo.root()).unwrap();
+        for id in ["E1", "S2"] {
+            let estimate = of(&tree, id);
+            assert_eq!((estimate.basis, estimate.size), (Basis::Tasks, None));
+            assert_eq!((estimate.hours, estimate.remaining_hours), (0.0, 0.0));
+            assert_eq!((estimate.parts, estimate.guessed), (0, 0));
+        }
     }
 
     #[test]

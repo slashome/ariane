@@ -36,6 +36,9 @@ describe('estimate', () => {
     expect(estimateBasis(makeEstimate({ basis: 'tasks', size: null, parts: 3, guessed: 2 }))).toBe(
       'Sum of 3 parts, 2 guessed from a default or provisional size',
     )
+    expect(estimateBasis(makeEstimate({ basis: 'tasks', size: null, hours: 0, parts: 0 }))).toBe(
+      'Every part is dropped: nothing left to do',
+    )
     expect(estimateBasis(makeEstimate({ basis: 'default' }))).toBe('No size: counted as the default size M')
     expect(estimateTesting(makeEstimate({ tester: 'others' }))).toBe('+3 h of testing by others, as a delay')
     expect(estimateTesting(makeEstimate({ test_hours: 0 }))).toBeNull()

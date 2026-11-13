@@ -26,7 +26,7 @@ export function estimateBasis(estimate: Estimate): string {
     case 'default':
       return `No size: counted as the default size ${estimate.size}`
     case 'tasks':
-      return `Sum of ${partsOf(estimate)}`
+      return estimate.parts === 0 ? 'Every part is dropped: nothing left to do' : `Sum of ${partsOf(estimate)}`
   }
 }
 

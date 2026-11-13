@@ -37,10 +37,12 @@ There is no measured velocity yet. Whatever unit is chosen will be recalibrated 
 5. **Testing is added, never estimated.** A task of `h` hours adds `h × test_ratio` of testing after it. With `tester = "owner"`, the testing consumes the owner's hours like the task. With `tester = "others"`, it is a delay: the task's release cannot be delivered before it elapses, but the owner's hours go to the next task. A ratio of `0` removes it.
 6. **The sizes stay the five of SPEC §1.3.** A table gives hours to those five; it cannot add a sixth.
 
+> **Amended 2026-11-13: when a story or an epic counts as split, and what dropped work leaves.** §4 reads "tasks" for both kinds; the implementation of S031 made it exact. A story is split as soon as it has tasks, and weighs the sum of its tasks. An **epic is split as soon as it has stories**, and weighs the sum of its stories, each one weighed by the same rule: a split story by its tasks, an unsplit story by its own provisional `size`, else by the default size. An epic's own `size` is then ignored, whether or not its stories have tasks. Dropped children leave every sum. A story or an epic **whose children are all dropped weighs 0 hours**: it was split, and nothing of it is left to do; it does not fall back to its provisional `size` or to the default size. A sum is marked guessed as soon as one of its parts is a default or provisional size.
+
 ## Consequences
 
 - Every unsized task still weighs something, so a forecast exists from the first day, and the warnings say how much of it is a guess.
-- An epic planned in a release before it is split ([ADR-0023](0023-plan-by-releases-declared-in-order-per-node.md) §3) weighs its provisional size, so a far release has a date before its work is broken down. The size left on a split epic stays in its header, unread; the interface shows the sum of its tasks instead.
+- An epic planned in a release before it is split ([ADR-0023](0023-plan-by-releases-declared-in-order-per-node.md) §3) weighs its provisional size, so a far release has a date before its work is broken down. The size left on a split epic stays in its header, unread; the interface shows the sum of its stories instead.
 - The hours shown are focused hours. Meetings, reviews and interruptions are taken out once, by the calendar's focus coefficient ([ADR-0026](0026-keep-the-work-calendar-personal.md)), not padded into each estimate.
 - One table per node means two nodes may price `M` differently, which is correct when their work differs and confusing when it does not. The interface shows the hours next to the size wherever a size is shown.
 - `tester` is a node-wide setting. A node where some tasks are validated by the owner and some by someone else gets one rule for all.
