@@ -210,6 +210,7 @@ fn work_plan(unit: &Unit, placed: Option<&Placed>, clock: &mut Clock) -> WorkPla
         ),
         State::Waiting => (Stage::Waiting, None),
         State::InProgress => (Stage::InProgress, None),
+        State::Testing => (Stage::Testing, None),
         State::Open | State::Dropped => (Stage::Open, None),
     };
     let mut plan = WorkPlan {

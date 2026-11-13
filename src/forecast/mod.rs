@@ -141,6 +141,8 @@ pub enum Stage {
     Open,
     /// Being worked on.
     InProgress,
+    /// Its work done, its testing left: a status of the `testing` stage.
+    Testing,
     /// Handed to someone.
     Waiting,
     /// Finished.
@@ -160,7 +162,8 @@ pub struct WorkPlan {
     pub title: String,
     /// Where it stands.
     pub stage: Stage,
-    /// Hours of work left; for finished work, the hours it weighed.
+    /// Hours of work left, 0 in testing; for finished work, the hours it
+    /// weighed.
     pub hours: f64,
     /// Hours of testing after it.
     pub test_hours: f64,

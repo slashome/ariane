@@ -13,6 +13,8 @@
 //! [`RELEASE_KEYS`](crate::schema::RELEASE_KEYS) does the same for the `[[release]]` entries of a
 //! `node.toml` (ADR-0023), which `ariane schema --json` publishes with how they
 //! are inherited and how an item's effective release is resolved.
+//! [`WORKFLOW_KEYS`](crate::schema::WORKFLOW_KEYS) describes the `[[workflow]]` entries,
+//! published with their categories, their stages and how a workflow is inherited.
 //! [`ESTIMATE_KEYS`](crate::schema::ESTIMATE_KEYS) describes the keys of the
 //! `[estimates]` table (ADR-0025), published with their defaults and their
 //! key-by-key inheritance. The keys of the personal `calendar.toml`
@@ -30,7 +32,7 @@ use crate::calendar::{
 };
 use crate::estimate::{Pricing, TESTERS};
 use crate::item::{Kind, SCHEMA_VERSION};
-use crate::node::Category;
+use crate::node::{Category, Stage};
 
 /// Allowed values of `size`, smallest first.
 pub const SIZES: &[&str] = &["XS", "S", "M", "L", "XL"];
@@ -245,6 +247,84 @@ pub const CORE_KEYS: &[CoreKey] = &[
     ),
     key("waiting_since", ValueType::Date, Requirement::May),
 ];
+
+/// One key of a `[[workflow]]` entry of `node.toml`.
+#[derive(Debug, Clone, Copy)]
+pub struct WorkflowKey {
+    /// The key as written in the entry.
+    pub name: &'static str,
+    /// Its type in `ariane schema` output.
+    pub value: &'static str,
+    /// Whether an entry must carry it.
+    pub requirement: Requirement,
+    /// What it means.
+    pub doc: &'static str,
+}
+
+/// Every key of a `[[workflow]]` entry, in the order they are written.
+pub const WORKFLOW_KEYS: &[WorkflowKey] = &[
+    WorkflowKey {
+        name: "id",
+        value: "string",
+        requirement: Requirement::Must,
+        doc: "The value items write in `status`, unique in the workflow, matching `^[a-z][a-z0-9-]*$`; stable.",
+    },
+    WorkflowKey {
+        name: "label",
+        value: "string",
+        requirement: Requirement::Must,
+        doc: "Free text shown to humans; changing it changes no item.",
+    },
+    WorkflowKey {
+        name: "category",
+        value: "enum",
+        requirement: Requirement::Must,
+        doc: "One of the seven fixed categories.",
+    },
+    WorkflowKey {
+        name: "stage",
+        value: "enum",
+        requirement: Requirement::May,
+        doc: "Where the work stands within its category, for the forecast: `testing`, on an `in_progress` status only, counts only the testing hours of its work.",
+    },
+];
+
+/// The `[[workflow]]` declaration as JSON: its keys with their vocabulary, the
+/// category each stage requires, that the order of the entries is the display
+/// order and that the nearest workflow replaces the inherited one.
+fn workflow_declaration() -> Json {
+    let categories: Vec<&str> = Category::ALL.iter().map(|category| category.id()).collect();
+    let stages: Vec<Json> = Stage::ALL
+        .iter()
+        .map(|stage| json!({"id": stage.id(), "category": stage.category().id()}))
+        .collect();
+    let keys: Vec<Json> = WORKFLOW_KEYS
+        .iter()
+        .map(|key| {
+            let mut entry = json!({
+                "name": key.name,
+                "type": key.value,
+                "requirement": key.requirement,
+                "doc": key.doc,
+            });
+            match key.name {
+                "category" => entry["values"] = json!(categories),
+                "stage" => {
+                    entry["values"] = json!(Stage::ALL.map(Stage::id));
+                }
+                _ => {}
+            }
+            entry
+        })
+        .collect();
+    json!({
+        "table": "[[workflow]]",
+        "keys": keys,
+        "stages": stages,
+        "order": "declaration",
+        "inheritance": "replace",
+    })
+}
 
 /// One key of a `[[release]]` entry of `node.toml`.
 #[derive(Debug, Clone, Copy)]
@@ -514,6 +594,7 @@ pub fn export() -> Json {
         "reflexion_statuses": REFLEXION_STATUSES,
         "id_prefixes": prefixes,
         "node_toml": {
+            "workflow": workflow_declaration(),
             "release": release_declaration(),
             "estimates": estimates_declaration(),
         },
@@ -683,6 +764,26 @@ mod tests {
             json!(["open", "trial", "settled"])
         );
         assert_eq!(exported["id_prefixes"]["ressource"], json!("D"));
+    }
+
+    #[test]
+    fn the_export_describes_the_workflow_declaration_and_its_stages() {
+        let workflow = &export()["node_toml"]["workflow"];
+        assert_eq!(workflow["table"], json!("[[workflow]]"));
+        assert_eq!(workflow["inheritance"], json!("replace"));
+        let keys = workflow["keys"].as_array().unwrap();
+        let names: Vec<&str> = keys
+            .iter()
+            .map(|key| key["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(names, ["id", "label", "category", "stage"]);
+        assert_eq!(keys[2]["values"].as_array().unwrap().len(), 7);
+        assert_eq!(keys[3]["requirement"], json!("may"));
+        assert_eq!(keys[3]["values"], json!(["testing"]));
+        assert_eq!(
+            workflow["stages"],
+            json!([{"id": "testing", "category": "in_progress"}])
+        );
     }
 
     #[test]

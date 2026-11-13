@@ -101,8 +101,17 @@ Shared front-end library of the `cmc` apps, hosted in `choosemycompany/cmc-lib`.
 - `id` MUST be unique within the workflow and match `^[a-z][a-z0-9-]*$`. It is the value written in items, and it is stable.
 - `label` is free text shown to humans. Changing it MUST NOT require any change to items.
 - `category` MUST be one of `backlog`, `todo`, `in_progress`, `waiting`, `blocked`, `done`, `dropped`. `waiting` is for an item that waits for someone — a review, an answer — named in `waiting_for`; `blocked`, for one that cannot move until something else happens.
+- `stage` MAY say where the work of the status stands within its category, for the forecast (§3). Its one value is `testing`, which only a status of the `in_progress` category MAY declare: the work is done, only its testing is left.
 
 The order of entries is the display order.
+
+```toml
+[[workflow]]
+id = "a-tester"
+label = "À tester"
+category = "in_progress"
+stage = "testing"
+```
 
 **Releases.** Each `[[release]]` entry declares one release of the node, a delivered version of the product, even internal ([ADR-0023](docs/adr/0023-plan-by-releases-declared-in-order-per-node.md)):
 
@@ -146,7 +155,7 @@ test_ratio = 0.25
 tester = "owner"
 ```
 
-The hours an item weighs are computed, never written: a task weighs the hours of its `size`, else those of `default`; a story with tasks weighs the sum of its tasks and an epic with stories the sum of its stories, their own `size` ignored; a story or an epic not split yet weighs its provisional `size`, else `default`. Dropped work counts in no sum, and a story or an epic whose children are all dropped weighs 0 hours. Each piece of work adds `hours × test_ratio` of testing, priced by its own node. `ariane tasks --json`, `ariane show --json` and the interface give each task, story and epic its `estimate`: `hours` and `test_hours`, the `remaining_hours` and `remaining_test_hours` of the work neither done nor dropped, the `tester`, the `basis` (`size`, `provisional`, `default` or `tasks`), the `size` priced, and how many of the summed `parts` are `guessed` from a default or provisional size.
+The hours an item weighs are computed, never written: a task weighs the hours of its `size`, else those of `default`; a story with tasks weighs the sum of its tasks and an epic with stories the sum of its stories, their own `size` ignored; a story or an epic not split yet weighs its provisional `size`, else `default`. Dropped work counts in no sum, and a story or an epic whose children are all dropped weighs 0 hours. Finished work has nothing remaining; a task in a status of the `testing` stage has no hours of work remaining, and all its testing. Each piece of work adds `hours × test_ratio` of testing, priced by its own node. `ariane tasks --json`, `ariane show --json` and the interface give each task, story and epic its `estimate`: `hours` and `test_hours`, the `remaining_hours` and `remaining_test_hours` of the work neither done nor dropped, the `tester`, the `basis` (`size`, `provisional`, `default` or `tasks`), the `size` priced, and how many of the summed `parts` are `guessed` from a default or provisional size.
 
 **People.** Each `[people.<handle>]` table declares one person an item may wait for: `name` MUST be given, free text; every other key is the person's id in a tracker, such as `monday = 58294966`. A handle matches `^[a-z][a-z0-9-]*$`.
 
@@ -206,7 +215,7 @@ name = "Responsable RH"
 | A file name that does not begin with the item's `id`, `-` and a slug | error — remedy: `ariane fix` (renames to `<id>-<current name>` and rewrites the links); a human when the name is the bare id |
 | An item in `backlog/` or `archives/backlog/` | error — remedy: `ariane fix` (moves it into `tasks/` or `archives/tasks/` and rewrites the links) |
 | A custom key not declared in any applicable `node.toml` | warning — `milestone` on a version `2` file is one ([ADR-0024](docs/adr/0024-remove-milestone-from-the-header.md)) |
-| A `node.toml` that does not parse, among others an `[estimates]` key that is neither a size nor `default`, `test_ratio` or `tester`, hours zero or below, a `default` that is not a size, a negative `test_ratio` or an unknown `tester` | error — the node falls back on its inherited configuration until the file is fixed |
+| A `node.toml` that does not parse, among others an `[estimates]` key that is neither a size nor `default`, `test_ratio` or `tester`, hours zero or below, a `default` that is not a size, a negative `test_ratio` or an unknown `tester`, a workflow `category` or `stage` outside its vocabulary, or a `stage` on a status of a category other than the one it requires (`in_progress` for `testing`) | error — the node falls back on its inherited configuration until the file is fixed |
 | A `[proxy]` table or `[[proxy]]` entry whose `host` is not a host name, whose `port` is 0, or whose `host` another entry declares | error |
 | An `INDEX.md` anywhere in the tree | warning — remedy: move the node's description into the `description` of its `node.toml`, its judgment into the item it concerns, its rules into a ressource of the node, then delete the file |
 
@@ -368,13 +377,17 @@ The forecast of a node runs on the node's **carrier** (§2.3) over every task, s
 ### 3.2 Work
 
 - A **piece of work** is a task, or a story or an epic not split yet (a story without tasks, an epic without stories), which counts as one block at its provisional size, else at the default size (§1.5).
-- Its hours are those of §1.5: for open work its remaining hours and testing, the whole of them for work in progress, since partial progress is not recorded.
+- Its hours are those of §1.5: for open work its remaining hours and testing, the whole of them for work in progress, since partial progress is not recorded. Work in a status of the `testing` stage (§1.5) has done its work: it counts only its testing hours.
 - Its release is its effective release (§1.3). Work of a parking release, work without effective release and work whose release no applicable list declares is listed as **unscheduled**, with the reason, and never scheduled. When the carrier's descendants declare release lists of their own, a release is identified by its name and the node declaring its list; releases are ordered by their place in their list, then by the path of that node.
 - Dropped work is left out. Finished work (`done` category) takes no hours: it is shown in its release at its `closed` date, else at the date approximated from git (§1.3, marked approximate), else without a date.
 
 ### 3.3 Order
 
-Releases come in their declared order. Within a release, work is grouped by epic, then by story, each level and the work in the order of items (§1.3), nodes in the order of their paths; the work without epic, and within an epic the work without story, comes last. `depends_on` is a constraint, the grouping a preference: the scheduler always takes the first piece of work in that order whose dependencies are delivered, and passes over the ones that are not, so a group can show a gap. A dependency on a story or an epic is a dependency on all its work; the `depends_on` of a story and of an epic apply to every piece of work inside them. A dependency on finished work is met; one on open work that is never scheduled (parking, no release, out of scope) is ignored and warned about. Work caught in a dependency cycle, and work waiting on it, stays unscheduled, and the cycle is warned about.
+Releases come in their declared order. Within a release, work is grouped by epic, then by story, each level and the work in the order of items (§1.3), nodes in the order of their paths; the work without epic, and within an epic the work without story, comes last.
+
+**Started work first.** Work of the `in_progress` category, `testing` stage included, is scheduled before all the rest, whatever its release, since the owner is on it now; among itself, in the order above, release first. Its release's span starts with it, so a later release can start before an earlier one. It still waits for its dependencies: one on work not started is scheduled in its own turn, never pulled forward.
+
+`depends_on` is a constraint, the grouping a preference: the scheduler always takes the first piece of work in that order whose dependencies are delivered, and passes over the ones that are not, so a group can show a gap. A dependency on a story or an epic is a dependency on all its work; the `depends_on` of a story and of an epic apply to every piece of work inside them. A dependency on finished work is met; one on open work that is never scheduled (parking, no release, out of scope) is ignored and warned about. Work caught in a dependency cycle, and work waiting on it, stays unscheduled, and the cycle is warned about.
 
 ### 3.4 Scheduling
 
@@ -383,13 +396,13 @@ One person works in sequence, from now on. The scheduler counts in **focused hou
 - with `tester = "owner"`, the testing takes the owner's hours right after the work;
 - with `tester = "others"`, the testing is a **validation** that elapses from the end of the work, measured in the carrier's focused hours, while the owner goes on with the next piece of work; the work is delivered, and its release can end, only after it.
 
-Work in a status of the `waiting` category takes none of the owner's hours: it is a validation from now that lasts its testing hours. Statuses of the `backlog`, `todo` and `blocked` categories are scheduled alike.
+Work in a status of the `waiting` category takes none of the owner's hours: it is a validation from now that lasts its testing hours. Work in a status of the `testing` stage has no hours of work left: with `tester = "owner"` its testing takes the owner's hours, in its turn among the started work; with `tester = "others"` it is, like waiting work, a validation from now that lasts its testing hours. Work handed to someone this way, waiting or tested by others, ignores its dependencies. Statuses of the `backlog`, `todo` and `blocked` categories are scheduled alike.
 
 With a carrier, focused hours become moments: the carrier's weekly blocks are laid out from now in the calendar's time zone, the global days off and the carrier's skipped, each block worth its length times `focus`, the hours accruing evenly over the block. A piece of work spread over several blocks has one segment per block. Moments are written RFC 3339 with the offset of the calendar's time zone; work further than ten years ahead has hours and no moment.
 
 ### 3.5 Result
 
-The result gives, per release in delivery order, its epics then their stories then their work, each with its hours left, its span (from the start of its first scheduled work to the delivery of its last) and the first and last closing dates of its finished work. Each piece of work has its place in the sequence, its start, its end, its delivery, its segments (work and testing) and its validation. Every moment carries its focused hours from now and, with a carrier, its date. Without a carrier the same sequence comes in hours only (“+36 h”).
+The result gives, per release in delivery order, its epics then their stories then their work, each with its hours left, its span (from the start of its first scheduled work to the delivery of its last) and the first and last closing dates of its finished work. Each piece of work has its `stage` (`open`, `in_progress`, `testing`, `waiting` or `done`), its place in the sequence, its start, its end, its delivery, its segments (work and testing) and its validation. Every moment carries its focused hours from now and, with a carrier, its date. Without a carrier the same sequence comes in hours only (“+36 h”).
 
 ### 3.6 Warnings
 

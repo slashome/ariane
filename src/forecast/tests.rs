@@ -45,6 +45,29 @@ fn tested_by(tester: &str) -> String {
     )
 }
 
+/// `node_toml` with the default workflow and a status `a-tester` of the
+/// `in_progress` category at the `testing` stage.
+fn with_testing(node_toml: &str) -> String {
+    let mut text = node_toml.to_owned();
+    for category in [
+        "backlog",
+        "todo",
+        "in_progress",
+        "waiting",
+        "blocked",
+        "done",
+        "dropped",
+    ] {
+        text.push_str(&format!(
+            "\n[[workflow]]\nid = \"{category}\"\nlabel = \"{category}\"\ncategory = \"{category}\"\n"
+        ));
+    }
+    text.push_str(
+        "\n[[workflow]]\nid = \"a-tester\"\nlabel = \"À tester\"\ncategory = \"in_progress\"\nstage = \"testing\"\n",
+    );
+    text
+}
+
 /// The moment `text`, RFC 3339.
 fn at(text: &str) -> Timestamp {
     text.parse().unwrap()
@@ -468,6 +491,103 @@ fn waiting_work_is_a_delay_and_work_in_progress_counts_all_its_hours() {
         (Stage::InProgress, Some(0), 4.0)
     );
     assert_eq!(moment(&started.end), (6.0, None));
+}
+
+#[test]
+fn work_in_testing_counts_only_its_testing_in_the_owners_hours() {
+    let repo = repo(&with_testing(&tested_by("owner")));
+    repo.write(
+        "p/tasks/T1-a.md",
+        &item("T1", "a-tester", "release: '1.0'\nsize: M\nrank: 2\n"),
+    )
+    .write(
+        "p/tasks/T2-b.md",
+        &item("T2", "todo", "release: '1.0'\nsize: S\nrank: 1\n"),
+    );
+    let forecast = relative(&repo);
+    assert_eq!(sequence(&forecast), ["p#T1", "p#T2"]);
+    let testing = work(&forecast, "p#T1");
+    assert_eq!(
+        (testing.stage, testing.hours, testing.test_hours),
+        (Stage::Testing, 0.0, 2.0)
+    );
+    let phases: Vec<(Phase, f64, f64)> = testing
+        .segments
+        .iter()
+        .map(|segment| (segment.phase, segment.start.hours, segment.end.hours))
+        .collect();
+    assert_eq!(phases, [(Phase::Test, 0.0, 2.0)]);
+    assert_eq!(testing.validation, None);
+    assert_eq!(moment(&work(&forecast, "p#T2").start), (2.0, None));
+    assert_eq!(forecast.hours, 2.0);
+    assert_eq!(forecast.test_hours, 3.0);
+}
+
+#[test]
+fn work_in_testing_by_others_is_a_validation_from_now() {
+    let repo = repo(&with_testing(&tested_by("others")));
+    repo.write(
+        "p/tasks/T1-a.md",
+        &item("T1", "a-tester", "release: '1.0'\nsize: M\n"),
+    )
+    .write(
+        "p/tasks/T2-b.md",
+        &item("T2", "todo", "release: '1.0'\nsize: S\n"),
+    );
+    let forecast = relative(&repo);
+    let testing = work(&forecast, "p#T1");
+    assert_eq!((testing.stage, testing.sequence), (Stage::Testing, None));
+    assert!(testing.segments.is_empty());
+    assert_eq!(hours(&testing.validation), (0.0, 2.0));
+    assert_eq!(moment(&testing.delivered), (2.0, None));
+    assert_eq!(sequence(&forecast), ["p#T2"]);
+    assert_eq!(moment(&work(&forecast, "p#T2").start), (0.0, None));
+}
+
+#[test]
+fn work_in_progress_comes_first_whatever_its_release_dependencies_kept() {
+    let repo = repo(&with_testing(NODE));
+    repo.write(
+        "p/tasks/T1-a.md",
+        &item("T1", "todo", "release: '1.0'\nsize: S\nrank: 1\n"),
+    )
+    .write(
+        "p/tasks/T2-b.md",
+        &item("T2", "todo", "release: '1.0'\nsize: S\nrank: 2\n"),
+    )
+    .write(
+        "p/tasks/T3-c.md",
+        &item("T3", "in_progress", "release: '2.0'\nsize: S\nrank: 1\n"),
+    )
+    .write(
+        "p/tasks/T4-d.md",
+        &item("T4", "a-tester", "release: '2.0'\nsize: S\nrank: 0\n"),
+    )
+    .write(
+        "p/tasks/T5-e.md",
+        &item("T5", "in_progress", "release: '1.0'\nsize: S\nrank: 9\n"),
+    )
+    .write(
+        "p/tasks/T6-f.md",
+        &item(
+            "T6",
+            "in_progress",
+            "release: '1.0'\nsize: S\nrank: 8\ndepends_on: [T2]\n",
+        ),
+    );
+    let forecast = relative(&repo);
+    assert_eq!(
+        sequence(&forecast),
+        ["p#T5", "p#T4", "p#T3", "p#T1", "p#T2", "p#T6"]
+    );
+    assert_eq!(hours(&release(&forecast, "2.0").summary.span), (2.0, 4.0));
+    let first = release(&forecast, "1.0");
+    let shown: Vec<&str> = first.epics[0].stories[0]
+        .work
+        .iter()
+        .map(|work| work.reference.as_str())
+        .collect();
+    assert_eq!(shown, ["p#T1", "p#T2", "p#T6", "p#T5"]);
 }
 
 #[test]

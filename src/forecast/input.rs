@@ -84,6 +84,9 @@ pub enum State {
     Open,
     /// Being worked on: its whole remaining hours still count.
     InProgress,
+    /// Its work done, in a status of the `testing` stage: only its testing
+    /// is left.
+    Testing,
     /// Handed to someone: no hours of the owner, a delay of its testing.
     Waiting,
     /// Finished, drawn at its closing date when one is known.
@@ -100,7 +103,16 @@ pub enum State {
 impl State {
     /// Tells whether the work still has to be done or delivered.
     pub fn is_open(self) -> bool {
-        matches!(self, State::Open | State::InProgress | State::Waiting)
+        matches!(
+            self,
+            State::Open | State::InProgress | State::Testing | State::Waiting
+        )
+    }
+
+    /// Tells whether the owner is on it now: in progress or in testing, which
+    /// comes before the rest of the work.
+    pub fn is_started(self) -> bool {
+        matches!(self, State::InProgress | State::Testing)
     }
 }
 

@@ -1,14 +1,19 @@
 //! Orders the work and places it in sequence, in focused hours from now
 //! (ADR-0028 §2 and §3).
 //!
-//! The work of the declared releases is sorted once: release, then epic, then
-//! story, then the work itself, each level in its manual order, the work
-//! without epic or story after the groups. Grouping is a preference,
+//! The work of the declared releases is sorted once: the work the owner is on
+//! now (in progress or in testing) first, whatever its release, then release,
+//! then epic, then story, then the work itself, each level in its manual
+//! order, the work without epic or story after the groups. Grouping is a preference,
 //! dependencies are constraints: the scheduler always takes the first piece of
 //! work in that order whose dependencies are delivered, passing over the ones
 //! that are not, so a group can show a gap. When nothing is ready because the
 //! dependencies left loop on each other, the loop and every piece of work
 //! waiting on it stay unscheduled.
+//!
+//! Work handed to someone takes none of the owner's hours and ignores its
+//! dependencies: work in a `waiting` status, and work in testing that others
+//! test, are validated from now for their testing hours.
 
 use std::collections::{HashMap, HashSet};
 
@@ -54,7 +59,17 @@ pub fn schedulable(unit: &Unit) -> bool {
     unit.state.is_open() && matches!(unit.release, Planned::Release(_))
 }
 
-/// The order of a unit: release, epic, story, its own place, then its index.
+/// The order the scheduler takes a unit in: started work first, then the
+/// order of [`order_key`].
+fn sequence_key(input: &Input, index: usize) -> (bool, (usize, usize, usize, usize, usize)) {
+    (
+        !input.units[index].state.is_started(),
+        order_key(input, index),
+    )
+}
+
+/// The order of a unit as the report shows it: release, epic, story, its own
+/// place, then its index.
 pub fn order_key(input: &Input, index: usize) -> (usize, usize, usize, usize, usize) {
     let unit = &input.units[index];
     let release = match unit.release {
@@ -87,11 +102,11 @@ pub fn run(input: &Input) -> Schedule {
     let mut pending: Vec<usize> = (0..input.units.len())
         .filter(|index| schedulable(&input.units[*index]))
         .collect();
-    pending.sort_by_key(|index| order_key(input, *index));
+    pending.sort_by_key(|index| sequence_key(input, *index));
     let dependencies = resolve(input, &pending, &mut schedule.dangling);
     for index in &pending {
         let unit = &input.units[*index];
-        if unit.state == State::Waiting {
+        if is_handed_over(unit) {
             schedule.placed.insert(
                 *index,
                 Placed {
@@ -172,6 +187,16 @@ pub fn run(input: &Input) -> Schedule {
         }
     }
     schedule
+}
+
+/// Tells whether a unit is with someone else, taking none of the owner's
+/// hours: waiting, or in testing that others do.
+fn is_handed_over(unit: &Unit) -> bool {
+    match unit.state {
+        State::Waiting => true,
+        State::Testing => unit.tester == Tester::Others,
+        _ => false,
+    }
 }
 
 /// The scheduled units each scheduled unit waits for. A reference to a task

@@ -113,10 +113,13 @@ export interface Finding {
   remedy: Remedy
 }
 
+export type WorkflowStage = 'testing'
+
 export interface WorkflowStatus {
   id: string
   label: string
   category: Category
+  stage?: WorkflowStage
 }
 
 export interface Tracker {

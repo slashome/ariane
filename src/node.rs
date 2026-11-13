@@ -5,7 +5,8 @@
 //!
 //! - `[fields.<key>]` declares a custom header key and its type;
 //! - `[[workflow]]` lists the statuses its items may take, each with a stable
-//!   `id`, a free `label` and one of the seven fixed categories;
+//!   `id`, a free `label`, one of the seven fixed categories and, on an
+//!   `in_progress` status, an optional `stage` such as `testing`;
 //! - `[[release]]` lists the node's releases in delivery order, each with a
 //!   `name`, an optional `parking` marker and an optional `target` date
 //!   (ADR-0023);
@@ -106,6 +107,34 @@ impl Category {
     }
 }
 
+/// Where the work of a status stands within its category, for the forecast
+/// (ADR-0028). Only a status of the `in_progress` category may declare one.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Stage {
+    /// The work is done and only its testing is left.
+    Testing,
+}
+
+impl Stage {
+    /// Every stage, in the order `ariane schema --json` lists them.
+    pub const ALL: [Stage; 1] = [Stage::Testing];
+
+    /// The value written in `node.toml` and JSON.
+    pub fn id(self) -> &'static str {
+        match self {
+            Stage::Testing => "testing",
+        }
+    }
+
+    /// The category a status must belong to for declaring this stage.
+    pub fn category(self) -> Category {
+        match self {
+            Stage::Testing => Category::InProgress,
+        }
+    }
+}
+
 /// One status of a workflow, as declared in a `[[workflow]]` entry.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Status {
@@ -115,6 +144,30 @@ pub struct Status {
     pub label: String,
     /// The fixed category this status belongs to.
     pub category: Category,
+    /// Where the work stands within the category, such as `testing`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stage: Option<Stage>,
+}
+
+/// Reads a `[[workflow]]` list, refusing a `stage` on a status of a category
+/// the stage does not belong to.
+fn workflow<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Vec<Status>>, D::Error> {
+    let statuses = Vec::<Status>::deserialize(deserializer)?;
+    for status in &statuses {
+        let Some(stage) = status.stage else {
+            continue;
+        };
+        if status.category != stage.category() {
+            return Err(D::Error::custom(format!(
+                "the status `{}` has `stage = \"{}\"`, which only a status of the `{}` category may declare, not `{}`",
+                status.id,
+                stage.id(),
+                stage.category().id(),
+                status.category.id()
+            )));
+        }
+    }
+    Ok(Some(statuses))
 }
 
 /// One release of a node, as declared in a `[[release]]` entry (ADR-0023): a
@@ -254,6 +307,7 @@ pub struct NodeFile {
     #[serde(default)]
     pub fields: BTreeMap<String, FieldDecl>,
     /// The workflow declared by this file, if any.
+    #[serde(default, deserialize_with = "workflow")]
     pub workflow: Option<Vec<Status>>,
     /// The releases declared by this file in delivery order, if any.
     #[serde(default, deserialize_with = "releases")]
@@ -387,12 +441,7 @@ impl Configs {
     /// read without combining the rest of the files; `None` when the workflow
     /// has no such status.
     pub fn category(&self, node: &NodePath, status: &str) -> Option<Category> {
-        let declared = node
-            .ancestors_from_root()
-            .iter()
-            .rev()
-            .find_map(|ancestor| self.files.get(ancestor)?.workflow.as_ref());
-        match declared {
+        match self.declared_workflow(node) {
             Some(workflow) => workflow
                 .iter()
                 .find(|entry| entry.id == status)
@@ -401,6 +450,25 @@ impl Configs {
                 .into_iter()
                 .find(|category| category.id() == status),
         }
+    }
+
+    /// The stage of the status `status` in `node`'s effective workflow, read
+    /// without combining the rest of the files; `None` when the status
+    /// declares none, or the workflow has no such status.
+    pub fn stage(&self, node: &NodePath, status: &str) -> Option<Stage> {
+        self.declared_workflow(node)?
+            .iter()
+            .find(|entry| entry.id == status)?
+            .stage
+    }
+
+    /// The workflow of `node`'s nearest `node.toml` declaring one; `None` for
+    /// the default workflow.
+    fn declared_workflow(&self, node: &NodePath) -> Option<&Vec<Status>> {
+        node.ancestors_from_root()
+            .iter()
+            .rev()
+            .find_map(|ancestor| self.files.get(ancestor)?.workflow.as_ref())
     }
 
     /// What sizes cost on `node`: the `[estimates]` of its ancestors from the
@@ -476,6 +544,7 @@ pub fn default_workflow() -> Vec<Status> {
             id: category.id().to_owned(),
             label: category.label().to_owned(),
             category,
+            stage: None,
         })
         .collect()
 }
@@ -811,6 +880,43 @@ parking = true
         .unwrap();
         assert_eq!(accepted.estimates.xs, Some(0.5));
         assert_eq!(accepted.estimates.default.as_deref(), Some("XL"));
+    }
+
+    #[test]
+    fn an_in_progress_status_may_declare_the_testing_stage_and_no_other_may() {
+        let accepted: NodeFile = toml::from_str(
+            "[[workflow]]\nid = \"en-cours\"\nlabel = \"En cours\"\ncategory = \"in_progress\"\n\n[[workflow]]\nid = \"a-tester\"\nlabel = \"À tester\"\ncategory = \"in_progress\"\nstage = \"testing\"\n",
+        )
+        .unwrap();
+        let workflow = accepted.workflow.unwrap();
+        assert_eq!(workflow[0].stage, None);
+        assert_eq!(workflow[1].stage, Some(Stage::Testing));
+        for text in [
+            "[[workflow]]\nid = \"a\"\nlabel = \"A\"\ncategory = \"in_progress\"\nstage = \"review\"\n",
+            "[[workflow]]\nid = \"a\"\nlabel = \"A\"\ncategory = \"todo\"\nstage = \"testing\"\n",
+            "[[workflow]]\nid = \"a\"\nlabel = \"A\"\ncategory = \"waiting\"\nstage = \"testing\"\n",
+        ] {
+            assert!(toml::from_str::<NodeFile>(text).is_err(), "{text}");
+        }
+    }
+
+    #[test]
+    fn the_stage_of_a_status_is_read_from_the_nearest_workflow() {
+        let repo = Repo::new();
+        repo.write(
+            "p/node.toml",
+            "[[workflow]]\nid = \"a-tester\"\nlabel = \"À tester\"\ncategory = \"in_progress\"\nstage = \"testing\"\n\n[[workflow]]\nid = \"en-cours\"\nlabel = \"En cours\"\ncategory = \"in_progress\"\n",
+        )
+        .write("p/q/tasks/t.md", "# t\n");
+        let tree = Tree::load(repo.root()).unwrap();
+        let child = NodePath::new("p/q");
+        assert_eq!(tree.configs.stage(&child, "a-tester"), Some(Stage::Testing));
+        assert_eq!(tree.configs.stage(&child, "en-cours"), None);
+        assert_eq!(tree.configs.stage(&NodePath::new("r"), "in_progress"), None);
+        assert_eq!(
+            tree.configs.effective(&child).workflow[0].stage,
+            Some(Stage::Testing)
+        );
     }
 
     #[test]

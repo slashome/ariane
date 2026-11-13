@@ -17,7 +17,7 @@ use crate::closed;
 use crate::estimate::{self, Basis};
 use crate::history::History;
 use crate::item::Kind;
-use crate::node::{Category, Effective};
+use crate::node::{Category, Effective, Stage};
 use crate::rank::{self, Placement};
 use crate::relations::Index;
 use crate::release;
@@ -248,10 +248,9 @@ fn unit(
     let reference = item.reference()?;
     let (story, epic) = containers(index, item);
     let effective = configs.of(&item.node).clone();
-    let category = item
-        .document
-        .text("status")
-        .and_then(|status| tree.configs.category(&item.node, status));
+    let status = item.document.text("status");
+    let category = status.and_then(|status| tree.configs.category(&item.node, status));
+    let stage = status.and_then(|status| tree.configs.stage(&item.node, status));
     let state = match category {
         Some(Category::Done) => {
             let written = date(item, closed::KEY);
@@ -266,6 +265,7 @@ fn unit(
         }
         Some(Category::Dropped) => State::Dropped,
         Some(Category::Waiting) => State::Waiting,
+        Some(Category::InProgress) if stage == Some(Stage::Testing) => State::Testing,
         Some(Category::InProgress) => State::InProgress,
         _ => State::Open,
     };

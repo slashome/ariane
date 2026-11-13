@@ -16,6 +16,8 @@
 //!   above; without stories, its provisional `size`, else the default size.
 //!
 //! Dropped work leaves both sums; finished work leaves the remaining hours only.
+//! Work in a status of the `testing` stage has done its hours: only its
+//! testing remains.
 //! A story or an epic whose children are all dropped is split all the same and
 //! weighs zero hours, never its provisional or default size.
 
@@ -23,7 +25,7 @@ use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::item::Kind;
-use crate::node::Category;
+use crate::node::{Category, Stage};
 use crate::schema::SIZES;
 use crate::tree::{Item, Tree, parse_reference};
 
@@ -335,7 +337,8 @@ fn split(tree: &Tree, item: &Item, pricing: &Pricing, part: Kind) -> Estimate {
 }
 
 /// One estimate priced from the item's own `size`, `sized` naming that basis,
-/// else from the node's default size; finished work has nothing remaining.
+/// else from the node's default size; finished work has nothing remaining,
+/// work in testing only its testing.
 fn single(tree: &Tree, item: &Item, pricing: &Pricing, sized: Basis) -> Estimate {
     let own = item.document.text("size").and_then(known_size);
     let (size, basis) = match own {
@@ -346,12 +349,14 @@ fn single(tree: &Tree, item: &Item, pricing: &Pricing, sized: Basis) -> Estimate
         .hours_of(size)
         .unwrap_or_else(|| pricing.default_hours());
     let finished = category(tree, item).is_some_and(Category::is_closed);
-    let remaining = if finished { 0.0 } else { hours };
+    let testing = stage(tree, item) == Some(Stage::Testing);
+    let remaining = if finished || testing { 0.0 } else { hours };
+    let remaining_test = if finished { 0.0 } else { hours };
     Estimate {
         hours: round(hours),
         remaining_hours: round(remaining),
         test_hours: round(hours * pricing.test_ratio),
-        remaining_test_hours: round(remaining * pricing.test_ratio),
+        remaining_test_hours: round(remaining_test * pricing.test_ratio),
         tester: pricing.tester,
         basis,
         size: Some(size),
@@ -378,6 +383,12 @@ fn children<'a>(tree: &'a Tree, item: &'a Item, part: Kind) -> impl Iterator<Ite
 fn category(tree: &Tree, item: &Item) -> Option<Category> {
     tree.configs
         .category(&item.node, item.document.text("status")?)
+}
+
+/// The stage of `item`'s status in its node's workflow, if it declares one.
+fn stage(tree: &Tree, item: &Item) -> Option<Stage> {
+    tree.configs
+        .stage(&item.node, item.document.text("status")?)
 }
 
 /// `value` rounded to the hundredth, so that `12 × 0.1` reads `1.2`.
@@ -538,6 +549,36 @@ mod tests {
             assert_eq!((estimate.hours, estimate.remaining_hours), (0.0, 0.0));
             assert_eq!((estimate.parts, estimate.guessed), (0, 0));
         }
+    }
+
+    #[test]
+    fn work_in_testing_has_only_its_testing_remaining() {
+        let repo = Repo::new();
+        repo.write(
+            "p/node.toml",
+            "[estimates]\nM = 10\ntest_ratio = 0.5\n\n[[workflow]]\nid = \"en-cours\"\nlabel = \"En cours\"\ncategory = \"in_progress\"\n\n[[workflow]]\nid = \"a-tester\"\nlabel = \"À tester\"\ncategory = \"in_progress\"\nstage = \"testing\"\n",
+        )
+        .write("p/stories/S1-a.md", &item("S1", "en-cours", ""))
+        .write(
+            "p/tasks/T1-a.md",
+            &item("T1", "a-tester", "parent: S1\nsize: M\n"),
+        )
+        .write(
+            "p/tasks/T2-b.md",
+            &item("T2", "en-cours", "parent: S1\nsize: M\n"),
+        );
+        let tree = Tree::load(repo.root()).unwrap();
+        let testing = of(&tree, "T1");
+        assert_eq!((testing.hours, testing.remaining_hours), (10.0, 0.0));
+        assert_eq!(
+            (testing.test_hours, testing.remaining_test_hours),
+            (5.0, 5.0)
+        );
+        let story = of(&tree, "S1");
+        assert_eq!(
+            (story.remaining_hours, story.remaining_test_hours),
+            (10.0, 10.0)
+        );
     }
 
     #[test]

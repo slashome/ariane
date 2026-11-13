@@ -597,6 +597,32 @@ category = "done"
     }
 
     #[test]
+    fn a_stage_unknown_or_outside_in_progress_is_an_invalid_node_toml() {
+        for (category, stage) in [("in_progress", "review"), ("todo", "testing")] {
+            let repo = base();
+            repo.write(
+                "p/node.toml",
+                &format!("{WORKFLOW}\n[[workflow]]\nid = \"a-tester\"\nlabel = \"À tester\"\ncategory = \"{category}\"\nstage = \"{stage}\"\n"),
+            )
+            .write("p/tasks/T1-a.md", &task("p", "T1", ""));
+            let tree = Tree::load(repo.root()).unwrap();
+            let findings = diagnose(&tree, None, false);
+            let invalid = findings
+                .iter()
+                .find(|finding| finding.check == Check::InvalidNodeToml)
+                .unwrap_or_else(|| panic!("{category} {stage}"));
+            assert_eq!(invalid.severity, Severity::Error);
+        }
+        let repo = base();
+        repo.write(
+            "p/node.toml",
+            &format!("{WORKFLOW}\n[[workflow]]\nid = \"a-tester\"\nlabel = \"À tester\"\ncategory = \"in_progress\"\nstage = \"testing\"\n"),
+        )
+        .write("p/tasks/T1-a.md", &task("p", "T1", ""));
+        assert_eq!(checks(&repo), vec![]);
+    }
+
+    #[test]
     fn an_invalid_estimates_table_is_an_invalid_node_toml() {
         for table in [
             "[estimates]\nXXL = 96\n",
