@@ -1,5 +1,6 @@
 import { useMemo, type ReactNode } from 'react'
 import { cn } from '@/shared/lib'
+import { edgeOf, revealLeft, rowExtent, type Edge } from '../model/edges'
 import type { GanttRow } from '../model/rows'
 import { ticks } from '../model/scale'
 import type { GanttView } from '../model/view'
@@ -37,6 +38,26 @@ function Label({ row, onOpen }: { row: GanttRow; onOpen?: () => void }) {
   )
 }
 
+function EdgeArrow({ row, edge, onClick }: { row: GanttRow; edge: Edge; onClick: () => void }) {
+  const name = row.level === 'release' ? `release ${row.title}` : (row.id ?? row.title)
+  const where = edge === 'before' ? 'earlier' : 'later'
+  return (
+    <button
+      type="button"
+      data-edge={edge}
+      aria-label={`Scroll to ${name}, ${where}`}
+      title={`Scroll to ${name}, ${where}`}
+      onClick={onClick}
+      className={cn(
+        'absolute top-1/2 z-10 flex h-5 w-4 -translate-y-1/2 items-center justify-center rounded-sm bg-muted text-xs leading-none text-muted-foreground transition-colors duration-(--duration-hover) ease-(--ease-hover) hover:bg-primary hover:text-primary-foreground focus-visible:outline-2 focus-visible:outline-ring',
+        edge === 'before' ? 'left-0.5' : 'right-0.5',
+      )}
+    >
+      {edge === 'before' ? '‹' : '›'}
+    </button>
+  )
+}
+
 export function GanttChart({
   rows,
   view,
@@ -61,7 +82,7 @@ export function GanttChart({
   const placement = { scale: view.scale, left: view.left, width: view.width }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-border">
       <div className="flex shrink-0 border-b border-border bg-muted/40">
         <div className="flex w-80 shrink-0 items-end px-3 pb-1 text-xs text-muted-foreground">
           {view.dated ? 'Dates' : 'Past in days · future in focused hours'}
@@ -100,6 +121,8 @@ export function GanttChart({
           <ul className="relative" aria-label="Roadmap rows">
             {rows.map((row) => {
               const open = opensDetail(row) && row.reference !== null ? () => onOpen(row.reference as string) : undefined
+              const extent = rowExtent(row)
+              const edge = edgeOf(extent, placement)
               return (
                 <li
                   key={row.key}
@@ -115,6 +138,7 @@ export function GanttChart({
                     ) : (
                       <SummaryBars row={row} placement={placement} dated={view.dated} now={now} onOpen={open} />
                     )}
+                    {edge && extent && <EdgeArrow row={row} edge={edge} onClick={() => view.reveal(revealLeft(extent, edge, placement))} />}
                   </div>
                 </li>
               )

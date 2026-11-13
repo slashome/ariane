@@ -84,7 +84,10 @@ export function describeFragment(row: GanttRow, fragment: Fragment, dated: boole
   }
   lines.push(`${row.done} done, ${row.open} open`)
   if (row.hours + row.testHours > 0) {
-    lines.push(`${formatHours(row.hours)} of work + ${formatHours(row.testHours)} of testing left`)
+    lines.push(`${row.guessed ? '~' : ''}${formatHours(row.hours)} of work + ${formatHours(row.testHours)} of testing left`)
+  }
+  if (row.guessed) {
+    lines.push('some parts are unsized or provisional')
   }
   lines.push(`${spanEnd(fragment.start, dated, now)} → ${spanEnd(fragment.end, dated, now)}`)
   const target = targetLine(row)

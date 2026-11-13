@@ -172,6 +172,7 @@ export function SummaryBars({
               type="button"
               aria-label={`${row.id ?? row.title} span in ${fragment.release}`}
               data-fragment={fragment.release}
+              data-guessed={row.guessed || undefined}
               onClick={onOpen}
               className={cn(
                 'absolute top-1/2 -translate-y-1/2 rounded-full bg-muted-foreground/15 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring',
@@ -181,14 +182,15 @@ export function SummaryBars({
             >
               {fragment.pieces.map((piece, index) => {
                 const shape = place(placement, piece.start, piece.end)
+                const hatched = piece.hatched || (row.guessed && !piece.done)
                 return (
                   <span
                     key={index}
-                    data-hatched={piece.hatched || undefined}
+                    data-hatched={hatched || undefined}
                     className={cn(
                       'absolute inset-y-0 rounded-full',
                       piece.done ? 'bg-green-500/70' : 'bg-slate-500/80 dark:bg-slate-400/80',
-                      piece.hatched && 'hatched',
+                      hatched && 'hatched',
                     )}
                     style={{ left: shape.from - from, width: shape.size }}
                   />
@@ -201,7 +203,7 @@ export function SummaryBars({
       {last && (
         <Trailer
           at={place(placement, last.start, last.end).from + place(placement, last.start, last.end).size}
-          text={hoursLabel(row.hours, row.testHours, false)}
+          text={hoursLabel(row.hours, row.testHours, row.guessed)}
           missed={row.missed !== null}
         />
       )}

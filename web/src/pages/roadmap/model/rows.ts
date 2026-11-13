@@ -63,6 +63,8 @@ export interface GanttRow {
   open: number
   target: string | null
   missed: string | null
+  guessed: boolean
+  covers: string[]
   fragments: Fragment[]
   work: WorkBar | null
 }
@@ -210,6 +212,7 @@ interface Builder {
   key: string
   summaries: ForecastSummary[]
   contributions: { release: string; segments: TimedSegment[]; hatched: boolean }[]
+  covers: Set<string>
   children: Map<string, Builder>
 }
 
@@ -295,7 +298,14 @@ const emptyRelease: ReleasePlan = {
 
 export function buildRows(roadmap: Roadmap, active: readonly Level[]): GanttRow[] {
   const deepest = Math.max(...active.map(levelRank))
-  const root: Builder = { node: releaseNode(emptyRelease), key: '', summaries: [], contributions: [], children: new Map() }
+  const root: Builder = {
+    node: releaseNode(emptyRelease),
+    key: '',
+    summaries: [],
+    contributions: [],
+    covers: new Set(),
+    children: new Map(),
+  }
   const segmentsOf = new Map<WorkPlan, TimedSegment[]>()
 
   const visit = (node: PlanNode, parent: Builder, shownAbove: Builder[]) => {
@@ -307,6 +317,7 @@ export function buildRows(roadmap: Roadmap, active: readonly Level[]): GanttRow[
         key: `${parent.key}/${node.key}`,
         summaries: [],
         contributions: [],
+        covers: new Set(),
         children: new Map(),
       }
       parent.children.set(node.key, holder)
@@ -315,6 +326,11 @@ export function buildRows(roadmap: Roadmap, active: readonly Level[]): GanttRow[
       }
     }
     const lineage = shown ? [...shownAbove, holder] : shownAbove
+    if (node.reference !== null) {
+      for (const builder of lineage) {
+        builder.covers.add(node.reference)
+      }
+    }
     if (node.work) {
       const segments = workSegments(node.work, roadmap)
       segmentsOf.set(node.work, segments)
@@ -351,6 +367,8 @@ export function buildRows(roadmap: Roadmap, active: readonly Level[]): GanttRow[
       open: work ? Number(open) : total((summary) => summary.open),
       target: node.target,
       missed: node.reference === null ? null : (missed.get(node.reference) ?? null),
+      guessed: builder.contributions.some((contribution) => contribution.hatched),
+      covers: [...builder.covers],
       fragments: fragmentsOf(builder),
       work: work ? workBar(work, segmentsOf.get(work) ?? []) : null,
     })

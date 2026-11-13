@@ -78,6 +78,34 @@ describe('buildRows', () => {
     expect(hatched).toEqual({ T1: false, T2: false, S2: true, E2: true, T3: false, T4: false })
   })
 
+  it('marks a summary guessed as soon as one of its open parts is guessed, at any level shown', () => {
+    const rows = rowsAt(['release', 'epic', 'story', 'task']).filter((row) => row.work === null)
+    expect(rows.map((row) => `${outline([row])[0]?.trim()} ${row.guessed}`)).toEqual([
+      'release 0.1 true',
+      'epic E1 true',
+      'story S1 false',
+      'epic No epic false',
+      'story No story false',
+      'release 0.2 false',
+      'epic E1 false',
+      'story S3 false',
+    ])
+    expect(rowsAt(['epic']).find((row) => row.id === 'E1')?.guessed).toBe(true)
+  })
+
+  it('never counts finished work as guessed', () => {
+    const roadmap = makeRoadmap([
+      makeRelease('0.1', [makeEpic('p#E1', [makeStory('p#S1', [makeWork('p#T1', { stage: 'done', basis: 'default' }), planned('p#T2', 0, 4, 1)])])]),
+    ])
+    expect(buildRows(roadmap, ['release']).map((row) => row.guessed)).toEqual([false])
+  })
+
+  it('lists the references each row covers, hidden levels included', () => {
+    const [release] = rowsAt(['release'])
+    expect(release?.covers).toEqual(expect.arrayContaining(['release 0.1', 'p#E1', 'p#S1', 'p#T1', 'p#T2', 'p#S2', 'p#E2', 'p#T3']))
+    expect(release?.covers).not.toContain('p#T4')
+  })
+
   it('marks the targets the forecast misses, from its warnings', () => {
     const rows = rowsAt(['task'])
     expect(rows.find((row) => row.id === 'T2')?.missed).toBe('target 2026-11-12, forecast 2026-11-14')

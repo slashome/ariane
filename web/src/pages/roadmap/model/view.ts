@@ -19,6 +19,7 @@ export interface GanttView {
   later: () => void
   zoomIn: () => void
   zoomOut: () => void
+  reveal: (left: number) => void
 }
 
 export function useElementWidth(): [number, (element: HTMLElement | null) => (() => void) | undefined] {
@@ -72,5 +73,6 @@ export function useGanttView(dated: boolean, width: number): GanttView {
     later: () => setOffset(Math.round(left + width * step)),
     zoomIn: () => zoomTo(index + 1),
     zoomOut: () => zoomTo(index - 1),
+    reveal: (next) => setOffset(Math.round(next)),
   }
 }
