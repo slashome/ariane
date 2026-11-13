@@ -383,6 +383,26 @@ impl Configs {
         self.files.get(node)?.description.as_deref()
     }
 
+    /// The category of the status `status` in `node`'s effective workflow,
+    /// read without combining the rest of the files; `None` when the workflow
+    /// has no such status.
+    pub fn category(&self, node: &NodePath, status: &str) -> Option<Category> {
+        let declared = node
+            .ancestors_from_root()
+            .iter()
+            .rev()
+            .find_map(|ancestor| self.files.get(ancestor)?.workflow.as_ref());
+        match declared {
+            Some(workflow) => workflow
+                .iter()
+                .find(|entry| entry.id == status)
+                .map(|entry| entry.category),
+            None => Category::ALL
+                .into_iter()
+                .find(|category| category.id() == status),
+        }
+    }
+
     /// What sizes cost on `node`: the `[estimates]` of its ancestors from the
     /// root down, key by key, without combining the rest of the files.
     pub fn pricing(&self, node: &NodePath) -> Pricing {

@@ -453,6 +453,8 @@ mod tests {
         assert_eq!(task["category"], "todo");
         assert_eq!(task["node"], "p");
         assert_eq!(task["external"], serde_json::json!(["monday:42"]));
+        assert_eq!(task["estimate"]["hours"], 12.0);
+        assert_eq!(task["estimate"]["basis"], "default");
     }
 
     #[tokio::test]

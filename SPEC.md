@@ -145,6 +145,8 @@ test_ratio = 0.25
 tester = "owner"
 ```
 
+The hours an item weighs are computed, never written: a task weighs the hours of its `size`, else those of `default`; a story with tasks weighs the sum of its tasks and an epic with stories the sum of its stories, their own `size` ignored; a story or an epic not split yet weighs its provisional `size`, else `default`. Dropped work counts in no sum. Each piece of work adds `hours × test_ratio` of testing, priced by its own node. `ariane tasks --json`, `ariane show --json` and the interface give each task, story and epic its `estimate`: `hours` and `test_hours`, the `remaining_hours` and `remaining_test_hours` of the work neither done nor dropped, the `tester`, the `basis` (`size`, `provisional`, `default` or `tasks`), the `size` priced, and how many of the summed `parts` are `guessed` from a default or provisional size.
+
 **People.** Each `[people.<handle>]` table declares one person an item may wait for: `name` MUST be given, free text; every other key is the person's id in a tracker, such as `monday = 58294966`. A handle matches `^[a-z][a-z0-9-]*$`.
 
 **Personas.** Each `[personas."<id>"]` table declares one persona a story may be written for ([ADR-0018](docs/adr/0018-name-the-personas-a-story-is-written-for.md)): `name` MUST be given, free text, the readable label; no other key is allowed. An id SHOULD read `<group>:<role>`, such as `cmc:dev` or `user:rh`; it is a quoted TOML key because of its colon:

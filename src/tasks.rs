@@ -15,6 +15,7 @@ use serde::Serialize;
 
 use crate::cli::TasksArgs;
 use crate::closed;
+use crate::estimate::{self, Estimate};
 use crate::history::History;
 use crate::item::Kind;
 use crate::node::Category;
@@ -42,6 +43,9 @@ pub struct Row<'a> {
     /// Category of that status in the node's effective workflow, if it is known there.
     pub category: Option<Category>,
     pub size: Option<&'a str>,
+    /// The hours of focused work the item weighs, with its testing and where
+    /// they come from (ADR-0025); `None` for a reflexion or a ressource.
+    pub estimate: Option<Estimate>,
     pub impact: Option<&'a str>,
     pub priority: Option<&'a str>,
     /// The manual order within the node and kind (ADR-0022); `None` when unranked.
@@ -178,6 +182,7 @@ pub fn row<'a>(tree: &'a Tree, item: &'a Item) -> Row<'a> {
         status,
         category,
         size: document.text("size"),
+        estimate: estimate::effective(tree, item),
         impact: document.text("impact"),
         priority: document.text("priority"),
         rank: document.integer("rank"),
@@ -347,6 +352,10 @@ mod tests {
                 "parking": false,
             })
         );
+        assert_eq!(json["estimate"]["basis"], "default");
+        assert_eq!(json["estimate"]["hours"], 12.0);
+        assert_eq!(json["estimate"]["test_hours"], 3.0);
+        assert_eq!(json["estimate"]["tester"], "owner");
         assert!(json.get("body").is_none());
         assert!(json.get("closed_approx").is_none());
         assert_eq!(json["type"], serde_json::Value::Null);

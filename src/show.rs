@@ -14,6 +14,7 @@ use anyhow::{Result, bail};
 use serde::Serialize;
 
 use crate::cli::ShowArgs;
+use crate::estimate::{Basis, Estimate};
 use crate::history::History;
 use crate::node::Category;
 use crate::relations::{self, Relations};
@@ -80,6 +81,40 @@ pub fn shown<'a>(tree: &'a Tree, item: &'a Item, dates: Option<&History>) -> Sho
         body: &item.document.body,
         relations,
     }
+}
+
+/// An estimate in words: its hours and where they come from, its testing and
+/// what remains, such as `16 h, sum of 3 parts, 1 guessed · 8 h of testing
+/// by others · 14 h remaining`.
+fn describe(estimate: &Estimate) -> String {
+    let size = estimate.size.unwrap_or("-");
+    let basis = match estimate.basis {
+        Basis::Size => format!("size {size}"),
+        Basis::Provisional => format!("provisional size {size}"),
+        Basis::Default => format!("assumed default size {size}"),
+        Basis::Tasks => {
+            let parts = match estimate.parts {
+                1 => "1 part".to_owned(),
+                parts => format!("{parts} parts"),
+            };
+            match estimate.guessed {
+                0 => format!("sum of {parts}"),
+                guessed => format!("sum of {parts}, {guessed} guessed"),
+            }
+        }
+    };
+    let mut facts = vec![format!("{} h, {basis}", estimate.hours)];
+    if estimate.test_hours > 0.0 {
+        facts.push(format!(
+            "{} h of testing by {}",
+            estimate.test_hours,
+            estimate.tester.id()
+        ));
+    }
+    if estimate.remaining_hours != estimate.hours {
+        facts.push(format!("{} h remaining", estimate.remaining_hours));
+    }
+    facts.join(" · ")
 }
 
 /// Finds the item `raw` names: `<node>#<id>` anywhere, a bare id within
@@ -169,6 +204,9 @@ fn print_text(shown: &Shown) {
             (_, Some(from)) => println!("release:    {} (from {from})", release.name),
         }
     }
+    if let Some(estimate) = &row.estimate {
+        println!("estimate:   {}", describe(estimate));
+    }
     if let Some(parent) = &relations.parent {
         println!("parent:     {}", list(std::slice::from_ref(parent)));
     }
@@ -243,6 +281,24 @@ mod tests {
             "---\nariane: 2\nnode: q\nid: T1\ntitle: B\nstatus: todo\n---\n",
         );
         Tree::load(repo.root()).unwrap()
+    }
+
+    #[test]
+    fn a_split_story_shows_the_sum_of_its_tasks_in_json_and_in_words() {
+        let tree = sample();
+        let story = find(&tree, "p#S1", None).unwrap();
+        let json = serde_json::to_value(shown(&tree, story, None)).unwrap();
+        assert_eq!(json["estimate"]["basis"], "tasks");
+        assert_eq!(json["estimate"]["hours"], 12.0);
+        assert_eq!(
+            json["relations"]["children"][0]["estimate"]["basis"],
+            "default"
+        );
+        let estimate = shown(&tree, story, None).row.estimate.unwrap();
+        assert_eq!(
+            describe(&estimate),
+            "12 h, sum of 1 part, 1 guessed · 3 h of testing by owner"
+        );
     }
 
     #[test]

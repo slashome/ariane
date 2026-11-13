@@ -5,11 +5,25 @@
 //! the `default` size of an item without one, the `test_ratio` of testing added
 //! after each piece of work, and who tests (`tester`). It is inherited key by
 //! key, the nearest declaration winning, over the values of ADR-0025.
+//!
+//! This module is the one place where an item's hours are computed, for
+//! `ariane tasks --json`, `ariane show --json` and the interface:
+//!
+//! - a task weighs the hours of its `size`, else of the default size, assumed;
+//! - a story with tasks weighs the sum of its tasks, its own `size` ignored;
+//!   without tasks, its provisional `size`, else the default size, assumed;
+//! - an epic with stories weighs the sum of its stories, each weighed as
+//!   above; without stories, its provisional `size`, else the default size.
+//!
+//! Dropped work leaves both sums; finished work leaves the remaining hours only.
 
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
 
+use crate::item::Kind;
+use crate::node::Category;
 use crate::schema::SIZES;
+use crate::tree::{Item, Tree, parse_reference};
 
 /// Hours of `XS`, `S`, `M`, `L` and `XL` when no node declares them.
 pub const DEFAULT_HOURS: [f64; 5] = [2.0, 4.0, 12.0, 24.0, 48.0];
@@ -218,5 +232,312 @@ impl Pricing {
     /// The hours of the default size.
     pub fn default_hours(&self) -> f64 {
         self.hours_of(self.default).unwrap_or(self.m)
+    }
+}
+
+/// Where an item's hours come from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Basis {
+    /// The task's own `size`.
+    Size,
+    /// The `size` of a story or an epic not split yet: a rough estimate.
+    Provisional,
+    /// No `size`: the node's default size, assumed.
+    Default,
+    /// The sum of the story's tasks, or of the epic's stories.
+    Tasks,
+}
+
+impl Basis {
+    /// Tells whether the hours are a guess: a default or a provisional size.
+    pub fn is_guess(self) -> bool {
+        matches!(self, Basis::Provisional | Basis::Default)
+    }
+}
+
+/// The hours an item weighs, with its testing (ADR-0025).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub struct Estimate {
+    /// Hours of focused work, dropped work left out.
+    pub hours: f64,
+    /// The part of `hours` not finished yet: neither done nor dropped.
+    pub remaining_hours: f64,
+    /// Hours of testing added after the work, `hours × test_ratio`.
+    pub test_hours: f64,
+    /// The part of `test_hours` of the work not finished yet.
+    pub remaining_test_hours: f64,
+    /// Who tests, from the item's node.
+    pub tester: Tester,
+    /// Where the hours come from.
+    pub basis: Basis,
+    /// The size priced, for every basis but `tasks`.
+    pub size: Option<&'static str>,
+    /// How many single estimates the hours add up: 1 for a task or an unsplit
+    /// story or epic, the count of its tasks and unsplit stories for a sum.
+    pub parts: usize,
+    /// How many of those parts are guesses: a default or provisional size.
+    pub guessed: usize,
+}
+
+/// The hours `item` weighs; `None` for a kind that carries no work, such as a
+/// reflexion or a ressource.
+pub fn effective(tree: &Tree, item: &Item) -> Option<Estimate> {
+    let pricing = tree.configs.pricing(&item.node);
+    match item.kind {
+        Kind::Task => Some(single(tree, item, &pricing, Basis::Size)),
+        Kind::Story => Some(split(tree, item, &pricing, Kind::Task)),
+        Kind::Epic => Some(split(tree, item, &pricing, Kind::Story)),
+        _ => None,
+    }
+}
+
+/// A story or an epic: the sum of its live children of kind `part` when it has
+/// some, else its own size as a provisional estimate.
+fn split(tree: &Tree, item: &Item, pricing: &Pricing, part: Kind) -> Estimate {
+    let children: Vec<&Item> = children(tree, item, part)
+        .filter(|child| category(tree, child) != Some(Category::Dropped))
+        .collect();
+    if children.is_empty() {
+        return single(tree, item, pricing, Basis::Provisional);
+    }
+    let mut sum = Estimate {
+        hours: 0.0,
+        remaining_hours: 0.0,
+        test_hours: 0.0,
+        remaining_test_hours: 0.0,
+        tester: pricing.tester,
+        basis: Basis::Tasks,
+        size: None,
+        parts: 0,
+        guessed: 0,
+    };
+    for child in children {
+        let Some(estimate) = effective(tree, child) else {
+            continue;
+        };
+        sum.hours += estimate.hours;
+        sum.remaining_hours += estimate.remaining_hours;
+        sum.test_hours += estimate.test_hours;
+        sum.remaining_test_hours += estimate.remaining_test_hours;
+        sum.parts += estimate.parts;
+        sum.guessed += estimate.guessed;
+    }
+    sum.hours = round(sum.hours);
+    sum.remaining_hours = round(sum.remaining_hours);
+    sum.test_hours = round(sum.test_hours);
+    sum.remaining_test_hours = round(sum.remaining_test_hours);
+    sum
+}
+
+/// One estimate priced from the item's own `size`, `sized` naming that basis,
+/// else from the node's default size; finished work has nothing remaining.
+fn single(tree: &Tree, item: &Item, pricing: &Pricing, sized: Basis) -> Estimate {
+    let own = item.document.text("size").and_then(known_size);
+    let (size, basis) = match own {
+        Some(size) => (size, sized),
+        None => (pricing.default, Basis::Default),
+    };
+    let hours = pricing
+        .hours_of(size)
+        .unwrap_or_else(|| pricing.default_hours());
+    let finished = category(tree, item).is_some_and(Category::is_closed);
+    let remaining = if finished { 0.0 } else { hours };
+    Estimate {
+        hours: round(hours),
+        remaining_hours: round(remaining),
+        test_hours: round(hours * pricing.test_ratio),
+        remaining_test_hours: round(remaining * pricing.test_ratio),
+        tester: pricing.tester,
+        basis,
+        size: Some(size),
+        parts: 1,
+        guessed: usize::from(basis.is_guess()),
+    }
+}
+
+/// The items of kind `part` whose `parent` is `item`, archived ones included.
+fn children<'a>(tree: &'a Tree, item: &'a Item, part: Kind) -> impl Iterator<Item = &'a Item> {
+    let id = item.id();
+    tree.items.iter().filter(move |candidate| {
+        candidate.kind == part
+            && id.is_some()
+            && candidate
+                .document
+                .text("parent")
+                .and_then(|raw| parse_reference(raw, &candidate.node))
+                .is_some_and(|(node, parent)| node == item.node && Some(parent.as_str()) == id)
+    })
+}
+
+/// The category of `item`'s status in its node's workflow, if known.
+fn category(tree: &Tree, item: &Item) -> Option<Category> {
+    tree.configs
+        .category(&item.node, item.document.text("status")?)
+}
+
+/// `value` rounded to the hundredth, so that `12 × 0.1` reads `1.2`.
+fn round(value: f64) -> f64 {
+    (value * 100.0).round() / 100.0
+}
+
+/// Unit tests of the hours an item weighs.
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tree::fixture::Repo;
+
+    /// An item of node `p` with `id`, `status` and extra header lines.
+    fn item(id: &str, status: &str, extra: &str) -> String {
+        format!(
+            "---\nariane: 2\nnode: p\nid: {id}\ntitle: {id}\nstatus: {status}\n{extra}---\n# {id}\n"
+        )
+    }
+
+    /// The estimate of item `id` of `tree`.
+    fn of(tree: &Tree, id: &str) -> Estimate {
+        let item = tree
+            .items
+            .iter()
+            .find(|item| item.id() == Some(id))
+            .unwrap();
+        effective(tree, item).unwrap()
+    }
+
+    /// A node pricing `M` at 10 hours with a test ratio of 0.5: an epic with a
+    /// split story (sized, unsized, done and dropped tasks, its own size
+    /// ignored) and an unsplit story with a provisional size; an unsplit epic
+    /// without size; a reflexion.
+    fn sample() -> Tree {
+        let repo = Repo::new();
+        repo.write(
+            "p/node.toml",
+            "[estimates]\nM = 10\ntest_ratio = 0.5\ntester = \"others\"\n",
+        )
+        .write("p/epics/E1-e.md", &item("E1", "todo", "size: XS\n"))
+        .write("p/epics/E2-e.md", &item("E2", "todo", ""))
+        .write(
+            "p/stories/S1-a.md",
+            &item("S1", "todo", "parent: E1\nsize: XL\n"),
+        )
+        .write(
+            "p/stories/S2-b.md",
+            &item("S2", "todo", "parent: E1\nsize: L\n"),
+        )
+        .write(
+            "p/stories/S3-c.md",
+            &item("S3", "dropped", "parent: E1\nsize: XL\n"),
+        )
+        .write(
+            "p/tasks/T1-sized.md",
+            &item("T1", "todo", "parent: S1\nsize: S\n"),
+        )
+        .write(
+            "p/tasks/T2-unsized.md",
+            &item("T2", "in_progress", "parent: S1\n"),
+        )
+        .write(
+            "p/archives/tasks/T3-done.md",
+            &item("T3", "done", "parent: S1\nsize: XS\n"),
+        )
+        .write(
+            "p/tasks/T4-dropped.md",
+            &item("T4", "dropped", "parent: S1\nsize: XL\n"),
+        )
+        .write("p/tasks/T5-odd.md", &item("T5", "todo", "size: XXL\n"))
+        .write("p/reflexions/R1-r.md", &item("R1", "open", ""));
+        Tree::load(repo.root()).unwrap()
+    }
+
+    #[test]
+    fn a_task_weighs_its_size_else_the_default_size_assumed() {
+        let tree = sample();
+        let sized = of(&tree, "T1");
+        assert_eq!(
+            (sized.basis, sized.size, sized.hours),
+            (Basis::Size, Some("S"), 4.0)
+        );
+        assert_eq!((sized.test_hours, sized.tester), (2.0, Tester::Others));
+        assert_eq!((sized.parts, sized.guessed), (1, 0));
+        let bare = of(&tree, "T2");
+        assert_eq!(
+            (bare.basis, bare.size, bare.hours),
+            (Basis::Default, Some("M"), 10.0)
+        );
+        assert_eq!(bare.guessed, 1);
+        let odd = of(&tree, "T5");
+        assert_eq!((odd.basis, odd.hours), (Basis::Default, 10.0));
+    }
+
+    #[test]
+    fn finished_work_has_hours_but_nothing_remaining() {
+        let tree = sample();
+        let done = of(&tree, "T3");
+        assert_eq!((done.hours, done.remaining_hours), (2.0, 0.0));
+        assert_eq!((done.test_hours, done.remaining_test_hours), (1.0, 0.0));
+        assert_eq!(of(&tree, "T4").remaining_hours, 0.0);
+    }
+
+    #[test]
+    fn a_split_story_weighs_the_sum_of_its_live_tasks_and_ignores_its_own_size() {
+        let story = of(&sample(), "S1");
+        assert_eq!((story.basis, story.size), (Basis::Tasks, None));
+        assert_eq!(story.hours, 4.0 + 10.0 + 2.0);
+        assert_eq!(story.remaining_hours, 4.0 + 10.0);
+        assert_eq!(story.test_hours, 8.0);
+        assert_eq!(story.remaining_test_hours, 7.0);
+        assert_eq!((story.parts, story.guessed), (3, 1));
+    }
+
+    #[test]
+    fn an_unsplit_story_or_epic_weighs_its_provisional_size_else_the_default() {
+        let tree = sample();
+        let story = of(&tree, "S2");
+        assert_eq!(
+            (story.basis, story.size, story.hours),
+            (Basis::Provisional, Some("L"), 24.0)
+        );
+        assert_eq!((story.parts, story.guessed), (1, 1));
+        let epic = of(&tree, "E2");
+        assert_eq!(
+            (epic.basis, epic.size, epic.hours),
+            (Basis::Default, Some("M"), 10.0)
+        );
+    }
+
+    #[test]
+    fn an_epic_weighs_the_sum_of_its_live_stories() {
+        let epic = of(&sample(), "E1");
+        assert_eq!(epic.basis, Basis::Tasks);
+        assert_eq!(epic.hours, 16.0 + 24.0);
+        assert_eq!(epic.remaining_hours, 14.0 + 24.0);
+        assert_eq!((epic.parts, epic.guessed), (4, 2));
+    }
+
+    #[test]
+    fn a_reflexion_weighs_nothing() {
+        let tree = sample();
+        let reflexion = tree
+            .items
+            .iter()
+            .find(|item| item.id() == Some("R1"))
+            .unwrap();
+        assert!(effective(&tree, reflexion).is_none());
+    }
+
+    #[test]
+    fn each_task_is_priced_by_its_own_node_and_hours_are_rounded() {
+        let repo = Repo::new();
+        repo.write("p/node.toml", "[estimates]\ntest_ratio = 0.1\n")
+            .write("p/stories/S1-a.md", &item("S1", "todo", ""))
+            .write("p/q/node.toml", "[estimates]\nS = 3\n")
+            .write(
+                "p/q/tasks/T1-a.md",
+                "---\nariane: 2\nnode: p/q\nid: T1\ntitle: T1\nstatus: todo\nparent: p#S1\nsize: S\n---\n",
+            );
+        let tree = Tree::load(repo.root()).unwrap();
+        let story = of(&tree, "S1");
+        assert_eq!(story.hours, 3.0);
+        assert_eq!(story.test_hours, 0.3);
     }
 }
