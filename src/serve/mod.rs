@@ -537,7 +537,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn nodes_carry_their_item_count_effective_workflow_and_releases() {
+    async fn nodes_carry_their_item_count_effective_workflow_releases_and_estimates() {
         let repo = sample();
         let (status, body, _) = get(&repo, "/api/nodes").await;
         assert_eq!(status, StatusCode::OK);
@@ -572,6 +572,13 @@ mod tests {
         assert!(root["tracker"].is_null());
         assert!(root["description"].is_null());
         assert!(root["releases"].is_null());
+        assert_eq!(
+            root["estimates"],
+            serde_json::json!({
+                "XS": 2.0, "S": 4.0, "M": 12.0, "L": 24.0, "XL": 48.0,
+                "default": "M", "test_ratio": 0.25, "tester": "owner",
+            })
+        );
     }
 
     #[tokio::test]

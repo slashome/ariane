@@ -1,7 +1,7 @@
 //! `node.toml`: what a node declares about its items (SPEC.md §1.5, ADR-0008).
 //!
 //! A node may carry a `node.toml` at the root of its directory: a top-level
-//! `description` of the node in Markdown, never inherited, and seven tables:
+//! `description` of the node in Markdown, never inherited, and eight tables:
 //!
 //! - `[fields.<key>]` declares a custom header key and its type;
 //! - `[[workflow]]` lists the statuses its items may take, each with a stable
@@ -9,6 +9,8 @@
 //! - `[[release]]` lists the node's releases in delivery order, each with a
 //!   `name`, an optional `parking` marker and an optional `target` date
 //!   (ADR-0023);
+//! - `[estimates]` gives the hours of each size, the default size, the test
+//!   ratio and who tests (ADR-0025);
 //! - `[people.<handle>]` names the people an item may wait for, with their ids
 //!   in the node's trackers;
 //! - `[personas."<id>"]` names the personas a user story is written for
@@ -17,8 +19,8 @@
 //! - `[proxy]`, or several `[[proxy]]`, give the node's development servers
 //!   local names (ADR-0016).
 //!
-//! A node inherits from its ancestors: fields, people and personas accumulate (the nearest
-//! declaration wins), a workflow or a release list replaces the inherited one as a whole, and
+//! A node inherits from its ancestors: fields, estimates, people and personas accumulate key by
+//! key (the nearest declaration wins), a workflow or a release list replaces the inherited one as a whole, and
 //! a node with no workflow above it uses the default one, one status per category. A node with
 //! no release list above it has none: its items keep free `release` values.
 
@@ -30,6 +32,7 @@ use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
 use toml_edit::DocumentMut;
 
+use crate::estimate::{self, Pricing};
 use crate::schema::is_date;
 use crate::tree::NodePath;
 
@@ -255,6 +258,10 @@ pub struct NodeFile {
     /// The releases declared by this file in delivery order, if any.
     #[serde(default, deserialize_with = "releases")]
     pub release: Option<Vec<Release>>,
+    /// The hours of each size and the testing rule declared by this file,
+    /// each key optional (ADR-0025).
+    #[serde(default)]
+    pub estimates: estimate::Declaration,
     /// The people declared by this file, by handle.
     #[serde(default)]
     pub people: BTreeMap<String, Person>,
@@ -303,6 +310,9 @@ pub struct Effective {
     pub releases: Option<Vec<Release>>,
     /// Node that declared the release list.
     pub releases_from: Option<NodePath>,
+    /// What sizes cost, from the `[estimates]` of the node and its ancestors,
+    /// key by key, over the values of ADR-0025.
+    pub estimates: Pricing,
     /// People of the node and its ancestors, by handle; the nearest wins.
     pub people: BTreeMap<String, Person>,
     /// Personas of the node and its ancestors, by id; the nearest wins.
@@ -373,8 +383,20 @@ impl Configs {
         self.files.get(node)?.description.as_deref()
     }
 
+    /// What sizes cost on `node`: the `[estimates]` of its ancestors from the
+    /// root down, key by key, without combining the rest of the files.
+    pub fn pricing(&self, node: &NodePath) -> Pricing {
+        let mut pricing = Pricing::default();
+        for ancestor in node.ancestors_from_root() {
+            if let Some(file) = self.files.get(&ancestor) {
+                pricing.apply(&file.estimates);
+            }
+        }
+        pricing
+    }
+
     /// Combines the files from the home node down to `node` (SPEC.md §1.5): fields,
-    /// people and personas accumulate, the nearest workflow, release list and
+    /// estimates, people and personas accumulate, the nearest workflow, release list and
     /// tracker replace inherited ones.
     pub fn effective(&self, node: &NodePath) -> Effective {
         let mut effective = Effective {
@@ -383,6 +405,7 @@ impl Configs {
             workflow_from: None,
             releases: None,
             releases_from: None,
+            estimates: Pricing::default(),
             people: BTreeMap::new(),
             personas: BTreeMap::new(),
             tracker: None,
@@ -397,6 +420,7 @@ impl Configs {
                     .iter()
                     .map(|(key, decl)| (key.clone(), decl.clone())),
             );
+            effective.estimates.apply(&file.estimates);
             effective.people.extend(
                 file.people
                     .iter()
@@ -707,6 +731,66 @@ parking = true
         ] {
             assert!(toml::from_str::<NodeFile>(text).is_err(), "{text}");
         }
+    }
+
+    #[test]
+    fn a_node_without_estimates_anywhere_prices_sizes_with_the_values_of_the_adr() {
+        let pricing = Configs::default().pricing(&NodePath::new("p"));
+        assert_eq!(
+            [pricing.xs, pricing.s, pricing.m, pricing.l, pricing.xl],
+            [2.0, 4.0, 12.0, 24.0, 48.0]
+        );
+        assert_eq!(pricing.default, "M");
+        assert_eq!(pricing.test_ratio, 0.25);
+        assert_eq!(pricing.tester, estimate::Tester::Owner);
+    }
+
+    #[test]
+    fn estimates_are_inherited_key_by_key_and_the_nearest_declaration_wins() {
+        let repo = Repo::new();
+        repo.write(
+            "p/node.toml",
+            "[estimates]\nXS = 1\nM = 10\ndefault = \"S\"\ntester = \"others\"\n",
+        )
+        .write("p/a/node.toml", "[estimates]\nM = 8.5\ntest_ratio = 0\n")
+        .write("p/a/tasks/t.md", "# t\n");
+        let tree = Tree::load(repo.root()).unwrap();
+        assert!(tree.configs.errors.is_empty(), "{:?}", tree.configs.errors);
+        let child = tree.configs.effective(&NodePath::new("p/a")).estimates;
+        assert_eq!(child.xs, 1.0);
+        assert_eq!(child.s, 4.0);
+        assert_eq!(child.m, 8.5);
+        assert_eq!(child.xl, 48.0);
+        assert_eq!(child.default, "S");
+        assert_eq!(child.default_hours(), 4.0);
+        assert_eq!(child.test_ratio, 0.0);
+        assert_eq!(child.tester, estimate::Tester::Others);
+        assert_eq!(tree.configs.pricing(&NodePath::new("p/a")), child);
+        let parent = tree.configs.pricing(&NodePath::new("p"));
+        assert_eq!(parent.m, 10.0);
+        assert_eq!(parent.test_ratio, 0.25);
+    }
+
+    #[test]
+    fn an_estimates_table_refuses_unknown_keys_bad_hours_ratios_sizes_and_testers() {
+        for text in [
+            "[estimates]\nXXL = 96\n",
+            "[estimates]\nM = 0\n",
+            "[estimates]\nS = -4\n",
+            "[estimates]\nL = \"24\"\n",
+            "[estimates]\ndefault = \"XXL\"\n",
+            "[estimates]\ndefault = \"m\"\n",
+            "[estimates]\ntest_ratio = -0.1\n",
+            "[estimates]\ntester = \"qa\"\n",
+        ] {
+            assert!(toml::from_str::<NodeFile>(text).is_err(), "{text}");
+        }
+        let accepted: NodeFile = toml::from_str(
+            "[estimates]\nXS = 0.5\nXL = 40\ndefault = \"XL\"\ntest_ratio = 0\ntester = \"owner\"\n",
+        )
+        .unwrap();
+        assert_eq!(accepted.estimates.xs, Some(0.5));
+        assert_eq!(accepted.estimates.default.as_deref(), Some("XL"));
     }
 
     #[test]

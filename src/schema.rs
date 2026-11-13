@@ -13,6 +13,9 @@
 //! [`RELEASE_KEYS`](crate::schema::RELEASE_KEYS) does the same for the `[[release]]` entries of a
 //! `node.toml` (ADR-0023), which `ariane schema --json` publishes with how they
 //! are inherited and how an item's effective release is resolved.
+//! [`ESTIMATE_KEYS`](crate::schema::ESTIMATE_KEYS) describes the keys of the
+//! `[estimates]` table (ADR-0025), published with their defaults and their
+//! key-by-key inheritance.
 //!
 //! The fixed vocabularies (sizes, levels, reflexion statuses), the id prefixes by
 //! kind and the small format checks shared by those commands live here too.
@@ -20,6 +23,7 @@
 use serde::Serialize;
 use serde_json::{Map, Value as Json, json};
 
+use crate::estimate::{Pricing, TESTERS};
 use crate::item::{Kind, SCHEMA_VERSION};
 use crate::node::Category;
 
@@ -295,6 +299,93 @@ fn release_declaration() -> Json {
     })
 }
 
+/// One key of the `[estimates]` table of `node.toml`.
+#[derive(Debug, Clone, Copy)]
+pub struct EstimateKey {
+    /// The key as written in the table.
+    pub name: &'static str,
+    /// Its type in `ariane schema` output.
+    pub value: &'static str,
+    /// What it means.
+    pub doc: &'static str,
+}
+
+/// Every key of the `[estimates]` table, in the order they are written; every
+/// one is optional.
+pub const ESTIMATE_KEYS: &[EstimateKey] = &[
+    EstimateKey {
+        name: "XS",
+        value: "number",
+        doc: "Hours of focused work of an `XS`, above zero.",
+    },
+    EstimateKey {
+        name: "S",
+        value: "number",
+        doc: "Hours of focused work of an `S`, above zero.",
+    },
+    EstimateKey {
+        name: "M",
+        value: "number",
+        doc: "Hours of focused work of an `M`, above zero.",
+    },
+    EstimateKey {
+        name: "L",
+        value: "number",
+        doc: "Hours of focused work of an `L`, above zero.",
+    },
+    EstimateKey {
+        name: "XL",
+        value: "number",
+        doc: "Hours of focused work of an `XL`, above zero.",
+    },
+    EstimateKey {
+        name: "default",
+        value: "enum",
+        doc: "The size an item without `size` counts as, one of the five sizes; its hours are an assumption.",
+    },
+    EstimateKey {
+        name: "test_ratio",
+        value: "number",
+        doc: "Hours of testing added after each hour of work, zero or above; `0` removes testing.",
+    },
+    EstimateKey {
+        name: "tester",
+        value: "enum",
+        doc: "Who tests: `owner` spends the owner's hours, `others` only delays the release.",
+    },
+];
+
+/// The `[estimates]` declaration as JSON: its keys with their vocabulary and
+/// the value that applies when no node declares them, inherited key by key.
+fn estimates_declaration() -> Json {
+    let defaults = serde_json::to_value(Pricing::default()).unwrap_or(Json::Null);
+    let testers: Vec<&str> = TESTERS.iter().map(|tester| tester.id()).collect();
+    let keys: Vec<Json> = ESTIMATE_KEYS
+        .iter()
+        .map(|key| {
+            let mut entry = json!({
+                "name": key.name,
+                "type": key.value,
+                "requirement": Requirement::May,
+                "default": defaults[key.name],
+                "doc": key.doc,
+            });
+            match key.name {
+                "default" => entry["values"] = json!(SIZES),
+                "tester" => entry["values"] = json!(testers),
+                _ => {}
+            }
+            entry
+        })
+        .collect();
+    json!({
+        "table": "[estimates]",
+        "keys": keys,
+        "inheritance": "key",
+        "unit": "hours",
+    })
+}
+
 /// Every item kind, in the order `ariane schema --json` lists them.
 pub const KINDS: [Kind; 6] = [
     Kind::Task,
@@ -416,7 +507,10 @@ pub fn export() -> Json {
         "categories": categories,
         "reflexion_statuses": REFLEXION_STATUSES,
         "id_prefixes": prefixes,
-        "node_toml": { "release": release_declaration() },
+        "node_toml": {
+            "release": release_declaration(),
+            "estimates": estimates_declaration(),
+        },
     })
 }
 
@@ -570,6 +664,39 @@ mod tests {
         assert_eq!(names, ["name", "parking", "target"]);
         assert_eq!(release["keys"][0]["requirement"], json!("must"));
         assert_eq!(release["keys"][1]["type"], json!("boolean"));
+    }
+
+    #[test]
+    fn the_export_describes_the_estimates_table_its_defaults_and_inheritance() {
+        let estimates = &export()["node_toml"]["estimates"];
+        assert_eq!(estimates["table"], json!("[estimates]"));
+        assert_eq!(estimates["inheritance"], json!("key"));
+        let keys = estimates["keys"].as_array().unwrap();
+        let names: Vec<&str> = keys
+            .iter()
+            .map(|key| key["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            names,
+            ["XS", "S", "M", "L", "XL", "default", "test_ratio", "tester"]
+        );
+        let defaults: Vec<&Json> = keys.iter().map(|key| &key["default"]).collect();
+        assert_eq!(
+            defaults,
+            [
+                &json!(2.0),
+                &json!(4.0),
+                &json!(12.0),
+                &json!(24.0),
+                &json!(48.0),
+                &json!("M"),
+                &json!(0.25),
+                &json!("owner"),
+            ]
+        );
+        assert_eq!(keys[5]["values"], json!(SIZES));
+        assert_eq!(keys[7]["values"], json!(["owner", "others"]));
+        assert!(keys.iter().all(|key| key["requirement"] == json!("may")));
     }
 
     #[test]

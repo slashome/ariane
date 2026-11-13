@@ -181,7 +181,7 @@ pub async fn show(Shared(state): Shared<Arc<State>>, Query(query): Query<ShowQue
 }
 
 /// `GET /api/nodes`: every node with its own `description`, its item count, effective
-/// workflow, releases in delivery order (`[[release]]`, inherited, `null` when none applies) and the node that declares them, people (`[people]`, inherited), personas (`[personas]`, inherited) and tracker binding (after `node.toml` inheritance, ADR-0008 and
+/// workflow, releases in delivery order (`[[release]]`, inherited, `null` when none applies) and the node that declares them, what sizes cost (`[estimates]`, inherited key by key), people (`[people]`, inherited), personas (`[personas]`, inherited) and tracker binding (after `node.toml` inheritance, ADR-0008 and
 /// ADR-0011) and the date of its latest commit, computed when the tree was
 /// loaded. The tracker is the raw `[tracker]` table, or `null`.
 pub async fn nodes(Shared(state): Shared<Arc<State>>) -> Response {
@@ -212,6 +212,7 @@ pub async fn nodes(Shared(state): Shared<Arc<State>>) -> Response {
                     "workflow": effective.workflow,
                     "releases": effective.releases,
                     "releases_from": effective.releases_from,
+                    "estimates": effective.estimates,
                     "people": effective.people,
                     "personas": effective.personas,
                     "tracker": effective.tracker,

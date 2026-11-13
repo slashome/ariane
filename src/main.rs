@@ -30,6 +30,8 @@ mod closed;
 mod config;
 /// `ariane doctor`: validation of items and nodes.
 mod doctor;
+/// Estimates in hours of focused work: what sizes cost, and what an item weighs.
+mod estimate;
 /// `ariane fix`: the deterministic repairs of `doctor` findings.
 mod fix;
 /// `ariane focus`: the item an agent session works on.

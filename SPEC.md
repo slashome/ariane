@@ -2,7 +2,7 @@
 
 > This document states what the method **requires**. It progressively supersedes [`PLAN.md`](PLAN.md), one concept at a time, starting with the item header. Where the two disagree on a concept specified here, this document is authoritative. The reasons behind each rule live in [`docs/adr/`](docs/adr/).
 
-The core keys of this section, and the keys of a `[[release]]` entry of `node.toml` with their inheritance, are also published by `ariane schema --json`, generated from the same tables the CLI validates against.
+The core keys of this section, and the keys of a `[[release]]` entry and of the `[estimates]` table of `node.toml` with their inheritance and defaults, are also published by `ariane schema --json`, generated from the same tables the CLI validates against.
 
 The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT** and **MAY** are to be interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 
@@ -41,7 +41,7 @@ Keys MUST be written in English, in lower case, with `_` as the word separator. 
 | `personas` | list of strings | MAY for stories; SHOULD NOT otherwise | The personas the story is written for, each an id declared under `[personas]` (§1.5), e.g. `cmc:dev`. |
 | `parent` | reference | MAY; MUST NOT for epics | One item reference (§1.4). Only a story may name an epic. |
 | `depends_on` | list of references | MAY | Item references (§1.4). |
-| `size` | string | MAY | `XS`, `S`, `M`, `L`, `XL`. |
+| `size` | string | MAY | `XS`, `S`, `M`, `L`, `XL`: hours of focused work, priced by the node's `[estimates]` (§1.5). On a story or an epic, a provisional estimate that yields to the sum of its tasks once it has some ([ADR-0025](docs/adr/0025-estimate-in-hours-of-focused-work-per-node.md)). |
 | `impact` | string | MAY | `low`, `medium`, `high`. |
 | `priority` | string | MAY | `low`, `medium`, `high`. |
 | `rank` | integer | MAY; SHOULD NOT for ressources | The item's place in the manual order of its node and kind, negative values included (ADR-0022). |
@@ -76,7 +76,7 @@ The body of the item MUST NOT restate in prose a fact the header carries.
 
 ### 1.5 `node.toml`
 
-A node MAY carry a `node.toml` file at the root of its directory. It describes the node, declares custom fields, the status workflow, the releases, the people items wait for and the personas stories are written for, and may name the node's development server.
+A node MAY carry a `node.toml` file at the root of its directory. It describes the node, declares custom fields, the status workflow, the releases, what sizes cost, the people items wait for and the personas stories are written for, and may name the node's development server.
 
 **Description.** A top-level `description` key MAY describe the node: its role, its host repository, its stack, its sources of truth. It is a Markdown string, multi-line with TOML's `"""`, and it is **not inherited**: it describes the node whose `node.toml` holds it ([ADR-0017](docs/adr/0017-keep-a-nodes-judgment-in-its-items.md), amended). Durable rules and conventions of the node belong in its ressources, not here.
 
@@ -124,6 +124,27 @@ name = "plus-tard"
 parking = true
 ```
 
+**Estimates.** An `[estimates]` table says what each size costs in hours of focused work, and how testing is added ([ADR-0025](docs/adr/0025-estimate-in-hours-of-focused-work-per-node.md)). Every key is optional:
+
+- `XS`, `S`, `M`, `L`, `XL` give the hours of that size, a number above zero. A table cannot add a sixth size.
+- `default` is the size an item without `size` counts as, one of the five; its hours are an assumption.
+- `test_ratio` is the hours of testing added after each hour of work, a number zero or above; `0` removes testing.
+- `tester` is who tests: `owner`, whose hours the testing consumes, or `others`, whose testing only delays the release.
+
+No other key is allowed. A node with no `[estimates]` anywhere above it uses:
+
+```toml
+[estimates]
+XS = 2
+S = 4
+M = 12
+L = 24
+XL = 48
+default = "M"
+test_ratio = 0.25
+tester = "owner"
+```
+
 **People.** Each `[people.<handle>]` table declares one person an item may wait for: `name` MUST be given, free text; every other key is the person's id in a tracker, such as `monday = 58294966`. A handle matches `^[a-z][a-z0-9-]*$`.
 
 **Personas.** Each `[personas."<id>"]` table declares one persona a story may be written for ([ADR-0018](docs/adr/0018-name-the-personas-a-story-is-written-for.md)): `name` MUST be given, free text, the readable label; no other key is allowed. An id SHOULD read `<group>:<role>`, such as `cmc:dev` or `user:rh`; it is a quoted TOML key because of its colon:
@@ -138,7 +159,7 @@ name = "Responsable RH"
 
 **Inheritance.** A node inherits the `node.toml` of each of its ancestors, from the root down:
 
-- `[fields]`, `[people]` and `[personas]` accumulate. A descendant MAY redeclare a key, a person or a persona inherited from an ancestor, and the descendant's declaration wins.
+- `[fields]`, `[estimates]`, `[people]` and `[personas]` accumulate key by key. A descendant MAY redeclare a key, an estimate, a person or a persona inherited from an ancestor, and the descendant's declaration wins.
 - A `[[workflow]]` declared in a node replaces the inherited workflow **as a whole**; entries are never merged.
 - A `[[release]]` list declared in a node replaces the inherited list **as a whole**, the same way. A node with no list anywhere above it has none, and its items keep free `release` values.
 - `description` and `[proxy]` (or `[[proxy]]`) are never inherited.
@@ -182,6 +203,7 @@ name = "Responsable RH"
 | A file name that does not begin with the item's `id`, `-` and a slug | error — remedy: `ariane fix` (renames to `<id>-<current name>` and rewrites the links); a human when the name is the bare id |
 | An item in `backlog/` or `archives/backlog/` | error — remedy: `ariane fix` (moves it into `tasks/` or `archives/tasks/` and rewrites the links) |
 | A custom key not declared in any applicable `node.toml` | warning — `milestone` on a version `2` file is one ([ADR-0024](docs/adr/0024-remove-milestone-from-the-header.md)) |
+| A `node.toml` that does not parse, among others an `[estimates]` key that is neither a size nor `default`, `test_ratio` or `tester`, hours zero or below, a `default` that is not a size, a negative `test_ratio` or an unknown `tester` | error — the node falls back on its inherited configuration until the file is fixed |
 | A `[proxy]` table or `[[proxy]]` entry whose `host` is not a host name, whose `port` is 0, or whose `host` another entry declares | error |
 | An `INDEX.md` anywhere in the tree | warning — remedy: move the node's description into the `description` of its `node.toml`, its judgment into the item it concerns, its rules into a ressource of the node, then delete the file |
 

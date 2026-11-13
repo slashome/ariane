@@ -597,6 +597,35 @@ category = "done"
     }
 
     #[test]
+    fn an_invalid_estimates_table_is_an_invalid_node_toml() {
+        for table in [
+            "[estimates]\nXXL = 96\n",
+            "[estimates]\nM = 0\n",
+            "[estimates]\ndefault = \"XXL\"\n",
+            "[estimates]\ntest_ratio = -1\n",
+            "[estimates]\ntester = \"qa\"\n",
+        ] {
+            let repo = base();
+            repo.write("p/node.toml", &format!("{WORKFLOW}\n{table}"))
+                .write("p/tasks/T1-a.md", &task("p", "T1", ""));
+            let tree = Tree::load(repo.root()).unwrap();
+            let findings = diagnose(&tree, None, false);
+            let invalid = findings
+                .iter()
+                .find(|finding| finding.check == Check::InvalidNodeToml)
+                .unwrap_or_else(|| panic!("{table}"));
+            assert_eq!(invalid.severity, Severity::Error);
+        }
+        let repo = base();
+        repo.write(
+            "p/node.toml",
+            &format!("{WORKFLOW}\n[estimates]\nM = 8\ndefault = \"S\"\ntest_ratio = 0\ntester = \"others\"\n"),
+        )
+        .write("p/tasks/T1-a.md", &task("p", "T1", ""));
+        assert_eq!(checks(&repo), vec![]);
+    }
+
+    #[test]
     fn a_reflexion_only_accepts_open_or_settled() {
         let repo = base();
         repo.write(
