@@ -7,7 +7,8 @@
 //! `?archived=1` are `--kind`, `--node` and `--archived`),
 //! `/api/show?ref=` is `ariane show --json`, `/api/schema` is
 //! `ariane schema --json`, `/api/doctor` is `ariane doctor --all --json`,
-//! `/api/proxy` is the checks of `ariane proxy status`. Responses are built under a short read lock on
+//! `/api/proxy` is the checks of `ariane proxy status`, `/api/calendar` is
+//! `ariane calendar --json`. Responses are built under a short read lock on
 //! the tree, released before anything is sent.
 //!
 //! The writing endpoints — `PATCH /api/items`, `PUT /api/dashboard`,
@@ -457,6 +458,34 @@ pub async fn pin(Shared(state): Shared<Arc<State>>, Json(body): Json<Pins>) -> R
 pub async fn settings(Shared(state): Shared<Arc<State>>) -> Response {
     match crate::settings::load(&state.root) {
         Ok(settings) => Json(settings).into_response(),
+        Err(failure) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
+    }
+}
+
+/// `GET /api/calendar`: the personal work calendar, as `ariane calendar
+/// --json`: the file read, whether it exists, its valid part and its problems.
+/// Read only.
+pub async fn calendar(Shared(state): Shared<Arc<State>>) -> Response {
+    let personal = crate::calendar::personal_of(&state.root, state.config.repo_path().as_deref());
+    if crate::calendar::is_personal(&state.root, &personal) {
+        let Ok(tree) = state.tree.read() else {
+            return error(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "the tree lock is poisoned",
+            );
+        };
+        return overview(crate::calendar::overview(&personal, &tree));
+    }
+    match Tree::load(&personal) {
+        Ok(tree) => overview(crate::calendar::overview(&personal, &tree)),
+        Err(failure) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
+    }
+}
+
+/// The JSON of a calendar overview, or a `500` when the file cannot be read.
+fn overview(read: anyhow::Result<crate::calendar::Overview>) -> Response {
+    match read {
+        Ok(overview) => Json(overview).into_response(),
         Err(failure) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
     }
 }

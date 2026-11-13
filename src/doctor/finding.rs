@@ -142,6 +142,17 @@ pub enum Check {
     /// A `[proxy]` table whose host is not a host name, whose port is 0, or
     /// whose host another node already declares.
     InvalidProxy,
+    /// A `calendar.toml` that does not parse, or a value of it out of its
+    /// format or range (ADR-0026).
+    InvalidCalendar,
+    /// Two blocks of the calendar that share time.
+    CalendarOverlap,
+    /// A `[node."<path>"]` table of the calendar that names no node.
+    UnknownCalendarNode,
+    /// A `[node."<path>"]` table of the calendar without blocks.
+    UnusedCalendarNode,
+    /// A `calendar.toml` in a content repository that is not the personal one.
+    ForeignCalendar,
 }
 
 /// One problem found by doctor, serialized as is by `--json`.

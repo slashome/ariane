@@ -99,6 +99,10 @@ pub enum Command {
         about = "Read and change the settings versioned with the content: theme, dashboard pins"
     )]
     Settings(SettingsArgs),
+    #[command(
+        about = "The personal work calendar: the blocks, focus and days off a node works on, or edit it"
+    )]
+    Calendar(CalendarArgs),
     #[command(about = "Keep `ariane serve` running in the background (launchd, systemd)")]
     Service(ServiceArgs),
 }
@@ -591,6 +595,32 @@ pub enum SettingsCommand {
         #[arg(help = "New value: a color `#rrggbb`, or nodes written `a, b`")]
         value: String,
     },
+}
+
+/// Arguments of `ariane calendar`: the node to describe, or the `edit`
+/// subcommand, and `json` to print JSON.
+#[derive(Args)]
+#[command(args_conflicts_with_subcommands = true)]
+pub struct CalendarArgs {
+    #[command(subcommand)]
+    pub command: Option<CalendarCommand>,
+
+    #[arg(
+        help = "The node to describe (default: the node of the current directory, else every node with blocks)"
+    )]
+    pub node: Option<String>,
+
+    #[arg(long)]
+    pub json: bool,
+}
+
+/// The subcommands of `ariane calendar`.
+#[derive(Subcommand)]
+pub enum CalendarCommand {
+    #[command(
+        about = "Open calendar.toml in $VISUAL or $EDITOR, and save it only once it is valid"
+    )]
+    Edit,
 }
 
 /// Arguments of `ariane service`: the subcommand to run.

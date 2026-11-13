@@ -17,11 +17,14 @@
 //! - `ariane schema` → [`schema`], prints the header schema; it needs no repository;
 //! - `ariane serve` → [`serve`], serves the web interface (ADR-0012), and pulls the content once;
 //! - `ariane pull` → [`serve::git`], fast-forwards the content to its upstream;
-//! - `ariane proxy` → [`proxy`], local names for the interface and the projects (ADR-0016).
+//! - `ariane proxy` → [`proxy`], local names for the interface and the projects (ADR-0016);
+//! - `ariane calendar` → [`calendar`], the personal work calendar (ADR-0026).
 //!
 //! Exit code `3` means the command could not run at all (ADR-0004); the other
 //! codes are chosen by each command.
 
+/// `calendar.toml`: the personal work calendar, and `ariane calendar`.
+mod calendar;
 /// Command-line arguments, declared with `clap`.
 mod cli;
 /// The closing date `closed`: when it is written, and how it is approximated.
@@ -166,6 +169,7 @@ fn run() -> Result<ExitCode> {
         cli::Command::Show(args) => show::run(&tree, &args, here.filter(|node| !node.is_home())),
         cli::Command::Rank(args) => rank::run(&tree, &args, here.filter(|node| !node.is_home())),
         cli::Command::Settings(args) => settings::run(&location.root, &args),
+        cli::Command::Calendar(args) => calendar::run(&location.root, &tree, &args, here),
         cli::Command::Focus(args) => focus::run(&tree, &args, here.filter(|node| !node.is_home())),
         cli::Command::Links(args) => {
             let scope = scope(args.node.as_deref(), args.all, here);

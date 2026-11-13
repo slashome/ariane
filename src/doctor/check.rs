@@ -1,6 +1,6 @@
 //! The checks of `ariane doctor` (SPEC.md §1.6), all read-only.
 //!
-//! Three passes, each appending to one list of findings:
+//! Four passes, each appending to one list of findings:
 //!
 //! 1. **structural**: unreadable files, invalid `node.toml`, leftover
 //!    `INDEX.md` files (ADR-0017), `[proxy]` tables that cannot become a route;
@@ -12,7 +12,9 @@
 //!    workflow, custom keys against the node's `node.toml`, the file name
 //!    against `id`;
 //! 3. **across items**: ids duplicated within a node, and a `parent` that
-//!    points to an epic from an item that is not a story.
+//!    points to an epic from an item that is not a story;
+//! 4. **the work calendar**: the personal `calendar.toml` (ADR-0026), or one
+//!    found where it is never read.
 
 use std::collections::{BTreeMap, HashSet};
 use std::path::Path;
@@ -44,7 +46,119 @@ pub fn findings(tree: &Tree, scope: Option<&NodePath>) -> Vec<Finding> {
     }
     duplicates(tree, scope, &mut found);
     epic_parents(tree, scope, &mut found);
+    calendar(
+        tree,
+        scope,
+        &crate::calendar::personal_root(&tree.root),
+        &mut found,
+    );
     found
+}
+
+/// Reports the problems of the personal work calendar (SPEC.md §2.3), when
+/// `tree` is the personal repository `personal`; in any other repository, a
+/// `calendar.toml` is reported as never read. A missing calendar is fine.
+///
+/// A problem of a node's table is in the scope of that node; the others only
+/// when the whole tree is checked.
+pub(super) fn calendar(
+    tree: &Tree,
+    scope: Option<&NodePath>,
+    personal: &Path,
+    found: &mut Vec<Finding>,
+) {
+    let file = crate::calendar::path(&tree.root);
+    let path = Some(crate::calendar::FILE.to_owned());
+    if !crate::calendar::is_personal(&tree.root, personal) {
+        if scope.is_none() && file.exists() {
+            found.push(Finding {
+                check: Check::ForeignCalendar,
+                severity: Severity::Warning,
+                node: None,
+                path,
+                message: format!(
+                    "a calendar is personal: this one is never read, only the personal content repository's is ({})",
+                    crate::calendar::path(personal).display()
+                ),
+                remedy: Remedy::human([
+                    "move its blocks into the personal content repository's calendar.toml, with `ariane calendar edit`",
+                    "delete it from this repository",
+                ]),
+            });
+        }
+        return;
+    }
+    let overview = match crate::calendar::overview(&tree.root, tree) {
+        Ok(overview) => overview,
+        Err(error) => {
+            found.push(Finding {
+                check: Check::Unreadable,
+                severity: Severity::Error,
+                node: None,
+                path,
+                message: format!("cannot be read: {error:#}"),
+                remedy: Remedy::human(["fix the file's permissions or encoding"]),
+            });
+            return;
+        }
+    };
+    for problem in overview.problems {
+        let in_scope = match (&problem.node, scope) {
+            (_, None) => true,
+            (Some(node), Some(scope)) => node.is_within(scope),
+            (None, Some(_)) => false,
+        };
+        if !in_scope {
+            continue;
+        }
+        let (check, severity, remedy) = calendar_rule(problem.kind);
+        found.push(Finding {
+            check,
+            severity,
+            node: problem.node,
+            path: path.clone(),
+            message: problem.message,
+            remedy,
+        });
+    }
+}
+
+/// The check, severity and remedy of a kind of calendar problem.
+fn calendar_rule(kind: crate::calendar::ProblemKind) -> (Check, Severity, Remedy) {
+    use crate::calendar::ProblemKind;
+    match kind {
+        ProblemKind::Invalid => (
+            Check::InvalidCalendar,
+            Severity::Error,
+            Remedy::human([
+                "fix the value with `ariane calendar edit`, as SPEC.md §2 describes it",
+            ]),
+        ),
+        ProblemKind::Overlap => (
+            Check::CalendarOverlap,
+            Severity::Error,
+            Remedy::human([
+                "move or shorten one of the two blocks with `ariane calendar edit`",
+                "remove one of them",
+            ]),
+        ),
+        ProblemKind::UnknownNode => (
+            Check::UnknownCalendarNode,
+            Severity::Error,
+            Remedy::human([
+                "write the path of an existing node in the `[node.\"<path>\"]` table",
+                "remove the table",
+            ]),
+        ),
+        ProblemKind::Unused => (
+            Check::UnusedCalendarNode,
+            Severity::Warning,
+            Remedy::human([
+                "give the table its own blocks",
+                "remove the table: the node works on its ancestor's blocks",
+            ]),
+        ),
+    }
 }
 
 /// Reports what prevents reading the tree properly: unreadable paths, invalid `node.toml` files, leftover `INDEX.md` files, invalid `[proxy]` tables.

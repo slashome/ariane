@@ -2,7 +2,7 @@
 
 > This document states what the method **requires**. It progressively supersedes [`PLAN.md`](PLAN.md), one concept at a time, starting with the item header. Where the two disagree on a concept specified here, this document is authoritative. The reasons behind each rule live in [`docs/adr/`](docs/adr/).
 
-The core keys of this section, and the keys of a `[[release]]` entry and of the `[estimates]` table of `node.toml` with their inheritance and defaults, are also published by `ariane schema --json`, generated from the same tables the CLI validates against.
+The core keys of this section, and the keys of a `[[release]]` entry and of the `[estimates]` table of `node.toml` with their inheritance and defaults, are also published by `ariane schema --json`, generated from the same tables the CLI validates against, and so are the keys of the work calendar (§2).
 
 The key words **MUST**, **MUST NOT**, **SHOULD**, **SHOULD NOT** and **MAY** are to be interpreted as described in [RFC 2119](https://www.rfc-editor.org/rfc/rfc2119).
 
@@ -289,3 +289,69 @@ id = "abandonne"
 label = "Abandonné"
 category = "dropped"
 ```
+
+## 2. Work calendar
+
+Decided in [ADR-0026](docs/adr/0026-keep-the-work-calendar-personal.md). The calendar says when the owner works on what; it turns hours of focused work (§1.5) into dates.
+
+### 2.1 Location
+
+The calendar is `calendar.toml`, at the root of the owner's **personal** content repository, next to `settings.toml`. The personal repository is the one the `repo` key of `config.toml` names (`ariane config get repo`); when that key is not set, the content repository being worked on is the personal one. A `calendar.toml` in any other content repository MUST NOT be read: `doctor` reports it. A missing calendar is not an error: the roadmap then has no dates.
+
+### 2.2 Form
+
+```toml
+version = 1
+timezone = "Europe/Paris"
+days_off = ["2026-12-24..2027-01-02"]
+
+[node."cmc"]
+focus = 0.6
+blocks = [{ days = "mon-fri", from = "09:00", to = "18:00" }]
+
+[node."slashome/pharmakon"]
+focus = 1.0
+days_off = ["2026-08-03..2026-08-14"]
+blocks = [
+  { days = "tue,thu", from = "20:00", to = "23:00" },
+  { days = "sat", from = "10:00", to = "13:00" },
+]
+```
+
+| Key | Type | Required | Rule |
+|---|---|---|---|
+| `version` | integer | MUST | `1`. Changed only by `ariane migrate`. |
+| `timezone` | string | MUST | An IANA time zone, such as `Europe/Paris`. Every block is written in it. |
+| `days_off` | list of strings | MAY | Days off of every node: dates `YYYY-MM-DD` and inclusive ranges `YYYY-MM-DD..YYYY-MM-DD`, the first day not after the last. |
+| `node."<path>"` | table | MAY | One per node with hours of its own; `<path>` MUST be a node of the tree, quoted. |
+| `node."<path>".focus` | number | MAY | The share of the blocks that is focused work, above `0` and at most `1`. Default `1`. |
+| `node."<path>".blocks` | list of tables | MAY | The node's weekly blocks of work. |
+| `node."<path>".blocks[].days` | string | MUST | Days `mon` to `sun`, as single days, ranges and lists: `mon-fri`, `tue,thu`, `sat`, `mon,wed-fri`. A range does not wrap around the week. |
+| `node."<path>".blocks[].from` | string | MUST | `HH:MM`, `00:00` to `23:59`. |
+| `node."<path>".blocks[].to` | string | MUST | `HH:MM` after `from`, `24:00` at the latest. A block never crosses midnight: one that does is written as two. |
+| `node."<path>".days_off` | list of strings | MAY | Days off of this node only, written as the global `days_off`. |
+
+No other key is allowed. Writing the file keeps its comments and layout: `ariane calendar edit` saves the text exactly as the owner wrote it.
+
+### 2.3 Resolution
+
+A node works on the blocks of the nearest node, itself or an ancestor, whose table has blocks: the **carrier**. Its descendants share the carrier's hours, its `focus` and its `days_off`, and the forecast runs on the carrier over every task below it ([ADR-0028](docs/adr/0028-compute-the-forecast-in-one-place.md)). A node with no carrier has no dates. The hours a carrier has per week are the sum of its blocks' lengths times their days, and its **focused hours** are those times `focus`.
+
+`ariane calendar [node]` prints the blocks, focus and days off that apply to a node, the carrier when they are inherited, and the hours per week; without a node, those of the current directory's node, else of every carrier. `ariane calendar edit` opens the file in `$VISUAL` or `$EDITOR` (`vi` otherwise), from `version` and the system's time zone when it does not exist; it saves the file only when it has no error, and otherwise opens the editor again on the same text with the errors on top. Leaving the text unchanged, or emptying it, leaves the file as it was. `ariane calendar --json` and `GET /api/calendar` give the calendar, its valid part and its problems.
+
+### 2.4 Validation
+
+`ariane doctor` checks the personal calendar along with the tree. The findings of a node's table belong to that node's scope; the others are reported when the whole tree is checked.
+
+| Finding | Severity |
+|---|---|
+| The file does not parse, has an unknown key, or lacks `version` or `timezone` | error |
+| `version` higher than the version the CLI implements | error — the CLI is outdated |
+| `timezone` that is not an IANA time zone | error |
+| A day off, `days`, `from` or `to` outside its format, or a block whose `to` is not after its `from` | error |
+| `focus` outside `]0, 1]` | error |
+| Two blocks of **different** nodes that share time on a day: an hour counts once | error |
+| Two blocks of one node that overlap; blocks MAY touch (`12:00` ends one, starts the other) | error |
+| A `node."<path>"` table that names no node of the tree | error |
+| A `node."<path>"` table without blocks: its `focus` and `days_off` are never used | warning |
+| A `calendar.toml` in a content repository that is not the personal one | warning — it is never read |

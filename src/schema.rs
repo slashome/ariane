@@ -15,7 +15,9 @@
 //! are inherited and how an item's effective release is resolved.
 //! [`ESTIMATE_KEYS`](crate::schema::ESTIMATE_KEYS) describes the keys of the
 //! `[estimates]` table (ADR-0025), published with their defaults and their
-//! key-by-key inheritance.
+//! key-by-key inheritance. The keys of the personal `calendar.toml`
+//! (ADR-0026) are declared in [`crate::calendar::CALENDAR_KEYS`] and published
+//! here too.
 //!
 //! The fixed vocabularies (sizes, levels, reflexion statuses), the id prefixes by
 //! kind and the small format checks shared by those commands live here too.
@@ -23,6 +25,9 @@
 use serde::Serialize;
 use serde_json::{Map, Value as Json, json};
 
+use crate::calendar::{
+    CALENDAR_KEYS, DEFAULT_FOCUS, FILE as CALENDAR_FILE, VERSION as CALENDAR_VERSION, WEEKDAYS,
+};
 use crate::estimate::{Pricing, TESTERS};
 use crate::item::{Kind, SCHEMA_VERSION};
 use crate::node::Category;
@@ -511,6 +516,36 @@ pub fn export() -> Json {
             "release": release_declaration(),
             "estimates": estimates_declaration(),
         },
+        "calendar_toml": calendar_declaration(),
+    })
+}
+
+/// The `calendar.toml` declaration as JSON (ADR-0026): where the file lives,
+/// its version, its keys, the days a block names, and how a node finds the
+/// blocks it works on.
+fn calendar_declaration() -> Json {
+    let keys: Vec<Json> = CALENDAR_KEYS
+        .iter()
+        .map(|key| {
+            let mut entry = json!({
+                "name": key.name,
+                "type": key.value,
+                "requirement": key.requirement,
+                "doc": key.doc,
+            });
+            if key.name.ends_with(".focus") {
+                entry["default"] = json!(DEFAULT_FOCUS);
+            }
+            entry
+        })
+        .collect();
+    json!({
+        "file": CALENDAR_FILE,
+        "location": "personal_repository_root",
+        "version": CALENDAR_VERSION,
+        "keys": keys,
+        "weekdays": WEEKDAYS,
+        "resolution": "nearest_ancestor_with_blocks",
     })
 }
 
@@ -697,6 +732,35 @@ mod tests {
         assert_eq!(keys[5]["values"], json!(SIZES));
         assert_eq!(keys[7]["values"], json!(["owner", "others"]));
         assert!(keys.iter().all(|key| key["requirement"] == json!("may")));
+    }
+
+    #[test]
+    fn the_export_describes_the_personal_calendar() {
+        let calendar = &export()["calendar_toml"];
+        assert_eq!(calendar["file"], json!("calendar.toml"));
+        assert_eq!(calendar["version"], json!(1));
+        assert_eq!(calendar["weekdays"][0], json!("mon"));
+        let keys = calendar["keys"].as_array().unwrap();
+        let names: Vec<&str> = keys
+            .iter()
+            .map(|key| key["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "version",
+                "timezone",
+                "days_off",
+                "node.<path>.focus",
+                "node.<path>.blocks",
+                "node.<path>.blocks.days",
+                "node.<path>.blocks.from",
+                "node.<path>.blocks.to",
+                "node.<path>.days_off",
+            ]
+        );
+        assert_eq!(keys[1]["requirement"], json!("must"));
+        assert_eq!(keys[3]["default"], json!(1.0));
     }
 
     #[test]

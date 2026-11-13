@@ -91,6 +91,7 @@ external:
 | `ariane pull` | The content up to date with its upstream, fast-forward only; a diverged branch is reported, never merged. |
 | `ariane proxy status` | Whether `http://ariane.local` and each project's `[proxy]` name reach their server, link by link; `setup` (sudo, until reboot) to fix. A node running several servers declares one `[[proxy]]` entry each. The interface's Proxy page shows the same and adds, edits or removes a node's routes (left uncommitted; a new name needs `setup` again). |
 | `ariane settings` | Theme and dashboard pins, in the content's `settings.toml`. |
+| `ariane calendar [node]` | The weekly blocks, focus and days off a node works on (inherited from the nearest ancestor with blocks) and its focused hours per week, from the personal `calendar.toml`; `edit` opens it in `$EDITOR` and saves it only once valid (no overlap between blocks). Never write a calendar into a shared content repository. |
 | `ariane config get\|set <key>` | The configuration; set the content repository with `ariane config set repo <path>`. |
 | `ariane service status` | Whether the interface runs in the background; `install` to keep it running. |
 

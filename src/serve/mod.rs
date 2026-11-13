@@ -157,6 +157,7 @@ pub fn router(state: Arc<State>) -> Router {
         .route("/api/dashboard", get(api::dashboard).put(api::pin))
         .route("/api/settings", get(api::settings))
         .route("/api/settings/theme", put(api::theme))
+        .route("/api/calendar", get(api::calendar))
         .route("/api/commit", post(api::commit))
         .route("/api/sync/monday", post(api::sync_monday))
         .route(
@@ -718,6 +719,34 @@ mod tests {
         let (status, body) = send(&repo, "PUT", "/api/settings/theme", bad).await;
         assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
         assert!(body["error"].as_str().unwrap().contains("red"));
+    }
+
+    #[tokio::test]
+    async fn the_personal_calendar_is_served_read_only() {
+        let repo = sample();
+        let (status, body, _) = get(&repo, "/api/calendar").await;
+        assert_eq!(status, StatusCode::OK);
+        let body = json(&body);
+        assert_eq!(body["present"], false);
+        assert_eq!(body["calendar"], serde_json::Value::Null);
+        std::fs::write(
+            repo.root().join("calendar.toml"),
+            "version = 1\ntimezone = \"Europe/Paris\"\n[node.\"p\"]\nfocus = 0.5\nblocks = [{ days = \"mon-fri\", from = \"09:00\", to = \"17:00\" }]\n[node.\"ghost\"]\nblocks = [{ days = \"sat\", from = \"09:00\", to = \"10:00\" }]\n",
+        )
+        .unwrap();
+        let (status, body, _) = get(&repo, "/api/calendar").await;
+        assert_eq!(status, StatusCode::OK);
+        let body = json(&body);
+        assert_eq!(body["present"], true);
+        assert_eq!(body["calendar"]["timezone"], "Europe/Paris");
+        let block = &body["calendar"]["nodes"]["p"]["blocks"][0];
+        assert_eq!(block["from"], "09:00");
+        assert_eq!(block["hours"], 40.0);
+        assert_eq!(
+            block["weekdays"],
+            serde_json::json!(["mon", "tue", "wed", "thu", "fri"])
+        );
+        assert_eq!(body["problems"][0]["kind"], "unknown_node");
     }
 
     #[tokio::test]

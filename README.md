@@ -116,6 +116,7 @@ Each command describes itself with `ariane <command> --help`; `ariane --help` li
 | `schema` | Print the item header schema |
 | `serve`, `service` | Serve the interface, in the foreground or as a background service |
 | `config`, `settings` | The machine's configuration, and the settings versioned with the content |
+| `calendar` | The personal work calendar: the hours each node works on, and editing it |
 | `pull` | Fast-forward the content repository to its upstream |
 | `people` | Declare the people items wait for |
 | `connect`, `sync` | Store a tracker's token, and send the items' statuses to it |

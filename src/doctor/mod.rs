@@ -809,6 +809,71 @@ category = "done"
         assert_eq!(exit_code(&diagnose(&tree, None, true)), 2);
     }
 
+    /// The calendar findings of `repo`, with `personal` as the personal repository.
+    fn calendar_findings(
+        repo: &Repo,
+        personal: &std::path::Path,
+        scope: Option<&str>,
+    ) -> Vec<Finding> {
+        let tree = Tree::load(repo.root()).unwrap();
+        let scope = scope.map(NodePath::new);
+        let mut found = Vec::new();
+        let personal = personal.canonicalize().unwrap();
+        check::calendar(&tree, scope.as_ref(), &personal, &mut found);
+        found
+    }
+
+    #[test]
+    fn the_personal_calendar_is_checked_and_a_missing_one_is_fine() {
+        let repo = base();
+        assert_eq!(calendar_findings(&repo, repo.root(), None), vec![]);
+        std::fs::write(
+            repo.root().join("calendar.toml"),
+            "version = 1\ntimezone = \"Europe/Paris\"\n\n[node.\"p\"]\nblocks = [{ days = \"mon-fri\", from = \"09:00\", to = \"18:00\" }]\n\n[node.\"q\"]\nfocus = 2\nblocks = [{ days = \"fri\", from = \"17:00\", to = \"19:00\" }]\n\n[node.\"p/r\"]\n",
+        )
+        .unwrap();
+        let found = calendar_findings(&repo, repo.root(), None);
+        let checks: Vec<(Check, Severity)> = found
+            .iter()
+            .map(|finding| (finding.check, finding.severity))
+            .collect();
+        assert_eq!(
+            checks,
+            [
+                (Check::UnknownCalendarNode, Severity::Error),
+                (Check::UnusedCalendarNode, Severity::Warning),
+                (Check::UnknownCalendarNode, Severity::Error),
+                (Check::InvalidCalendar, Severity::Error),
+                (Check::CalendarOverlap, Severity::Error),
+            ]
+        );
+        assert!(
+            found
+                .iter()
+                .all(|finding| finding.path.as_deref() == Some("calendar.toml"))
+        );
+        assert_eq!(exit_code(&found), 2);
+        let scoped: Vec<Check> = calendar_findings(&repo, repo.root(), Some("q"))
+            .into_iter()
+            .map(|finding| finding.check)
+            .collect();
+        assert_eq!(scoped, [Check::UnknownCalendarNode, Check::InvalidCalendar]);
+    }
+
+    #[test]
+    fn a_calendar_outside_the_personal_repository_is_reported_and_never_read() {
+        let personal = Repo::new();
+        let team = base();
+        std::fs::write(team.root().join("calendar.toml"), "not toml at all [").unwrap();
+        let found = calendar_findings(&team, personal.root(), None);
+        assert_eq!(found.len(), 1);
+        assert_eq!(
+            (found[0].check, found[0].severity),
+            (Check::ForeignCalendar, Severity::Warning)
+        );
+        assert_eq!(calendar_findings(&team, personal.root(), Some("p")), vec![]);
+    }
+
     #[test]
     fn an_invalid_node_toml_is_reported() {
         let repo = Repo::new();

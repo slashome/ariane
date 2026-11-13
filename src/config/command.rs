@@ -141,16 +141,8 @@ fn edit(file: &Path) -> Result<ExitCode> {
     if !file.exists() {
         init(file, false, None)?;
     }
-    let editor = std::env::var("VISUAL")
-        .or_else(|_| std::env::var("EDITOR"))
-        .unwrap_or_else(|_| "vi".to_owned());
-    let mut words = editor.split_whitespace();
-    let program = words.next().unwrap_or("vi");
-    let status = std::process::Command::new(program)
-        .args(words)
-        .arg(file)
-        .status()
-        .with_context(|| format!("starting the editor `{editor}`"))?;
+    let editor = editor();
+    let status = open_editor(&editor, file)?;
     if !status.success() {
         bail!("the editor `{editor}` exited with {status}");
     }
@@ -164,6 +156,32 @@ fn edit(file: &Path) -> Result<ExitCode> {
             Ok(ExitCode::from(1))
         }
     }
+}
+
+/// The editor the owner chose: `$VISUAL`, else `$EDITOR`, else `vi`; an empty
+/// variable counts as unset.
+pub(crate) fn editor() -> String {
+    ["VISUAL", "EDITOR"]
+        .into_iter()
+        .filter_map(|name| std::env::var(name).ok())
+        .find(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| "vi".to_owned())
+}
+
+/// Runs `editor` on `file` and waits for it; `editor` may carry arguments,
+/// such as `code --wait`.
+///
+/// # Errors
+///
+/// Fails when the editor cannot be started.
+pub(crate) fn open_editor(editor: &str, file: &Path) -> Result<std::process::ExitStatus> {
+    let mut words = editor.split_whitespace();
+    let program = words.next().unwrap_or("vi");
+    std::process::Command::new(program)
+        .args(words)
+        .arg(file)
+        .status()
+        .with_context(|| format!("starting the editor `{editor}`"))
 }
 
 /// The schema entry for `name`, or an error listing the known keys.
