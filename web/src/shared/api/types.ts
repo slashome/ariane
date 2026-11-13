@@ -348,3 +348,130 @@ export interface RouteRemoval {
   node: string
   host: string
 }
+
+export interface Moment {
+  hours: number
+  at: string | null
+}
+
+export interface Span {
+  start: Moment
+  end: Moment
+}
+
+export interface DateRange {
+  from: string
+  to: string
+}
+
+export interface ClosedDate {
+  date: string
+  approximate: boolean
+}
+
+export interface ForecastSummary {
+  hours: number
+  test_hours: number
+  span: Span | null
+  closed: DateRange | null
+  done: number
+  open: number
+}
+
+export type WorkStage = 'open' | 'in_progress' | 'testing' | 'waiting' | 'done'
+
+export type SegmentPhase = 'work' | 'test'
+
+export interface Segment {
+  phase: SegmentPhase
+  start: Moment
+  end: Moment
+}
+
+export interface WorkPlan {
+  reference: string
+  node: string
+  kind: Kind
+  title: string
+  stage: WorkStage
+  hours: number
+  test_hours: number
+  tester: Tester
+  basis: EstimateBasis
+  target: string | null
+  sequence: number | null
+  start: Moment | null
+  end: Moment | null
+  delivered: Moment | null
+  segments: Segment[]
+  validation: Span | null
+  closed: ClosedDate | null
+}
+
+export interface StoryPlan extends ForecastSummary {
+  reference: string | null
+  title: string | null
+  target: string | null
+  work: WorkPlan[]
+}
+
+export interface EpicPlan extends ForecastSummary {
+  reference: string | null
+  title: string | null
+  target: string | null
+  stories: StoryPlan[]
+}
+
+export interface ReleasePlan extends ForecastSummary {
+  name: string
+  declared_by: string
+  target: string | null
+  epics: EpicPlan[]
+}
+
+export type UnscheduledReason = 'parking' | 'no_release' | 'undeclared_release' | 'cycle' | 'blocked_by_cycle'
+
+export interface Unscheduled {
+  reference: string
+  node: string
+  kind: Kind
+  title: string
+  reason: UnscheduledReason
+  release: string | null
+}
+
+export type ForecastWarningKind =
+  | 'unsized'
+  | 'provisional'
+  | 'without_story'
+  | 'without_epic'
+  | 'without_release'
+  | 'undeclared_release'
+  | 'missed_target'
+  | 'contradictory_target'
+  | 'dependency_cycle'
+  | 'unscheduled_dependency'
+
+export interface FlaggedItem {
+  reference: string
+  detail: string | null
+}
+
+export interface ForecastWarning {
+  kind: ForecastWarningKind
+  count: number
+  items: FlaggedItem[]
+}
+
+export interface Roadmap {
+  node: string
+  carrier: string | null
+  timezone: string | null
+  now: string
+  dated: boolean
+  hours: number
+  test_hours: number
+  releases: ReleasePlan[]
+  unscheduled: Unscheduled[]
+  warnings: ForecastWarning[]
+}

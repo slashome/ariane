@@ -16,6 +16,9 @@
 //! [`compute`] runs the last three on any [`Input`], with `now` given, so the
 //! engine is tested on fixtures without a clock or a file system; [`build`]
 //! and [`load`] add the first.
+//!
+//! The sequence runs on the carrier, over all its descendants; the result is
+//! then narrowed to the node asked and its descendants, by the report.
 
 mod gather;
 pub mod input;
@@ -44,10 +47,12 @@ pub use input::Input;
 /// The forecast of one node.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Forecast {
-    /// The node the sequence runs on: the calendar's carrier of the node
-    /// asked, else the node asked. Its descendants share the sequence.
+    /// The node asked. Everything below is narrowed to its work and its
+    /// descendants', scheduled in the sequence of the whole scope.
     pub node: NodePath,
-    /// The node whose blocks give the dates; `None` without a calendar.
+    /// The node whose blocks give the dates, and whose descendants share the
+    /// sequence: the node asked or an ancestor; `None` without a calendar,
+    /// when the sequence runs on the node asked alone.
     pub carrier: Option<NodePath>,
     /// The calendar's time zone, when the forecast is dated.
     pub timezone: Option<String>,
@@ -348,22 +353,27 @@ pub fn build(
     compute(&gather(tree, calendar, history, node, now))
 }
 
-/// The forecast of `node` in the content repository at `root`, whose tree is
-/// `tree`, from now: the personal calendar is read (SPEC.md §2.1), and git's
-/// history approximates the closing dates the headers lack.
+/// The forecast of `node` in `tree`, from `now`, on the calendar of the
+/// personal content repository at `personal` (SPEC.md §2.1); `history`
+/// approximates the closing dates the headers lack.
 ///
 /// # Errors
 ///
 /// Fails when the calendar exists but cannot be read.
-pub fn load(root: &Path, tree: &Tree, node: &NodePath) -> Result<Forecast> {
-    let personal = calendar::personal_root(root);
-    let overview = calendar::overview(&personal, tree)?;
-    let history = History::read(root);
-    Ok(build(
-        tree,
-        overview.calendar.as_ref(),
-        Some(&history),
-        node,
-        Timestamp::now(),
-    ))
+pub fn load(
+    personal: &Path,
+    tree: &Tree,
+    history: Option<&History>,
+    node: &NodePath,
+    now: Timestamp,
+) -> Result<Forecast> {
+    let overview = calendar::overview(personal, tree)?;
+    Ok(build(tree, overview.calendar.as_ref(), history, node, now))
+}
+
+/// Now, to the second: a forecast states the moment it starts from, and one
+/// computed again from that moment is the same.
+pub fn now() -> Timestamp {
+    let now = Timestamp::now();
+    Timestamp::from_second(now.as_second()).unwrap_or(now)
 }

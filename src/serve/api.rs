@@ -8,7 +8,8 @@
 //! `/api/show?ref=` is `ariane show --json`, `/api/schema` is
 //! `ariane schema --json`, `/api/doctor` is `ariane doctor --all --json`,
 //! `/api/proxy` is the checks of `ariane proxy status`, `/api/calendar` is
-//! `ariane calendar --json`. Responses are built under a short read lock on
+//! `ariane calendar --json`, `/api/roadmap?node=` is `ariane roadmap <node>
+//! --json`. Responses are built under a short read lock on
 //! the tree, released before anything is sent.
 //!
 //! The writing endpoints — `PATCH /api/items`, `PUT /api/dashboard`,
@@ -478,6 +479,59 @@ pub async fn calendar(Shared(state): Shared<Arc<State>>) -> Response {
     }
     match Tree::load(&personal) {
         Ok(tree) => overview(crate::calendar::overview(&personal, &tree)),
+        Err(failure) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
+    }
+}
+
+/// The query of `GET /api/roadmap`.
+#[derive(Debug, Default, Deserialize)]
+pub struct RoadmapQuery {
+    /// The node to forecast.
+    pub node: Option<String>,
+}
+
+/// `GET /api/roadmap?node=<node>`: the forecast of a node, as `ariane roadmap
+/// <node> --json`, on the personal calendar of the configuration the server
+/// started with; `400` without a node, `404` for a node not in the tree,
+/// `500` when the calendar cannot be read.
+pub async fn roadmap(
+    Shared(state): Shared<Arc<State>>,
+    Query(query): Query<RoadmapQuery>,
+) -> Response {
+    let Some(node) = query.node.as_deref().filter(|node| !node.is_empty()) else {
+        return error(
+            StatusCode::BAD_REQUEST,
+            "name a node: /api/roadmap?node=<node>",
+        );
+    };
+    let node = crate::tree::NodePath::new(node);
+    let personal = crate::calendar::personal_of(&state.root, state.config.repo_path().as_deref());
+    let Ok(dates) = state.dates.read() else {
+        return error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "the date lock is poisoned",
+        );
+    };
+    let Ok(tree) = state.tree.read() else {
+        return error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "the tree lock is poisoned",
+        );
+    };
+    if !crate::roadmap::is_node(&tree, &node) {
+        return error(
+            StatusCode::NOT_FOUND,
+            &format!("`{node}` is not a node of the tree"),
+        );
+    }
+    match crate::roadmap::forecast(
+        &personal,
+        &tree,
+        Some(&dates),
+        &node,
+        crate::forecast::now(),
+    ) {
+        Ok(forecast) => Json(forecast).into_response(),
         Err(failure) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
     }
 }

@@ -404,7 +404,13 @@ With a carrier, focused hours become moments: the carrier's weekly blocks are la
 
 The result gives, per release in delivery order, its epics then their stories then their work, each with its hours left, its span (from the start of its first scheduled work to the delivery of its last) and the first and last closing dates of its finished work. Each piece of work has its `stage` (`open`, `in_progress`, `testing`, `waiting` or `done`), its place in the sequence, its start, its end, its delivery, its segments (work and testing) and its validation. Every moment carries its focused hours from now and, with a carrier, its date. Without a carrier the same sequence comes in hours only (“+36 h”).
 
-### 3.6 Warnings
+### 3.6 Reading the forecast
+
+`ariane roadmap [node]` prints the forecast of a node, by default the current directory's node: a header naming the node whose blocks give the dates (the node itself, or the carrier and the other nodes sharing its sequence), or saying there is none and that `ariane calendar edit` adds blocks; then the releases in delivery order, their epics, stories and work indented, each with its hours left (work + testing), its span (dates in the calendar's time zone, or `+N h` from now without a carrier), its done and open counts or its stage, its `target` and `MISSED` when the forecast misses it; then the unscheduled work by reason and the warnings by kind, long lists cut with a count. `--release <name>` prints one release. `ariane roadmap <node> --json` and `GET /api/roadmap?node=<node>` give the same JSON: the engine's result, from `now` to the second.
+
+**A node below its carrier** reads its part of the carrier's pooled sequence. The sequence is computed over the whole carrier; the result keeps the work whose node is the node asked or one of its descendants, at the place and moments the pooled sequence gives it (its `sequence` keeps its rank in the whole sequence, so it can show gaps). Every summary — the totals, each release, epic and story — is computed again from that work only: a span is the span of the node's part. A release is kept when it holds some of that work or when its list is declared by the node, an ancestor or a descendant. Unscheduled work and warnings keep the items of the node and its descendants, and the release warnings of the releases kept; a release's missed target is judged on all its work. The JSON says the node asked in `node` and the node whose blocks give the dates in `carrier` (`null` without a carrier, when the sequence runs on the node asked alone).
+
+### 3.7 Warnings
 
 The forecast carries its own warnings, counted by kind with the items they concern; `doctor` reports none of them ([ADR-0028](docs/adr/0028-compute-the-forecast-in-one-place.md) §5):
 

@@ -18,7 +18,8 @@
 //! - `ariane serve` → [`serve`], serves the web interface (ADR-0012), and pulls the content once;
 //! - `ariane pull` → [`serve::git`], fast-forwards the content to its upstream;
 //! - `ariane proxy` → [`proxy`], local names for the interface and the projects (ADR-0016);
-//! - `ariane calendar` → [`calendar`], the personal work calendar (ADR-0026).
+//! - `ariane calendar` → [`calendar`], the personal work calendar (ADR-0026);
+//! - `ariane roadmap` → [`roadmap`], the forecast of a node (ADR-0028).
 //!
 //! Exit code `3` means the command could not run at all (ADR-0004); the other
 //! codes are chosen by each command.
@@ -40,10 +41,6 @@ mod fix;
 /// `ariane focus`: the item an agent session works on.
 mod focus;
 /// The forecast engine: when each release should be delivered (ADR-0028).
-#[allow(
-    dead_code,
-    reason = "read by `ariane roadmap` and its API route, which come next (T122)"
-)]
 mod forecast;
 /// What git remembers of each item file: its latest change, the statuses it went through.
 mod history;
@@ -75,6 +72,8 @@ mod relations;
 mod release;
 /// Discovery of the content repository on disk.
 mod repo;
+/// `ariane roadmap`: the forecast of a node, as text or JSON.
+mod roadmap;
 /// The core header schema, declared once as data.
 mod schema;
 /// `ariane search`: items found by header and body.
@@ -176,6 +175,7 @@ fn run() -> Result<ExitCode> {
         cli::Command::Rank(args) => rank::run(&tree, &args, here.filter(|node| !node.is_home())),
         cli::Command::Settings(args) => settings::run(&location.root, &args),
         cli::Command::Calendar(args) => calendar::run(&location.root, &tree, &args, here),
+        cli::Command::Roadmap(args) => roadmap::run(&location.root, &tree, &args, here),
         cli::Command::Focus(args) => focus::run(&tree, &args, here.filter(|node| !node.is_home())),
         cli::Command::Links(args) => {
             let scope = scope(args.node.as_deref(), args.all, here);

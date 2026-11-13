@@ -24,6 +24,7 @@ import type {
   RouteChange,
   RouteRemoval,
   RouteTable,
+  Roadmap,
   Settings,
   SyncReport,
   Theme,
@@ -86,6 +87,8 @@ export const fetchNodes = () => request<NodeSummary[]>('GET', '/api/nodes')
 export const fetchSchema = () => request<Schema>('GET', '/api/schema')
 export const fetchRepo = () => request<Repo>('GET', '/api/repo')
 export const fetchDashboard = () => request<Dashboard>('GET', '/api/dashboard')
+export const fetchRoadmap = (node: string) =>
+  request<Roadmap>('GET', `/api/roadmap?${new URLSearchParams({ node }).toString()}`)
 export const fetchDiff = (path: string) =>
   request<FileDiff>('GET', `/api/diff?${new URLSearchParams({ path }).toString()}`)
 

@@ -103,6 +103,10 @@ pub enum Command {
         about = "The personal work calendar: the blocks, focus and days off a node works on, or edit it"
     )]
     Calendar(CalendarArgs),
+    #[command(
+        about = "When each release should be delivered: the forecast of a node, with its warnings"
+    )]
+    Roadmap(RoadmapArgs),
     #[command(about = "Keep `ariane serve` running in the background (launchd, systemd)")]
     Service(ServiceArgs),
 }
@@ -621,6 +625,27 @@ pub enum CalendarCommand {
         about = "Open calendar.toml in $VISUAL or $EDITOR, and save it only once it is valid"
     )]
     Edit,
+}
+
+/// Arguments of `ariane roadmap`: the node to forecast, the release to read
+/// alone, and `json` to print the forecast as JSON.
+#[derive(Args)]
+pub struct RoadmapArgs {
+    #[arg(help = "The node to forecast (default: the node of the current directory)")]
+    pub node: Option<String>,
+
+    #[arg(
+        long,
+        conflicts_with = "json",
+        help = "Print this release only; the JSON always holds every release"
+    )]
+    pub release: Option<String>,
+
+    #[arg(
+        long,
+        help = "Print the forecast as JSON, as `GET /api/roadmap?node=<node>` serves it"
+    )]
+    pub json: bool,
 }
 
 /// Arguments of `ariane service`: the subcommand to run.

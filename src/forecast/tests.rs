@@ -783,7 +783,7 @@ fn the_carrier_pools_the_work_of_its_descendants_in_one_sequence() {
         "p/r/tasks/T1-a.md",
         &item_of("p/r", "T1", "todo", "release: '1.0'\nsize: S\n"),
     );
-    let forecast = forecast_of(&repo, "p/q", Some(PARIS), monday());
+    let forecast = forecast_of(&repo, "p", Some(PARIS), monday());
     assert_eq!(forecast.node, NodePath::new("p"));
     let releases: Vec<(&str, &str)> = forecast
         .releases
@@ -793,8 +793,70 @@ fn the_carrier_pools_the_work_of_its_descendants_in_one_sequence() {
     assert_eq!(releases, [("1.0", "p"), ("1.0", "p/r"), ("2.0", "p")]);
     assert_eq!(sequence(&forecast), ["p/q#T1", "p/r#T1", "p#T1"]);
     let alone = forecast_of(&repo, "p/q", None, monday());
-    assert_eq!(alone.node, NodePath::new("p/q"));
+    assert_eq!((alone.node.as_str(), alone.carrier.as_ref()), ("p/q", None));
     assert_eq!(sequence(&alone), ["p/q#T1"]);
+}
+
+#[test]
+fn a_child_node_reads_its_part_of_the_carriers_sequence() {
+    let node = NODE.replace("name = \"2.0\"\n", "name = \"2.0\"\ntarget = 2026-11-20\n");
+    let repo = repo(&node);
+    repo.write(
+        "p/tasks/T1-a.md",
+        &item("T1", "todo", "release: '1.0'\nsize: S\n"),
+    )
+    .write(
+        "p/tasks/T2-b.md",
+        &item("T2", "todo", "release: '2.0'\nsize: XS\n"),
+    )
+    .write("p/r/node.toml", "[[release]]\nname = \"1.0\"\n")
+    .write(
+        "p/r/tasks/T1-a.md",
+        &item_of("p/r", "T1", "todo", "release: '1.0'\n"),
+    )
+    .write(
+        "p/q/tasks/T1-a.md",
+        &item_of("p/q", "T1", "todo", "release: '2.0'\nsize: S\n"),
+    )
+    .write(
+        "p/q/tasks/T2-b.md",
+        &item_of(
+            "p/q",
+            "T2",
+            "done",
+            "release: '1.0'\nsize: XS\nclosed: 2026-11-02\n",
+        ),
+    );
+    let pooled = forecast_of(&repo, "p", Some(PARIS), monday());
+    assert_eq!(sequence(&pooled), ["p#T1", "p/r#T1", "p#T2", "p/q#T1"]);
+    let child = forecast_of(&repo, "p/q", Some(PARIS), monday());
+    assert_eq!(child.node, NodePath::new("p/q"));
+    assert_eq!(child.carrier, Some(NodePath::new("p")));
+    let releases: Vec<(&str, &str)> = child
+        .releases
+        .iter()
+        .map(|release| (release.name.as_str(), release.declared_by.as_str()))
+        .collect();
+    assert_eq!(releases, [("1.0", "p"), ("2.0", "p")]);
+    assert_eq!(sequence(&child), ["p/q#T1"]);
+    let own = work(&child, "p/q#T1");
+    assert_eq!(own, work(&pooled, "p/q#T1"));
+    assert_eq!(own.sequence, Some(3));
+    let first = release(&child, "1.0");
+    assert_eq!((first.summary.done, first.summary.open), (1, 0));
+    assert_eq!(
+        (first.summary.hours, first.summary.span.as_ref()),
+        (0.0, None)
+    );
+    let second = &release(&child, "2.0").summary;
+    assert_eq!((second.hours, hours(&second.span)), (2.0, (7.0, 9.0)));
+    assert_eq!(release(&pooled, "2.0").summary.hours, 3.0);
+    assert_eq!((child.hours, pooled.hours), (2.0, 9.0));
+    assert_eq!(flagged(&child, WarningKind::MissedTarget), ["release 2.0"]);
+    assert_eq!(flagged(&child, WarningKind::WithoutStory), ["p/q#T1"]);
+    assert_eq!(flagged(&pooled, WarningKind::Unsized), ["p/r#T1"]);
+    assert_eq!(child.warnings.len(), 2, "{:?}", child.warnings);
+    assert!(child.unscheduled.is_empty());
 }
 
 #[test]

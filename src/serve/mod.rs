@@ -158,6 +158,7 @@ pub fn router(state: Arc<State>) -> Router {
         .route("/api/settings", get(api::settings))
         .route("/api/settings/theme", put(api::theme))
         .route("/api/calendar", get(api::calendar))
+        .route("/api/roadmap", get(api::roadmap))
         .route("/api/commit", post(api::commit))
         .route("/api/sync/monday", post(api::sync_monday))
         .route(
@@ -747,6 +748,73 @@ mod tests {
             serde_json::json!(["mon", "tue", "wed", "thu", "fri"])
         );
         assert_eq!(body["problems"][0]["kind"], "unknown_node");
+    }
+
+    /// What `ariane roadmap <node> --json` prints for `repo`, from the moment
+    /// the response `served` starts from.
+    fn roadmap_command(repo: &Repo, node: &str, served: &serde_json::Value) -> serde_json::Value {
+        let tree = Tree::load(repo.root()).unwrap();
+        let now: jiff::Timestamp = served["now"].as_str().unwrap().parse().unwrap();
+        let forecast = crate::roadmap::forecast(
+            repo.root(),
+            &tree,
+            Some(&History::read(repo.root())),
+            &NodePath::new(node),
+            now,
+        )
+        .unwrap();
+        serde_json::to_value(forecast).unwrap()
+    }
+
+    #[tokio::test]
+    async fn the_roadmap_is_the_same_json_as_the_roadmap_command() {
+        let repo = sample();
+        repo.write(
+            "p/q/tasks/T001-b.md",
+            "---\nariane: 2\nnode: p/q\nid: T001\ntitle: B\nstatus: a-faire\nrelease: '1.0'\nsize: S\n---\n# B\n",
+        );
+        let (status, body, _) = get(&repo, "/api/roadmap?node=p").await;
+        assert_eq!(status, StatusCode::OK);
+        let body = json(&body);
+        assert_eq!(body, roadmap_command(&repo, "p", &body));
+        assert_eq!(
+            (body["node"].as_str(), body["dated"].as_bool()),
+            (Some("p"), Some(false))
+        );
+        assert_eq!(body["carrier"], serde_json::Value::Null);
+        assert_eq!(body["releases"][0]["name"], "1.0");
+        assert_eq!(body["unscheduled"][0]["reference"], "p#T001");
+        assert_eq!(body["unscheduled"][0]["reason"], "no_release");
+        std::fs::write(
+            repo.root().join("calendar.toml"),
+            "version = 1\ntimezone = \"Europe/Paris\"\n[node.\"p\"]\nblocks = [{ days = \"mon-sun\", from = \"00:00\", to = \"24:00\" }]\n",
+        )
+        .unwrap();
+        let (status, body, _) = get(&repo, "/api/roadmap?node=p%2Fq").await;
+        assert_eq!(status, StatusCode::OK);
+        let body = json(&body);
+        assert_eq!(body, roadmap_command(&repo, "p/q", &body));
+        assert_eq!(
+            (body["node"].as_str(), body["carrier"].as_str()),
+            (Some("p/q"), Some("p"))
+        );
+        assert_eq!(body["dated"], true);
+        assert_eq!(body["timezone"], "Europe/Paris");
+        let work = &body["releases"][0]["epics"][0]["stories"][0]["work"][0];
+        assert_eq!(work["reference"], "p/q#T001");
+        assert!(work["start"]["at"].is_string());
+        assert_eq!(body["unscheduled"], serde_json::json!([]));
+    }
+
+    #[tokio::test]
+    async fn the_roadmap_needs_a_node_of_the_tree() {
+        let repo = sample();
+        let (status, body, _) = get(&repo, "/api/roadmap").await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(json(&body)["error"].as_str().unwrap().contains("node"));
+        let (status, body, _) = get(&repo, "/api/roadmap?node=nope").await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert!(json(&body)["error"].as_str().unwrap().contains("nope"));
     }
 
     #[tokio::test]

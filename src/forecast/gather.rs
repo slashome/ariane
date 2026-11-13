@@ -2,7 +2,8 @@
 //!
 //! The forecast of a node runs on the calendar's carrier of that node, over
 //! every item below the carrier (ADR-0026 §4); without a carrier, on the node
-//! itself and its descendants. Hours come from [`crate::estimate`], effective
+//! itself and its descendants. The node asked is kept as the input's focus,
+//! which the report narrows its result to. Hours come from [`crate::estimate`], effective
 //! releases from [`crate::release`], the manual order from [`crate::rank`]:
 //! nothing is recomputed here.
 
@@ -143,7 +144,7 @@ pub fn gather(
         })
         .collect();
     Input {
-        scope,
+        focus: node.clone(),
         carrier: carried.map(|(_, path, _)| path),
         releases,
         groups,

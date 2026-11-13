@@ -16,9 +16,10 @@ use crate::tree::NodePath;
 /// Everything the forecast of one node depends on.
 #[derive(Debug, Clone)]
 pub struct Input {
-    /// The node the forecast runs on: the calendar's carrier of the node asked,
-    /// else the node asked; every task below it shares one sequence.
-    pub scope: NodePath,
+    /// The node asked. The units cover the calendar's carrier of it, else
+    /// the node itself, all in one sequence; the report keeps only the work
+    /// of the node asked and of its descendants.
+    pub focus: NodePath,
     /// The node whose blocks give the capacity, when the calendar has one.
     pub carrier: Option<NodePath>,
     /// The releases that can be scheduled, in delivery order, parking ones

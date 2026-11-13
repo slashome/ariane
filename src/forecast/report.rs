@@ -1,4 +1,12 @@
 //! Turns the schedule into the [`Forecast`]: moments, groups and warnings.
+//!
+//! The schedule covers the whole scope; the report keeps the work of the
+//! node asked, the input's focus, and of its descendants. Every summary is
+//! computed from that work alone, so the span of a release, an epic or a
+//! story is the span of the focus's part of it, placed where the pooled
+//! sequence puts it. A release is kept when it holds some of that work or
+//! when its list concerns the focus; warnings keep the items of the focus
+//! and the releases kept.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -7,6 +15,7 @@ use jiff::civil::Date;
 
 use crate::estimate::Basis;
 use crate::item::Kind;
+use crate::tree::NodePath;
 
 use super::input::{GroupSpec, Input, Planned, State, Unit};
 use super::schedule::{Placed, Schedule, order_key};
@@ -132,20 +141,23 @@ pub fn assemble(input: &Input, schedule: &Schedule) -> Forecast {
     for (index, unit) in input.units.iter().enumerate() {
         let placed = schedule.placed.get(&index);
         let shown = placed.is_some() || matches!(unit.state, State::Done { .. });
-        if shown && matches!(unit.release, Planned::Release(_)) {
+        if shown && matches!(unit.release, Planned::Release(_)) && in_focus(input, &unit.node) {
             works.insert(index, work_plan(unit, placed, &mut clock));
         }
     }
-    let releases = input
+    let releases: Vec<ReleasePlan> = input
         .releases
         .iter()
         .enumerate()
-        .map(|(position, spec)| {
+        .filter_map(|(position, spec)| {
             let mut members: Vec<usize> = works
                 .keys()
                 .copied()
                 .filter(|index| input.units[*index].release == Planned::Release(position))
                 .collect();
+            if members.is_empty() && !applies(&spec.declared_by, &input.focus) {
+                return None;
+            }
             members.sort_by_key(|index| order_key(input, *index));
             let context = Context {
                 input,
@@ -153,24 +165,29 @@ pub fn assemble(input: &Input, schedule: &Schedule) -> Forecast {
                 placed: &schedule.placed,
                 works: &works,
             };
-            ReleasePlan {
+            Some(ReleasePlan {
                 name: spec.name.clone(),
                 declared_by: spec.declared_by.clone(),
                 target: spec.target.map(|date| date.to_string()),
                 summary: summarize(input, &members, &schedule.placed, &mut clock),
                 epics: epic_plans(&context, &members, &mut clock),
-            }
+            })
         })
         .collect();
     let (hours, test_hours) = schedule
         .placed
         .keys()
         .map(|index| &input.units[*index])
+        .filter(|unit| in_focus(input, &unit.node))
         .fold((0.0, 0.0), |(hours, tests), unit| {
             (hours + unit.hours, tests + unit.test_hours)
         });
+    let warnings = warnings(input, schedule, &groups, &mut clock)
+        .into_iter()
+        .filter_map(|warning| narrow(input, &releases, warning))
+        .collect();
     Forecast {
-        node: input.scope.clone(),
+        node: input.focus.clone(),
         carrier: input.carrier.clone(),
         timezone,
         now,
@@ -179,8 +196,36 @@ pub fn assemble(input: &Input, schedule: &Schedule) -> Forecast {
         test_hours: round(test_hours),
         releases,
         unscheduled: unscheduled(input, schedule),
-        warnings: warnings(input, schedule, &groups, &mut clock),
+        warnings,
     }
+}
+
+/// Tells whether `node` holds work of the node asked: it or one of its
+/// descendants.
+fn in_focus(input: &Input, node: &NodePath) -> bool {
+    node.is_within(&input.focus)
+}
+
+/// Tells whether the release list of `owner` concerns `focus`: declared by
+/// it, by one of its ancestors or by one of its descendants.
+fn applies(owner: &NodePath, focus: &NodePath) -> bool {
+    focus.is_within(owner) || owner.is_within(focus)
+}
+
+/// `warning` with only the items of the node asked: work of it or of its
+/// descendants, and the releases the forecast keeps; `None` when none is left.
+fn narrow(input: &Input, releases: &[ReleasePlan], mut warning: Warning) -> Option<Warning> {
+    warning
+        .items
+        .retain(|item| match item.reference.strip_prefix("release ") {
+            Some(name) => releases.iter().any(|release| release.name == name),
+            None => item
+                .reference
+                .split_once('#')
+                .is_some_and(|(node, _)| in_focus(input, &NodePath::new(node))),
+        });
+    warning.count = warning.items.len();
+    (warning.count > 0).then_some(warning)
 }
 
 /// What grouping the work of a release reads.
@@ -369,7 +414,7 @@ fn epic_plans(context: &Context, members: &[usize], clock: &mut Clock) -> Vec<Ep
 fn unscheduled(input: &Input, schedule: &Schedule) -> Vec<Unscheduled> {
     let mut entries: Vec<(usize, Reason)> = Vec::new();
     for (index, unit) in input.units.iter().enumerate() {
-        if !unit.state.is_open() {
+        if !unit.state.is_open() || !in_focus(input, &unit.node) {
             continue;
         }
         let reason = match &unit.release {

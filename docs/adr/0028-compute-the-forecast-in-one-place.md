@@ -33,6 +33,8 @@ Deviations already have homes: `doctor` reports breaches of the file contract, o
 > - **Started work first.** Tasks of the `in_progress` category, the testing stage included, are scheduled before the rank order of everything else, whatever their release, since the owner is on them now; among themselves, release order then rank. Their release's span starts with them, so a later release can start before an earlier one. They still wait for their dependencies, which are not pulled forward. The report keeps showing work in its release, epic and story order.
 > - **Inherited dependencies.** The `depends_on` of a story or of an epic applies to every task inside it, as if each task declared it; a dependency on a story or an epic is still one on all its work.
 
+> **Command and route delivered on 2026-11-13 (T122).** `ariane roadmap [node] [--json]` and `GET /api/roadmap?node=<node>` give the same JSON. The forecast of a node below its carrier is computed on the carrier, then narrowed to the work of the node and its descendants, whose summaries are computed again from that work alone; the JSON names the node asked (`node`) and the carrier (`carrier`). SPEC §3.6 describes the reading.
+
 ## Consequences
 
 - The CLI, the interface and agents read one answer. The engine is testable with fixtures and no browser.

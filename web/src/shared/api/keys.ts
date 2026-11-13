@@ -15,4 +15,5 @@ export const queryKeys = {
   people: ['people'],
   personas: ['personas'],
   proxy: ['proxy'],
+  roadmap: (node: string) => ['roadmap', node] as const,
 } as const
