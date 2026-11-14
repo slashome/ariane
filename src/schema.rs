@@ -492,7 +492,7 @@ fn changelog_declaration() -> Json {
                 "requirement": Requirement::May,
                 "values": languages,
                 "default": Language::default().id(),
-                "doc": "The language of the headings of a changelog entry: `en` writes Added and Fixed, `fr` Nouveautés and Corrections.",
+                "doc": "The language of the headings of a changelog entry: `en` writes Added, Fixed and Removed, `fr` Nouveautés, Corrections and Retraits.",
             },
             {
                 "name": "audience",

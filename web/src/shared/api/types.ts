@@ -188,7 +188,7 @@ export interface ChangelogLine {
 }
 
 export interface ChangelogSection {
-  kind: 'added' | 'fixed'
+  kind: 'added' | 'fixed' | 'removed'
   heading: string
   lines: ChangelogLine[]
 }

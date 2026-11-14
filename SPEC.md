@@ -37,7 +37,7 @@ Keys MUST be written in English, in lower case, with `_` as the word separator. 
 | `id` | string | **MUST** | Matches `^[A-Za-z][A-Za-z0-9-]*$`. Unique within the node. |
 | `title` | string | **MUST** | Non-empty. |
 | `status` | string | MUST for tasks, epics and stories; MUST for reflexions; MUST NOT for ressources | A status id from the node's workflow (§1.5). Reflexions use `open`, `trial` (a decision applied on trial, not yet confirmed) or `settled`. |
-| `type` | string | MAY | A classification declared by the node (`[fields.type]` in `node.toml`); free when undeclared. |
+| `type` | string | MAY | A classification declared by the node (`[fields.type]` in `node.toml`); free when undeclared. The changelog entry reads three values: `bug` and `fix` go to `Fixed`, `removal` to `Removed` (§1.5). |
 | `personas` | list of strings | MAY for stories; SHOULD NOT otherwise | The personas the story is written for, each an id declared under `[personas]` (§1.5), e.g. `cmc:dev`. |
 | `parent` | reference | MAY; MUST NOT for epics | One item reference (§1.4). Only a story may name an epic. |
 | `depends_on` | list of references | MAY | Item references (§1.4). |
@@ -239,9 +239,8 @@ A node that inherits its list cannot change it: the change is refused, naming th
 ```
 
 - The title is the release's name, without a date.
-- A section is written only when it has lines: `Added`, then `Fixed`, which holds the work whose own `type` is `bug` or `fix`. The headings follow `[changelog] language` (`Nouveautés` and `Corrections` in `fr`, where the subject is followed by ` : `).
-- One line per subject, in bold: a task's story, else its epic, else the task itself; a story or an epic not split yet is its own subject. The titles of the work of a subject are joined by `; ` on its line, which ends with the ids of that work, bare for the node that declares the list and `<node>#<id>` for a descendant's. Lines come in the order of their subjects: epics, stories, then work of its own, each in the order of items (§1.3).
-- No `type` names a removal yet: the CLI writes no `Removed` section.
+- A section is written only when it has lines: `Added`, then `Fixed`, which holds the work whose own `type` is `bug` or `fix`, then `Removed`, which holds the work whose own `type` is `removal`. The headings follow `[changelog] language` (`Nouveautés`, `Corrections` and `Retraits` in `fr`, where the subject is followed by ` : `).
+- One line per subject, in bold: the largest unit the release delivers in full. A story or an epic is delivered in full when every piece of work under it — its tasks, and its stories not split yet, archived ones included and `dropped` ones excluded — is `done` with the release as its effective release. A piece of work's subject is its epic when the release delivers all of it, else its story when the release delivers all of that, else the work itself, under its own title; a story or an epic not split yet is its own subject unless its epic is delivered in full. The titles of the work of a subject are joined by `; ` on its line, which ends with the ids of that work, bare for the node that declares the list and `<node>#<id>` for a descendant's. Lines come in the order of their subjects: epics, stories, then single pieces of work, each in the order of items (§1.3).
 
 **Changing a workflow.** Renaming a status id MUST go through `ariane status rename <node> <old> <new>`; removing a status still in use MUST go through `ariane status remove <node> <id> --into <other>`. Both commands rewrite `node.toml` and every affected item in one operation.
 
