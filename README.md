@@ -95,7 +95,7 @@ From `~/code/my-app`, every command is then scoped to that node.
 ## What you get
 
 - **A tree of projects.** Any node holds its own items, and inherits its parents' workflow, people and personas. Nothing is deleted: finished work moves to `archives/`.
-- **A dashboard and boards.** The interface shows each node's tasks, stories and epics, a kanban that moves them across the workflow, a backlog, an epic's progress, a Gantt of each node's roadmap, its releases, epics, stories and tasks on the time of the forecast, and a Releases board to declare and order releases and drag work into them.
+- **A dashboard and boards.** The interface shows each node's tasks, stories and epics, a kanban that moves them across the workflow, a backlog, an epic's progress, a Gantt of each node's roadmap, its releases, epics, stories and tasks on the time of the forecast, where dragging a row reorders it and stretching a bar resizes it, and a Releases board to declare and order releases and drag work into them.
 - **Size × impact.** Items carry a size (`XS`…`XL`) and an impact; a matrix places them to show what is cheap and worth it.
 - **Waiting on people.** An item that waits for a review or an answer names whom, why and since when, so the interface can list what is stuck on someone.
 - **A health check.** `ariane doctor` reports what breaks the specification, and `ariane migrate` and `ariane fix` repair it — dry runs unless `--apply`.

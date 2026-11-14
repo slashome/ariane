@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useItems } from '@/entities/item'
+import { useNodes } from '@/entities/node'
 import { useItemFilters } from '@/features/filter-items'
 import type { Estimate, ForecastWarningKind, Roadmap } from '@/shared/api'
 import { searchParamKeys } from '@/shared/config'
 import { displayNode, useSearchParam } from '@/shared/lib'
 import { ErrorState, PageHeader } from '@/shared/ui'
+import { useGanttEdits } from '../api/use-gantt-edits'
 import { useRoadmap } from '../api/use-roadmap'
 import { buildColumns, narrowColumns, useUnfoldedColumns } from '../model/columns'
 import { useGanttLevels } from '../model/levels'
@@ -12,7 +14,7 @@ import { buildRows } from '../model/rows'
 import { useElementWidth, useGanttView } from '../model/view'
 import { filterRows, flaggedBy, warningCounters } from '../model/warnings'
 import { CalendarBanner } from './calendar-banner'
-import { GanttChart } from './gantt-chart'
+import { GanttChart, type GanttEditing } from './gantt-chart'
 import { GanttNav } from './gantt-nav'
 import { LevelToggle } from './level-toggle'
 import { UndatedColumns } from './undated-columns'
@@ -44,6 +46,8 @@ export function GanttPage() {
   const node = filters.node
   const { data: roadmap, isPending, error } = useRoadmap(node)
   const { data: items = [] } = useItems()
+  const { data: nodes = [] } = useNodes()
+  const edits = useGanttEdits()
   const [levels, toggleLevel] = useGanttLevels()
   const [unfolded, toggleColumn] = useUnfoldedColumns()
   const [width, measure] = useElementWidth()
@@ -57,7 +61,15 @@ export function GanttPage() {
   const flagged = useMemo(() => (roadmap ? flaggedBy(roadmap, warning) : null), [roadmap, warning])
   const rows = useMemo(() => (roadmap ? filterRows(buildRows(roadmap, levels), flagged) : []), [roadmap, levels, flagged])
   const columns = useMemo(() => (roadmap ? narrowColumns(buildColumns(roadmap), flagged) : []), [roadmap, flagged])
-  const paths = useMemo(() => new Map(items.map((item) => [`${item.node}#${item.id}`, item.path])), [items])
+  const byReference = useMemo(() => new Map(items.map((item) => [`${item.node}#${item.id}`, item])), [items])
+  const paths = useMemo(() => new Map([...byReference].map(([reference, item]) => [reference, item.path])), [byReference])
+  const pricing = useMemo(() => new Map(nodes.map((entry) => [entry.path, entry.estimates])), [nodes])
+  const editing: GanttEditing = {
+    itemOf: (row) => (row.reference === null ? undefined : byReference.get(row.reference)),
+    pricingOf: (item) => pricing.get(item.node),
+    move: edits.move,
+    resize: edits.resize,
+  }
   const estimates = useMemo(
     () =>
       new Map(
@@ -100,6 +112,7 @@ export function GanttPage() {
           now={roadmap?.now ?? opened}
           empty={emptyMessage(chosen, isPending, warning !== null)}
           onOpen={open}
+          editing={editing}
         />
         <UndatedColumns columns={columns} unfolded={unfolded} estimates={estimates} onToggle={toggleColumn} onOpen={open} />
       </div>

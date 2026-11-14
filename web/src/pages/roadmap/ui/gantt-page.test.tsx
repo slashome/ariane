@@ -1,15 +1,52 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
-import { makeItem, type Roadmap } from '@/shared/api'
+import { makeItem, type NodeSummary, type Roadmap } from '@/shared/api'
 import { sampleRoadmap } from '../model/fixtures'
 import { GanttPage } from './gantt-page'
 
 const items = [
-  makeItem({ id: 'T2', node: 'p', title: 'Work p#T2', path: 'tree/p/tasks/T2.md' }),
+  makeItem({ id: 'T1', node: 'p', title: 'Work p#T1', path: 'tree/p/tasks/T1.md', rank: 1000, category: 'done', size: 'S' }),
+  makeItem({ id: 'T2', node: 'p', title: 'Work p#T2', path: 'tree/p/tasks/T2.md', rank: 2000, size: 'M' }),
+  makeItem({ id: 'T3', node: 'p', title: 'Work p#T3', path: 'tree/p/tasks/T3.md', size: 'XS' }),
+  makeItem({ id: 'T4', node: 'p', title: 'Work p#T4', path: 'tree/p/tasks/T4.md', size: 'S' }),
   makeItem({ id: 'T8', node: 'p', title: 'Work p#T8', path: 'tree/p/tasks/T8.md' }),
+  makeItem({ id: 'S1', node: 'p', kind: 'story', path: 'tree/p/stories/S1.md' }),
+  makeItem({ id: 'S2', node: 'p', kind: 'story', path: 'tree/p/stories/S2.md', size: 'M' }),
 ]
+
+const nodes: Partial<NodeSummary>[] = [
+  { path: 'p', workflow: [], items: items.length, estimates: { XS: 2, S: 4, M: 12, L: 24, XL: 48, default: 'M', test_ratio: 0.25, tester: 'owner' } },
+]
+
+function answer(input: string, init: RequestInit | undefined, roadmap: Roadmap): unknown {
+  const method = init?.method ?? 'GET'
+  if (input === '/api/items/rank' && method === 'POST') {
+    return { items: [] }
+  }
+  if (input === '/api/items' && method === 'PATCH') {
+    const { path } = JSON.parse(String(init?.body)) as { path: string }
+    return items.find((item) => item.path === path)
+  }
+  if (input.startsWith('/api/roadmap')) {
+    return roadmap
+  }
+  if (input.startsWith('/api/nodes')) {
+    return nodes
+  }
+  return input.startsWith('/api/items') ? items : {}
+}
+
+function sent(fetch: ReturnType<typeof vi.fn>, method: string, url: string): unknown[] {
+  return fetch.mock.calls
+    .filter(([input, init]) => input === url && (init as RequestInit | undefined)?.method === method)
+    .map(([, init]) => JSON.parse(String((init as RequestInit).body)) as unknown)
+}
+
+function roadmapFetches(fetch: ReturnType<typeof vi.fn>): number {
+  return fetch.mock.calls.filter(([input]) => String(input).startsWith('/api/roadmap')).length
+}
 
 function richRoadmap(): Roadmap {
   const roadmap = sampleRoadmap()
@@ -28,10 +65,9 @@ function richRoadmap(): Roadmap {
 }
 
 function renderAt(url: string, roadmap: Roadmap = sampleRoadmap()) {
-  const fetch = vi.fn(async (input: string) => {
-    const body = input.startsWith('/api/roadmap') ? roadmap : input.startsWith('/api/items') ? items : {}
-    return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
-  })
+  const fetch = vi.fn(async (input: string, init?: RequestInit) =>
+    new Response(JSON.stringify(answer(input, init, roadmap)), { headers: { 'Content-Type': 'application/json' } }),
+  )
   vi.stubGlobal('fetch', fetch)
   const router = createMemoryRouter(
     [
@@ -194,5 +230,66 @@ describe('the Gantt page', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Scroll to T4, earlier' }))
     expect(screen.getByRole('button', { name: 'T4 bar' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Scroll to T4, earlier' })).not.toBeInTheDocument()
+  })
+
+  it('moves a row after its next sibling with Alt+↓, through the rank route of the kanban, then refreshes the forecast', async () => {
+    const { fetch } = renderAt('/roadmap/gantt?node=p')
+    const grip = await screen.findByRole('button', { name: 'Reorder T1' })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Resize T2' })).toBeInTheDocument())
+    const before = roadmapFetches(fetch)
+    grip.focus()
+    await userEvent.keyboard('{Alt>}{ArrowDown}{/Alt}')
+    await waitFor(() =>
+      expect(sent(fetch, 'POST', '/api/items/rank')).toEqual([
+        { path: 'tree/p/tasks/T1.md', place: 'after', other: 'tree/p/tasks/T2.md', seen: { 'tree/p/tasks/T1.md': 1000, 'tree/p/tasks/T2.md': 2000 } },
+      ]),
+    )
+    await waitFor(() => expect(roadmapFetches(fetch)).toBeGreaterThan(before))
+  })
+
+  it('reorders a row dropped on a sibling and refuses a drop in another group', async () => {
+    const { fetch } = renderAt('/roadmap/gantt?node=p')
+    const grip = await screen.findByRole('button', { name: 'Reorder T2' })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Resize T2' })).toBeInTheDocument())
+    const rowOf = (name: string) => screen.getByRole('button', { name }).closest('li') as HTMLElement
+    const pointAt = vi.fn(() => rowOf('Reorder T4'))
+    document.elementFromPoint = pointAt
+    fireEvent.pointerDown(grip, { pointerId: 1, clientY: 0 })
+    fireEvent.pointerMove(grip, { pointerId: 1, clientY: 5 })
+    expect(await screen.findByRole('status')).toHaveTextContent('Drop it among its siblings')
+    pointAt.mockImplementation(() => rowOf('Reorder T1'))
+    fireEvent.pointerMove(grip, { pointerId: 1, clientY: -5 })
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    fireEvent.pointerUp(grip, { pointerId: 1 })
+    await waitFor(() => expect(sent(fetch, 'POST', '/api/items/rank')).toHaveLength(1))
+    expect(sent(fetch, 'POST', '/api/items/rank')[0]).toMatchObject({ path: 'tree/p/tasks/T2.md', place: 'before', other: 'tree/p/tasks/T1.md' })
+    Reflect.deleteProperty(document, 'elementFromPoint')
+  })
+
+  it('previews the size a stretched bar snaps to and writes it on release', async () => {
+    const { fetch } = renderAt('/roadmap/gantt?node=p')
+    const handle = await screen.findByRole('button', { name: 'Resize T2' })
+    fireEvent.pointerDown(handle, { pointerId: 1, clientX: 100 })
+    fireEvent.pointerMove(handle, { pointerId: 1, clientX: 130 })
+    expect(screen.getByTestId('stretch-preview')).toHaveTextContent('M → L · 24 h')
+    fireEvent.pointerUp(handle, { pointerId: 1 })
+    await waitFor(() => expect(sent(fetch, 'PATCH', '/api/items')).toEqual([{ path: 'tree/p/tasks/T2.md', changes: { size: { from: 'M', to: 'L' } } }]))
+    expect(screen.queryByTestId('stretch-preview')).not.toBeInTheDocument()
+  })
+
+  it('steps a size with + and - on a focused bar', async () => {
+    const { fetch } = renderAt('/roadmap/gantt?node=p')
+    await screen.findByRole('button', { name: 'Resize T3' })
+    screen.getByRole('button', { name: 'T3 bar' }).focus()
+    await userEvent.keyboard('+')
+    await waitFor(() => expect(sent(fetch, 'PATCH', '/api/items')).toEqual([{ path: 'tree/p/tasks/T3.md', changes: { size: { from: 'XS', to: 'S' } } }]))
+  })
+
+  it('refuses to resize a split story and done work', async () => {
+    renderAt('/roadmap/gantt?node=p')
+    await screen.findByRole('button', { name: 'Resize T2' })
+    expect(screen.getByRole('button', { name: 'Resize S1: Its size is the sum of its tasks: resize those instead' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Resize S2' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Resize T1/ })).not.toBeInTheDocument()
   })
 })

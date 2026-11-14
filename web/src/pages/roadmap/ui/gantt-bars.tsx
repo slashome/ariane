@@ -1,9 +1,12 @@
+import type { KeyboardEvent } from 'react'
 import type { WorkStage } from '@/shared/api'
 import { cn } from '@/shared/lib'
-import { Tooltip } from '@/shared/ui'
+import { toast, Tooltip } from '@/shared/ui'
 import { describeFragment, describeWork, hoursLabel } from '../model/describe'
+import { stepSize } from '../model/edits'
 import type { Fragment, GanttRow, Phase, TimedSegment, WorkBar } from '../model/rows'
 import type { Scale } from '../model/scale'
+import { RefusedHandle, StretchHandle, type Stretch } from './stretch-handle'
 
 const stageFills: Record<WorkStage, string> = {
   open: 'bg-blue-500',
@@ -99,12 +102,14 @@ export function WorkBars({
   placement,
   dated,
   onOpen,
+  stretch,
 }: {
   row: GanttRow
   work: WorkBar
   placement: Placement
   dated: boolean
   onOpen?: () => void
+  stretch?: Stretch
 }) {
   if (work.segments.length === 0) {
     return null
@@ -116,14 +121,32 @@ export function WorkBars({
     return null
   }
   const approximate = work.closed?.approximate ?? false
+  const label = row.id ?? row.title
+  const step = (event: KeyboardEvent<HTMLButtonElement>) => {
+    const direction = event.key === '+' || event.key === '=' ? 1 : event.key === '-' ? -1 : 0
+    if (stretch === undefined || direction === 0) {
+      return
+    }
+    event.preventDefault()
+    if (stretch.refusal !== null) {
+      toast.info(stretch.refusal)
+      return
+    }
+    const next = stepSize(stretch, stretch.pricing, direction)
+    if (next !== null) {
+      stretch.onResize(next)
+    }
+  }
   return (
     <>
       <Tooltip content={<Lines lines={describeWork(row, work, dated)} />}>
         <button
           type="button"
-          aria-label={`${row.id ?? row.title} bar`}
+          aria-label={`${label} bar`}
+          aria-keyshortcuts={stretch?.refusal === null ? '+ -' : undefined}
           data-stage={work.stage}
           onClick={onOpen}
+          onKeyDown={step}
           className="absolute top-1/2 h-3.5 -translate-y-1/2 rounded-[3px] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring"
           style={{ left: from, width: size }}
         >
@@ -141,6 +164,8 @@ export function WorkBars({
         </button>
       </Tooltip>
       <Trailer at={from + size} text={work.stage === 'done' ? '' : hoursLabel(work.hours, work.testHours, work.hatched)} missed={row.missed !== null} />
+      {stretch && stretch.refusal === null && <StretchHandle label={label} from={from} width={size} hours={work.hours} stretch={stretch} />}
+      {stretch && stretch.refusal !== null && work.stage !== 'done' && <RefusedHandle at={from + size} label={label} refusal={stretch.refusal} />}
     </>
   )
 }
@@ -151,14 +176,17 @@ export function SummaryBars({
   dated,
   now,
   onOpen,
+  refusal,
 }: {
   row: GanttRow
   placement: Placement
   dated: boolean
   now: string
   onOpen?: () => void
+  refusal?: string | null
 }) {
   const last = row.fragments[row.fragments.length - 1]
+  const tail = last ? place(placement, last.start, last.end) : null
   return (
     <>
       {row.fragments.map((fragment: Fragment) => {
@@ -200,9 +228,12 @@ export function SummaryBars({
           </Tooltip>
         )
       })}
-      {last && (
+      {tail && refusal && visible(placement, tail.from, tail.size) && (
+        <RefusedHandle at={tail.from + tail.size} label={row.id ?? row.title} refusal={refusal} />
+      )}
+      {tail && (
         <Trailer
-          at={place(placement, last.start, last.end).from + place(placement, last.start, last.end).size}
+          at={tail.from + tail.size}
           text={hoursLabel(row.hours, row.testHours, row.guessed)}
           missed={row.missed !== null}
         />
