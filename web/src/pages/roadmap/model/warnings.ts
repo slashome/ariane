@@ -45,18 +45,37 @@ export interface WarningCounter {
   label: string
   hint: string
   count: number
+  muted: boolean
 }
 
-export function warningCounters(roadmap: Pick<Roadmap, 'warnings'>): WarningCounter[] {
+export const mutedHint = 'Muted: it touches more than half of the scheduled work, so it says little about any one item'
+
+export function scheduledWork(roadmap: Pick<Roadmap, 'releases'>): Set<string> {
+  return new Set(
+    roadmap.releases.flatMap((release) => release.epics.flatMap((epic) => epic.stories.flatMap((story) => story.work.map((work) => work.reference)))),
+  )
+}
+
+export function touchesMostOf(flagged: ReadonlySet<string>, scheduled: ReadonlySet<string>): boolean {
+  const touched = [...flagged].filter((reference) => scheduled.has(reference)).length
+  return touched * 2 > scheduled.size
+}
+
+export function warningCounters(roadmap: Pick<Roadmap, 'warnings' | 'releases'>): WarningCounter[] {
   const counts = new Map<ForecastWarningKind, number>()
   for (const warning of roadmap.warnings) {
     if (warning.count > 0) {
       counts.set(warning.kind, (counts.get(warning.kind) ?? 0) + warning.count)
     }
   }
+  const scheduled = scheduledWork(roadmap)
   return warningKinds.flatMap((kind) => {
     const count = counts.get(kind)
-    return count === undefined ? [] : [{ kind, label: warningLabels[kind], hint: warningHints[kind], count }]
+    if (count === undefined) {
+      return []
+    }
+    const muted = touchesMostOf(flaggedBy(roadmap, kind) ?? new Set(), scheduled)
+    return [{ kind, label: warningLabels[kind], hint: muted ? `${warningHints[kind]}. ${mutedHint}` : warningHints[kind], count, muted }]
   })
 }
 

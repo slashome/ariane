@@ -35,6 +35,7 @@ export function WarningsBanner({
               onClick={() => onToggle(counter.kind)}
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-0.5 text-xs transition-colors duration-(--duration-hover) ease-(--ease-hover) hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ring',
+                counter.muted && !pressed && 'border-dashed bg-muted/40 text-muted-foreground',
                 pressed && 'border-primary bg-primary text-primary-foreground hover:bg-primary',
               )}
             >
