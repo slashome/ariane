@@ -623,6 +623,30 @@ category = "done"
     }
 
     #[test]
+    fn an_unknown_key_in_a_workflow_entry_or_a_field_declaration_is_an_invalid_node_toml() {
+        for table in [
+            "[[workflow]]\nid = \"a-tester\"\nlabel = \"À tester\"\ncategory = \"in_progress\"\nstge = \"testing\"\n",
+            "[fields.audit]\ntype = \"string\"\nrequierd = true\n",
+        ] {
+            let repo = base();
+            repo.write("p/node.toml", &format!("{WORKFLOW}\n{table}"))
+                .write("p/tasks/T1-a.md", &task("p", "T1", ""));
+            let tree = Tree::load(repo.root()).unwrap();
+            let findings = diagnose(&tree, None, false);
+            let invalid = findings
+                .iter()
+                .find(|finding| finding.check == Check::InvalidNodeToml)
+                .unwrap_or_else(|| panic!("{table}"));
+            assert_eq!(invalid.severity, Severity::Error);
+            assert!(
+                invalid.message.contains("unknown field"),
+                "{}",
+                invalid.message
+            );
+        }
+    }
+
+    #[test]
     fn an_invalid_estimates_table_is_an_invalid_node_toml() {
         for table in [
             "[estimates]\nXXL = 96\n",

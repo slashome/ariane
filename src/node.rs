@@ -138,7 +138,10 @@ impl Stage {
 }
 
 /// One status of a workflow, as declared in a `[[workflow]]` entry.
+/// `deny_unknown_fields` refuses a misspelled key, such as `stge`, instead of
+/// silently dropping it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Status {
     /// Stable identifier, the value written in items' `status` key.
     pub id: String,
@@ -356,8 +359,10 @@ pub enum FieldType {
     Enum,
 }
 
-/// The declaration of one custom key.
+/// The declaration of one custom key, `[fields.<key>]`; `deny_unknown_fields`
+/// refuses a key other than `type`, `values` and `required`.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct FieldDecl {
     /// Its type, read from the `type` key (renamed because `type` is a Rust keyword).
     #[serde(rename = "type")]
@@ -1048,6 +1053,42 @@ parking = true
         ] {
             assert!(toml::from_str::<NodeFile>(text).is_err(), "{text}");
         }
+    }
+
+    #[test]
+    fn a_workflow_entry_and_a_field_declaration_refuse_unknown_keys() {
+        for (text, key) in [
+            (
+                "[[workflow]]\nid = \"a-tester\"\nlabel = \"À tester\"\ncategory = \"in_progress\"\nstge = \"testing\"\n",
+                "stge",
+            ),
+            (
+                "[fields.mod]\ntype = \"string\"\nrequierd = true\n",
+                "requierd",
+            ),
+            ("[changelog]\nlang = \"fr\"\n", "lang"),
+            (
+                "[personas.\"cmc:dev\"]\nname = \"Dev\"\nlabel = \"Dev\"\n",
+                "label",
+            ),
+            (
+                "[proxy]\nhost = \"a.local\"\nport = 3000\npath = \"/\"\n",
+                "path",
+            ),
+            ("[[release]]\nname = \"1.0\"\ndate = 2027-01-01\n", "date"),
+            ("descripton = \"typo\"\n", "descripton"),
+        ] {
+            let error = toml::from_str::<NodeFile>(text).unwrap_err().to_string();
+            assert!(error.contains(&format!("unknown field `{key}`")), "{error}");
+        }
+        let accepted: NodeFile = toml::from_str(
+            "[people.alice]\nname = \"Alice\"\nmonday = 58294966\n\n[tracker]\nkind = \"monday\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            accepted.people["alice"].ids["monday"].as_integer(),
+            Some(58294966)
+        );
     }
 
     #[test]

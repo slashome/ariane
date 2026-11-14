@@ -96,6 +96,8 @@ Shared front-end library of the `cmc` apps, hosted in `choosemycompany/cmc-lib`.
 - When `type = "enum"`, `values` MUST list the allowed strings.
 - `required` MAY be `true`; it defaults to `false`.
 
+No other key is allowed.
+
 **Workflow.** Each `[[workflow]]` entry declares one status:
 
 - `id` MUST be unique within the workflow and match `^[a-z][a-z0-9-]*$`. It is the value written in items, and it is stable.
@@ -103,7 +105,7 @@ Shared front-end library of the `cmc` apps, hosted in `choosemycompany/cmc-lib`.
 - `category` MUST be one of `backlog`, `todo`, `in_progress`, `waiting`, `blocked`, `done`, `dropped`. `waiting` is for an item that waits for someone — a review, an answer — named in `waiting_for`; `blocked`, for one that cannot move until something else happens.
 - `stage` MAY say where the work of the status stands within its category, for the forecast (§3). Its one value is `testing`, which only a status of the `in_progress` category MAY declare: the work is done, only its testing is left.
 
-The order of entries is the display order.
+No other key is allowed in an entry. The order of entries is the display order.
 
 ```toml
 [[workflow]]
@@ -277,7 +279,7 @@ A node that inherits its list cannot change it: the change is refused, naming th
 | A file name that does not begin with the item's `id`, `-` and a slug | error — remedy: `ariane fix` (renames to `<id>-<current name>` and rewrites the links); a human when the name is the bare id |
 | An item in `backlog/` or `archives/backlog/` | error — remedy: `ariane fix` (moves it into `tasks/` or `archives/tasks/` and rewrites the links) |
 | A custom key not declared in any applicable `node.toml` | warning — `milestone` on a version `2` file is one ([ADR-0024](docs/adr/0024-remove-milestone-from-the-header.md)) |
-| A `node.toml` that does not parse, among others an `[estimates]` key that is neither a size nor `default`, `test_ratio` or `tester`, hours zero or below, a `default` that is not a size, a negative `test_ratio` or an unknown `tester`, a workflow `category` or `stage` outside its vocabulary, or a `stage` on a status of a category other than the one it requires (`in_progress` for `testing`) | error — the node falls back on its inherited configuration until the file is fixed |
+| A `node.toml` that does not parse, among others a key that is not allowed — at the top level, in a `[fields.<key>]` table, a `[[workflow]]` or `[[release]]` entry, or the `[changelog]`, `[personas."<id>"]` or `[proxy]` tables (the keys of `[people.<handle>]` other than `name` and of `[tracker]` are free) —, an `[estimates]` key that is neither a size nor `default`, `test_ratio` or `tester`, hours zero or below, a `default` that is not a size, a negative `test_ratio` or an unknown `tester`, a workflow `category` or `stage` outside its vocabulary, or a `stage` on a status of a category other than the one it requires (`in_progress` for `testing`) | error — the node falls back on its inherited configuration until the file is fixed |
 | A `[proxy]` table or `[[proxy]]` entry whose `host` is not a host name, whose `port` is 0, or whose `host` another entry declares | error |
 | An `INDEX.md` anywhere in the tree | warning — remedy: move the node's description into the `description` of its `node.toml`, its judgment into the item it concerns, its rules into a ressource of the node, then delete the file |
 
