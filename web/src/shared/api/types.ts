@@ -153,7 +153,7 @@ export interface ReleaseChange {
   place?: ReleasePlace
   other?: string
   parking?: boolean
-  target?: string
+  target?: string | null
   rename_to?: string
 }
 

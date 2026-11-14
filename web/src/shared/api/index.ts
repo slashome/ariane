@@ -86,6 +86,8 @@ export type {
   RouteRemoval,
   RouteTable,
   Roadmap,
+  EffectiveRelease,
+  Release,
   ReleaseChange,
   ReleaseList,
   ReleasePlace,

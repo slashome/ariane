@@ -9,6 +9,7 @@ export const routes = {
   backlog: '/tasks/backlog',
   roadmap: '/roadmap',
   gantt: '/roadmap/gantt',
+  releases: '/roadmap/releases',
   roadmapSettings: '/roadmap/settings',
   epics: '/epics',
   stories: '/stories',

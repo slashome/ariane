@@ -19,6 +19,7 @@ import {
   Pin,
   Settings,
   SlidersHorizontal,
+  SquareKanban,
   Users,
   type LucideIcon,
 } from 'lucide-react'
@@ -222,6 +223,7 @@ export function Sidebar() {
         </Section>
         <Section id="roadmap" label="Roadmap" icon={ChartGantt} collapsed={collapsed.has('roadmap')} onToggle={() => toggle('roadmap')}>
           <Entry to={routes.gantt} label="Gantt" icon={ChartGantt} search={scope} nested />
+          <Entry to={routes.releases} label="Releases" icon={SquareKanban} search={scope} nested />
           <Entry to={routes.roadmapSettings} label="Settings" icon={SlidersHorizontal} search={scope} nested />
         </Section>
         <Entry to={routes.epics} label="Epics" icon={Layers} count={counts.epics} search={scope} />
