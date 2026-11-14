@@ -23,6 +23,8 @@ export function reasonLabel(entry: Pick<ColumnEntry, 'reason' | 'release'>): str
   switch (entry.reason) {
     case 'parking':
       return `parked in ${entry.release ?? 'a parking release'}`
+    case 'closed_release':
+      return entry.release === null ? 'left in a closed release' : `left in ${entry.release}, closed`
     case 'no_release':
       return 'no release'
     case 'undeclared_release':

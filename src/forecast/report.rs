@@ -169,7 +169,7 @@ pub fn assemble(input: &Input, schedule: &Schedule) -> Forecast {
                 name: spec.name.clone(),
                 declared_by: spec.declared_by.clone(),
                 target: spec.target.map(|date| date.to_string()),
-                closed: spec.closed.map(|date| date.to_string()),
+                closed_on: spec.closed.map(|date| date.to_string()),
                 summary: summarize(input, &members, &schedule.placed, &mut clock),
                 epics: epic_plans(&context, &members, &mut clock),
             })

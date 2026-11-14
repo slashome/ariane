@@ -245,7 +245,7 @@ impl View<'_> {
         if homonyms > 1 {
             let _ = write!(label, "  (declared by {})", plan.declared_by);
         }
-        if let Some(closed) = &plan.closed {
+        if let Some(closed) = &plan.closed_on {
             let _ = write!(label, "  (closed {closed})");
         }
         lines.push(self.group(

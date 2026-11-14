@@ -8,6 +8,7 @@ import { queryKeys, type Item, type Release, type ReleaseChange } from '@/shared
 import { searchParamKeys } from '@/shared/config'
 import { displayNode, useSearchParam } from '@/shared/lib'
 import { Button, ConfirmDialog, DragArea, EmptyState, PageHeader, type DragEndEvent } from '@/shared/ui'
+import { useCloseRelease } from '../api/use-release-close'
 import { useReleaseChange } from '../api/use-release-change'
 import { useRoadmap } from '../api/use-roadmap'
 import { columnMenu, moveRequest, type ColumnAction } from '../model/column-menu'
@@ -25,6 +26,7 @@ import {
   typesOf,
 } from '../model/release-board'
 import { BacklogPanel } from './backlog-panel'
+import { CloseReleaseDialog } from './close-release-dialog'
 import { InheritedNotice } from './inherited-notice'
 import { ReleaseColumn } from './release-column'
 import { NewReleaseDialog, RenameReleaseDialog } from './release-dialogs'
@@ -37,11 +39,13 @@ function Board({ node }: { node: string }) {
   const { data: roadmap } = useRoadmap(node)
   const update = useUpdateItem()
   const releaseChange = useReleaseChange()
+  const releaseClose = useCloseRelease()
   const [, setPreview] = useSearchParam(searchParamKeys.preview)
   const [filters, setFilters] = useState(defaultBacklogFilters)
   const [creating, setCreating] = useState(false)
   const [renaming, setRenaming] = useState<Release | null>(null)
   const [removing, setRemoving] = useState<Release | null>(null)
+  const [closing, setClosing] = useState<Release | null>(null)
 
   const list = useMemo(() => boardList(nodes, node), [nodes, node])
   const listNode = list.declaredIn ?? node
@@ -74,6 +78,9 @@ function Board({ node }: { node: string }) {
       }
       case 'parking':
         send('change', { node: listNode, name: release.name, parking: !release.parking })
+        return
+      case 'close':
+        setClosing(release)
         return
       case 'remove':
         setRemoving(release)
@@ -168,6 +175,16 @@ function Board({ node }: { node: string }) {
         pending={releaseChange.isPending}
         onClose={() => setRenaming(null)}
         onRename={(name) => renaming && send('change', { node: listNode, name: renaming.name, rename_to: name }, () => setRenaming(null))}
+      />
+      <CloseReleaseDialog
+        key={closing?.name ?? 'none'}
+        target={closing === null ? null : { node: listNode, name: closing.name }}
+        pending={releaseClose.isPending}
+        onClose={() => setClosing(null)}
+        onConfirm={(carryOver) =>
+          closing &&
+          releaseClose.mutate({ target: { node: listNode, name: closing.name }, carryOver }, { onSuccess: () => setClosing(null) })
+        }
       />
       <ConfirmDialog
         open={removing !== null}

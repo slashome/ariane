@@ -100,8 +100,9 @@ pub struct ReleasePlan {
     /// Its desired date, `YYYY-MM-DD`.
     pub target: Option<String>,
     /// The day it was closed, `YYYY-MM-DD`: it is delivered, and nothing is
-    /// scheduled in it (ADR-0029).
-    pub closed: Option<String>,
+    /// scheduled in it (ADR-0029). Named apart from the summary's `closed`,
+    /// the closing dates of its work.
+    pub closed_on: Option<String>,
     /// What it adds up to.
     #[serde(flatten)]
     pub summary: Summary,

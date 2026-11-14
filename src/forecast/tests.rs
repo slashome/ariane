@@ -418,10 +418,13 @@ fn a_closed_release_is_delivered_its_finished_work_shown_and_its_open_work_not_s
     let forecast = relative(&repo);
     assert_eq!(sequence(&forecast), ["p#T3"]);
     let closed = release(&forecast, "1.0");
-    assert_eq!(closed.closed.as_deref(), Some("2026-11-10"));
+    assert_eq!(closed.closed_on.as_deref(), Some("2026-11-10"));
     assert!(closed.summary.span.is_none());
     assert_eq!((closed.summary.done, closed.summary.open), (1, 0));
-    assert_eq!(release(&forecast, "2.0").closed, None);
+    assert_eq!(release(&forecast, "2.0").closed_on, None);
+    let json = serde_json::to_value(closed).unwrap();
+    assert_eq!(json["closed_on"], "2026-11-10");
+    assert_eq!(json["closed"]["to"], "2026-11-09");
     assert_eq!(forecast.unscheduled.len(), 1);
     assert_eq!(forecast.unscheduled[0].reference, "p#T2");
     assert_eq!(forecast.unscheduled[0].reason, Reason::ClosedRelease);

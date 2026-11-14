@@ -67,6 +67,7 @@ export interface GanttRow {
   covers: string[]
   fragments: Fragment[]
   work: WorkBar | null
+  closedOn: string | null
 }
 
 const hour = 3_600_000
@@ -126,6 +127,7 @@ interface PlanNode {
   release: string
   summary: ForecastSummary | null
   work: WorkPlan | null
+  closedOn?: string | null
   children: PlanNode[]
 }
 
@@ -203,6 +205,7 @@ function releaseNode(release: ReleasePlan): PlanNode {
     release: release.name,
     summary: release,
     work: null,
+    closedOn: release.closed_on ?? null,
     children: release.epics.map((epic) => epicNode(epic, release.name)),
   }
 }
@@ -254,6 +257,25 @@ function fragmentsOf(builder: Builder): Fragment[] {
       },
     ]
   })
+}
+
+function deliveredFragments(builder: Builder, closedOn: string, now: number): Fragment[] {
+  const day = closedDay(closedOn, now)
+  const fragments = fragmentsOf(builder)
+  if (day === null) {
+    return fragments
+  }
+  const [start, end] = day
+  const delivered: Piece = { start, end, done: true, hatched: false }
+  if (fragments.length === 0) {
+    return [{ release: builder.node.release, start, end, pieces: [delivered] }]
+  }
+  return fragments.map((fragment) => ({
+    ...fragment,
+    start: Math.min(fragment.start, start),
+    end: Math.max(fragment.end, end),
+    pieces: mergePieces([...fragment.pieces, delivered]),
+  }))
 }
 
 function missedTargets(roadmap: Roadmap): Map<string, string> {
@@ -369,8 +391,9 @@ export function buildRows(roadmap: Roadmap, active: readonly Level[]): GanttRow[
       missed: node.reference === null ? null : (missed.get(node.reference) ?? null),
       guessed: builder.contributions.some((contribution) => contribution.hatched),
       covers: [...builder.covers],
-      fragments: fragmentsOf(builder),
+      fragments: node.closedOn ? deliveredFragments(builder, node.closedOn, Date.parse(roadmap.now)) : fragmentsOf(builder),
       work: work ? workBar(work, segmentsOf.get(work) ?? []) : null,
+      closedOn: node.closedOn ?? null,
     })
     for (const child of builder.children.values()) {
       flatten(child, depth + 1)

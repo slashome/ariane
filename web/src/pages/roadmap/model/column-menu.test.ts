@@ -33,6 +33,20 @@ describe('the column menu', () => {
     expect(label(parked)).toBe('Schedule it (not parking)')
   })
 
+  it('closes a scheduled release, never a parking one, and freezes a closed one', () => {
+    expect(reasons(first).close).toBeNull()
+    expect(reasons(parked).close).toBe('A parking release is never closed')
+    const closed: Release = { ...first, closed: '2026-11-14' }
+    expect(reasons(closed)).toMatchObject({
+      rename: null,
+      left: 'Closed on 2026-11-14',
+      right: 'Closed on 2026-11-14',
+      parking: 'Closed on 2026-11-14',
+      close: 'Closed on 2026-11-14',
+    })
+    expect(columnMenu(shownOrder, first, [], null).find((entry) => entry.action === 'close')?.label).toBe('Close release…')
+  })
+
   it('moves next to the shown neighbour', () => {
     expect(moveRequest('p', shownOrder, '0.3', 'left')).toEqual({ node: 'p', name: '0.3', place: 'before', other: '0.2' })
     expect(moveRequest('p', shownOrder, '0.2', 'right')).toEqual({ node: 'p', name: '0.2', place: 'after', other: '0.3' })

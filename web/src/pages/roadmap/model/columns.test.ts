@@ -46,6 +46,7 @@ describe('reasonLabel', () => {
     expect(reasonLabel({ reason: 'no_release', release: null })).toBe('no release')
     expect(reasonLabel({ reason: 'undeclared_release', release: '9.9' })).toBe('release 9.9 not declared')
     expect(reasonLabel({ reason: 'cycle', release: null })).toBe('dependency cycle')
+    expect(reasonLabel({ reason: 'closed_release', release: '0.1' })).toBe('left in 0.1, closed')
     expect(reasonLabel({ reason: 'blocked_by_cycle', release: null })).toBe('waits on a dependency cycle')
   })
 })

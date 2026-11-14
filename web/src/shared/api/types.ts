@@ -143,6 +143,7 @@ export interface Release {
   name: string
   parking: boolean
   target: string | null
+  closed?: string | null
 }
 
 export type ReleasePlace = 'before' | 'after' | 'top' | 'bottom'
@@ -162,6 +163,83 @@ export interface ReleaseList {
   releases_from: string | null
   releases: Release[]
   rewritten: string[]
+}
+
+export type ChangelogLanguage = 'en' | 'fr'
+
+export type ChangelogAudience = 'po' | 'designer' | 'user'
+
+export interface ChangelogSettings {
+  language: ChangelogLanguage
+  audience: ChangelogAudience | null
+}
+
+export interface ChangelogChange {
+  reference: string
+  id: string
+  title: string
+  archived: boolean
+}
+
+export interface ChangelogLine {
+  subject: string
+  subject_reference: string
+  changes: ChangelogChange[]
+}
+
+export interface ChangelogSection {
+  kind: 'added' | 'fixed'
+  heading: string
+  lines: ChangelogLine[]
+}
+
+export interface ChangelogEntry {
+  node: string
+  release: string
+  language: ChangelogLanguage
+  sections: ChangelogSection[]
+  markdown: string
+}
+
+export interface CloseRequest {
+  node: string
+  name: string
+  carry_over: boolean
+  dry_run: boolean
+}
+
+export interface ClosingWork {
+  reference: string
+  id: string
+  kind: Kind
+  title: string
+  status: string | null
+}
+
+export interface ClosingArchived extends ClosingWork {
+  from: string
+  to: string
+  references: number
+  files: number
+  mentioned: string[]
+}
+
+export interface ClosingKept extends ClosingWork {
+  reason: string
+}
+
+export interface ReleaseClosing {
+  node: string
+  release: string
+  closed: string
+  dry_run: boolean
+  open: ClosingWork[]
+  carry_over: boolean
+  carry_to: string | null
+  blocked: boolean
+  archived: ClosingArchived[]
+  kept: ClosingKept[]
+  changelog: ChangelogEntry
 }
 
 export type EstimateKey = keyof Pricing
@@ -257,6 +335,7 @@ export interface NodeSummary {
   releases_from?: string | null
   estimates?: Pricing
   estimates_from?: EstimateSources
+  changelog?: ChangelogSettings
   people?: Record<string, Person>
   personas?: Record<string, Persona>
   tracker_from?: string | null
@@ -539,10 +618,11 @@ export interface ReleasePlan extends ForecastSummary {
   name: string
   declared_by: string
   target: string | null
+  closed_on?: string | null
   epics: EpicPlan[]
 }
 
-export type UnscheduledReason = 'parking' | 'no_release' | 'undeclared_release' | 'cycle' | 'blocked_by_cycle'
+export type UnscheduledReason = 'parking' | 'closed_release' | 'no_release' | 'undeclared_release' | 'cycle' | 'blocked_by_cycle'
 
 export interface Unscheduled {
   reference: string

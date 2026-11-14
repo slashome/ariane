@@ -166,4 +166,23 @@ describe('an epic without stories', () => {
     expect(outline(rows)).toEqual(['release 0.1', '  epic E9'])
     expect(rows[1]?.work?.hatched).toBe(true)
   })
+
+  it('draws a closed release as delivered on its closing day, with or without its finished work', () => {
+    const empty = buildRows(makeRoadmap([makeRelease('0.1', [], { closed_on: '2026-11-10' })]), ['release'])
+    expect(empty[0]?.closedOn).toBe('2026-11-10')
+    expect(empty[0]?.fragments).toHaveLength(1)
+    expect(empty[0]?.fragments[0]?.pieces).toEqual([expect.objectContaining({ done: true, hatched: false })])
+    expect(empty[0]?.fragments[0]?.start).toBeLessThan(0)
+    const done = makeWork('p#T1', { stage: 'done', closed: { date: '2026-11-09', approximate: false } })
+    const shipped = buildRows(
+      makeRoadmap([makeRelease('0.1', [makeEpic(null, [makeStory(null, [done])])], { closed_on: '2026-11-10' })]),
+      ['release'],
+    )
+    const fragment = shipped[0]?.fragments[0]
+    expect(fragment?.pieces.every((piece) => piece.done)).toBe(true)
+    expect(fragment?.end).toBeGreaterThan(fragment?.start ?? 0)
+    const open = buildRows(makeRoadmap([makeRelease('0.2', [])]), ['release'])
+    expect(open[0]?.closedOn).toBeNull()
+    expect(open[0]?.fragments).toEqual([])
+  })
 })

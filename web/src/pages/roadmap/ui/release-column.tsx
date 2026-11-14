@@ -62,6 +62,47 @@ export function ReleaseColumn({
   onTarget: (target: string | null) => void
   onOpen: (item: Item) => void
 }) {
+  const closed = release.closed ?? null
+  if (closed !== null) {
+    return (
+      <section
+        aria-label={`Release ${release.name}`}
+        className="flex w-48 shrink-0 flex-col rounded-lg border border-border bg-muted/10 text-muted-foreground"
+      >
+        <header className="flex flex-col gap-1 border-b border-border px-3 py-2">
+          <div className="flex items-center gap-2">
+            <h2 className="truncate text-sm font-semibold text-foreground">{release.name}</h2>
+            <span className="flex-1" />
+            <Menu
+              label={`Release ${release.name} actions`}
+              trigger={
+                <button type="button" className="icon-button size-6" title="Release actions">
+                  <Ellipsis className="size-4" aria-hidden />
+                </button>
+              }
+              entries={menu.map((entry) => ({
+                key: entry.action,
+                label: entry.label,
+                disabled: entry.disabled,
+                hint: entry.reason,
+                destructive: entry.action === 'remove',
+                onSelect: () => onAction(entry.action),
+              }))}
+            />
+          </div>
+          <p className="text-[11px]">Closed {closed}</p>
+          <p className="text-[11px]" aria-label={`Forecast of ${release.name}`}>
+            {summary.done} done{summary.open > 0 ? ` · ${summary.open} open` : ''}
+          </p>
+        </header>
+        {entries.length > 0 && (
+          <div className="min-h-0 flex-1 overflow-y-auto p-2">
+            <ReleaseOutline entries={entries} scope={scope} onOpen={onOpen} empty="" />
+          </div>
+        )}
+      </section>
+    )
+  }
   return (
     <DropZone
       id={releaseZone(release.name)}

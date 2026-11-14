@@ -1,6 +1,6 @@
 import type { Release, ReleaseChange } from '@/shared/api'
 
-export type ColumnAction = 'rename' | 'left' | 'right' | 'parking' | 'remove'
+export type ColumnAction = 'rename' | 'left' | 'right' | 'parking' | 'close' | 'remove'
 
 export interface ColumnMenuEntry {
   action: ColumnAction
@@ -32,13 +32,19 @@ function moveReason(shownOrder: Release[], release: Release, direction: 'left' |
   return neighbour.parking !== release.parking ? 'Parking releases stay after the scheduled ones' : null
 }
 
+function closeReason(release: Release): string | null {
+  return release.parking ? 'A parking release is never closed' : null
+}
+
 export function columnMenu(shownOrder: Release[], release: Release, usedBy: string[], inheritedFrom: string | null): ColumnMenuEntry[] {
   const locked = inheritedFrom === null ? null : `The list is declared in ${inheritedFrom === '' ? 'the home node' : inheritedFrom}`
+  const closed = release.closed ? `Closed on ${release.closed}` : null
   return [
     entry('rename', 'Rename…', locked),
-    entry('left', 'Move left', locked ?? moveReason(shownOrder, release, 'left')),
-    entry('right', 'Move right', locked ?? moveReason(shownOrder, release, 'right')),
-    entry('parking', release.parking ? 'Schedule it (not parking)' : 'Make it a parking release', locked),
+    entry('left', 'Move left', locked ?? closed ?? moveReason(shownOrder, release, 'left')),
+    entry('right', 'Move right', locked ?? closed ?? moveReason(shownOrder, release, 'right')),
+    entry('parking', release.parking ? 'Schedule it (not parking)' : 'Make it a parking release', locked ?? closed),
+    entry('close', 'Close release…', locked ?? closed ?? closeReason(release)),
     entry('remove', 'Remove', locked ?? (usedBy.length > 0 ? `Still the release of ${shown(usedBy)}` : null)),
   ]
 }

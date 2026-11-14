@@ -40,6 +40,7 @@ function Label({ row, onOpen }: { row: GanttRow; onOpen?: () => void }) {
       <span className={cn('truncate', row.level === 'release' && 'font-semibold', row.level === 'epic' && 'font-medium', row.reference === null && 'italic text-muted-foreground')}>
         {row.title}
       </span>
+      {row.closedOn !== null && <span className="shrink-0 text-[10px] text-muted-foreground">closed {row.closedOn}</span>}
       {row.missed !== null && <span className="size-1.5 shrink-0 rounded-full bg-red-500" title={`Target missed: ${row.missed}`} aria-label="target missed" />}
     </>
   )

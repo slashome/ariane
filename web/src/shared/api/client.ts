@@ -28,7 +28,10 @@ import type {
   RouteChange,
   RouteRemoval,
   RouteTable,
+  ChangelogEntry,
+  CloseRequest,
   ReleaseChange,
+  ReleaseClosing,
   ReleaseList,
   Roadmap,
   Settings,
@@ -109,6 +112,9 @@ export const addRelease = (release: ReleaseChange) => request<ReleaseList>('POST
 export const changeRelease = (release: ReleaseChange) => request<ReleaseList>('PATCH', '/api/releases', release)
 export const removeRelease = (release: Pick<ReleaseChange, 'node' | 'name'>) =>
   request<ReleaseList>('DELETE', '/api/releases', release)
+export const closeRelease = (close: CloseRequest) => request<ReleaseClosing>('POST', '/api/releases/close', close)
+export const fetchChangelog = (node: string, name: string) =>
+  request<ChangelogEntry>('GET', `/api/releases/changelog?${new URLSearchParams({ node, name }).toString()}`)
 export const fetchPersonas = () => request<PersonaDirectory[]>('GET', '/api/personas')
 export const addPersona = (persona: PersonaChange) => request<PersonaDirectory[]>('POST', '/api/personas', persona)
 export const changePersona = (persona: PersonaChange) => request<PersonaDirectory[]>('PATCH', '/api/personas', persona)

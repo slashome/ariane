@@ -146,6 +146,11 @@ describe('dropping a card', () => {
     expect(assignment(task, 'backlog', releases)).toEqual({ release: null, optimistic: { release: null, effective_release: null } })
   })
 
+  it('never plans it in a closed release', () => {
+    const closed = releases.map((release) => (release.name === '0.3' ? { ...release, closed: '2026-11-14' } : release))
+    expect(assignment(task, 'release:0.3', closed)).toBeNull()
+  })
+
   it('does nothing on its own column or outside any zone', () => {
     expect(assignment(task, 'release:0.2', releases)).toBeNull()
     expect(assignment(item('T2'), 'backlog', releases)).toBeNull()

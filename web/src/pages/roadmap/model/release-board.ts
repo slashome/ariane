@@ -206,5 +206,8 @@ export function assignment(item: Item, zone: string, releases: Release[]): Assig
   if (release === undefined || release === item.release) {
     return null
   }
+  if (release !== null && releases.some((entry) => entry.name === release && entry.closed)) {
+    return null
+  }
   return { release, optimistic: { release, effective_release: effectiveAfter(item, release, releases) } }
 }
