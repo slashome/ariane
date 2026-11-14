@@ -1,7 +1,7 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { makeItem, type NodeSummary, type Schema } from '@/shared/api'
+import { makeItem, queryKeys, type NodeSummary, type Schema } from '@/shared/api'
 import { ItemEditors } from './item-editors'
 
 const nodes: NodeSummary[] = [
@@ -13,6 +13,7 @@ const nodes: NodeSummary[] = [
       { id: 'waiting', label: 'Waiting', category: 'waiting' },
     ],
     people: { keyvan: { name: 'Keyvan Coen' } },
+    estimates: { XS: 2, S: 4, M: 12, L: 24, XL: 48, default: 'M', test_ratio: 0.25, tester: 'owner' },
   },
 ]
 
@@ -28,15 +29,21 @@ const schema = {
   reflexion_statuses: ['open', 'trial', 'settled'],
 } as unknown as Schema
 
-function renderEditors(item = makeItem()) {
+function renderEditors(item = makeItem(), saved: () => Promise<unknown> = async () => item) {
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
-    const body = url.startsWith('/api/nodes') ? nodes : url.startsWith('/api/schema') ? schema : init?.method === 'PATCH' ? item : []
+    const body = url.startsWith('/api/nodes') ? nodes : url.startsWith('/api/schema') ? schema : init?.method === 'PATCH' ? await saved() : []
     return new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } })
   })
   vi.stubGlobal('fetch', fetch)
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  client.setQueryData(queryKeys.items, [item])
+  function Editors() {
+    const { data: items = [] } = useQuery({ queryKey: queryKeys.items, queryFn: () => [item] })
+    return <ItemEditors item={items[0] ?? item} />
+  }
   render(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <ItemEditors item={item} />
+    <QueryClientProvider client={client}>
+      <Editors />
     </QueryClientProvider>,
   )
   return fetch
@@ -85,5 +92,17 @@ describe('ItemEditors', () => {
     expect(estimate).toHaveTextContent('Sum of 3 parts, 1 guessed from a default or provisional size')
     expect(estimate).toHaveTextContent('+9 h of testing by others, as a delay')
     expect(estimate).toHaveTextContent('24 h remaining')
+  })
+
+  it('shows the hours of a new size before the server answers', async () => {
+    const estimate = { hours: 12, remaining_hours: 12, test_hours: 3, remaining_test_hours: 3, tester: 'owner' as const, basis: 'size' as const, size: 'M', parts: 1, guessed: 0 }
+    renderEditors(makeItem({ size: 'M', estimate }), () => new Promise(() => {}))
+    expect(await screen.findByLabelText('Estimate')).toHaveTextContent('12 h')
+    await screen.findByText('Status')
+    await userEvent.click(within(screen.getByRole('group', { name: 'Size' })).getByRole('button', { name: 'XS' }))
+    await waitFor(() => expect(screen.getByLabelText('Estimate')).toHaveTextContent('Size XS'))
+    const resized = screen.getByLabelText('Estimate')
+    expect(within(resized).getByText('2 h')).toBeInTheDocument()
+    expect(resized).toHaveTextContent('+0.5 h of testing by the owner')
   })
 })

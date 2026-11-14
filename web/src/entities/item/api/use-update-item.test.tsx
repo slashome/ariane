@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { queryKeys, type Item, type NodeSummary } from '@/shared/api'
+import { queryKeys, type Item, type ItemDetail, type NodeSummary } from '@/shared/api'
 import { toast } from '@/shared/ui'
 import { changesFor } from '../model/categories'
 import { useUpdateItem } from './use-update-item'
@@ -120,5 +120,22 @@ describe('useUpdateItem', () => {
     })
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(client.getQueryData<Item[]>(queryKeys.items)?.[0]?.size).toBe('M')
+  })
+
+  it('shows the change on the item page at once, and rolls it back on a refusal', async () => {
+    const detail: ItemDetail = { ...item, header: null, body: '', relations: { parent: null, children: [], depends_on: [], dependents: [], unresolved: [] } }
+    let refuse: () => void = () => {}
+    const refusal = new Promise<Response>((resolve) => {
+      refuse = () => resolve(Response.json({ error: 'stale', current: item }, { status: 409 }))
+    })
+    const { client, result } = setup(() => refusal as unknown as Response)
+    client.setQueryData(queryKeys.item('game#T001'), detail)
+    act(() => {
+      result.current.mutate({ item, changes: changesFor(item, { size: 'XS' }), optimistic: { size: 'XS' } })
+    })
+    await waitFor(() => expect(client.getQueryData<ItemDetail>(queryKeys.item('game#T001'))?.size).toBe('XS'))
+    refuse()
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(client.getQueryData<ItemDetail>(queryKeys.item('game#T001'))?.size).toBe('M')
   })
 })

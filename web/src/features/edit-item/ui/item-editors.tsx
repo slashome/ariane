@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
-import { changesFor, EstimateDetail, today, useUpdateItem } from '@/entities/item'
-import { peopleOf, useNodes, workflowOf } from '@/entities/node'
+import { changesFor, EstimateDetail, resizedEstimate, today, useUpdateItem } from '@/entities/item'
+import { findNode, peopleOf, useNodes, workflowOf } from '@/entities/node'
 import { enumValues, useSchema } from '@/entities/schema'
 import type { Item } from '@/shared/api'
 import { NativeSelect, Segmented } from '@/shared/ui'
@@ -60,8 +60,15 @@ export function ItemEditors({ item }: { item: Item }) {
     setWaitingFor(null)
   }
 
-  const setField = (field: 'priority' | 'size' | 'impact', value: string | null) =>
+  const setField = (field: 'priority' | 'impact', value: string | null) =>
     update.mutate({ item, changes: changesFor(item, { [field]: value }), optimistic: { [field]: value } })
+
+  const setSize = (size: string | null) =>
+    update.mutate({
+      item,
+      changes: changesFor(item, { size }),
+      optimistic: { size, estimate: resizedEstimate(item, size, findNode(nodes, item.node)?.estimates) },
+    })
 
   return (
     <div className="space-y-2">
@@ -83,7 +90,7 @@ export function ItemEditors({ item }: { item: Item }) {
             <Segmented label="Priority" values={enumValues(schema, 'priority')} value={item.priority} onChange={(value) => setField('priority', value)} />
           </Row>
           <Row label="Size">
-            <Segmented label="Size" values={enumValues(schema, 'size')} value={item.size} onChange={(value) => setField('size', value)} />
+            <Segmented label="Size" values={enumValues(schema, 'size')} value={item.size} onChange={setSize} />
             {item.estimate && <EstimateDetail estimate={item.estimate} className="mt-1" />}
           </Row>
           <Row label="Impact">
