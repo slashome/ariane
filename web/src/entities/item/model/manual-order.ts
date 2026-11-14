@@ -67,6 +67,19 @@ export interface Beside<Lane> {
 
 const isPeer = (item: Item, other: Item) => other.path !== item.path && other.node === item.node && other.kind === item.kind
 
+export function itemsRankedByMove(items: Item[], moved: Item, place: Place, other: Item | null): number {
+  if ((place !== 'before' && place !== 'after') || other === null) {
+    return 0
+  }
+  const peers = items.filter((item) => isPeer(moved, item) && !item.archived && item.id !== null).sort(compareManualOrder)
+  const at = peers.findIndex((item) => item.path === other.path)
+  if (at === -1) {
+    return 0
+  }
+  const above = peers.slice(0, place === 'after' ? at + 1 : at)
+  return above.some((item) => item.rank === null) ? peers.filter((item) => item.rank === null).length + 1 : 0
+}
+
 export function dropBeside<Lane extends { id: string; items: Item[] }>(item: Item, overId: string, lanes: Lane[]): Beside<Lane> | null {
   const holder = lanes.find((lane) => lane.items.some((entry) => entry.path === overId))
   if (holder === undefined) {

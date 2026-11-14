@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { changesFor, dropBeside, ItemCard, today, useItems, useRankItem, useUpdateItem, waitingSummary } from '@/entities/item'
+import { changesFor, dropBeside, ItemCard, today, useItems, useRankConfirmation, useRankItem, useUpdateItem, waitingSummary } from '@/entities/item'
 import { peopleOf, useNodes } from '@/entities/node'
 import { useSchema } from '@/entities/schema'
 import { QueryField, useFilteredItems, useItemFilters } from '@/features/filter-items'
@@ -20,6 +20,7 @@ export function KanbanPage() {
   const { filters } = useItemFilters()
   const update = useUpdateItem()
   const rank = useRankItem()
+  const ranking = useRankConfirmation(items)
   // Columns folded or unfolded against their default, remembered by the browser.
   const [toggled, toggle] = useStoredSet('ariane.kanban.toggled')
   // The previewed item lives in the URL, so Back from its page brings the preview back.
@@ -47,13 +48,16 @@ export function KanbanPage() {
       setMoving({ item, status: target.status })
       return
     }
-    if (drop.place !== null && drop.other !== null) {
-      rank.mutate({
-        item,
-        place: drop.place,
-        other: drop.other,
-        status: moves ? { to: target.status, category: target.category } : undefined,
-      })
+    const { place, other } = drop
+    if (place !== null && other !== null) {
+      ranking.confirm(item, place, other, () =>
+        rank.mutate({
+          item,
+          place,
+          other,
+          status: moves ? { to: target.status, category: target.category } : undefined,
+        }),
+      )
       return
     }
     if (!moves) {
@@ -150,6 +154,7 @@ export function KanbanPage() {
         onConfirm={wait}
         onCancel={() => setMoving(null)}
       />
+      {ranking.dialog}
     </div>
   )
 }

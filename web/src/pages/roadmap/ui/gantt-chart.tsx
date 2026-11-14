@@ -4,7 +4,7 @@ import type { Item, Pricing } from '@/shared/api'
 import { cn } from '@/shared/lib'
 import { toast } from '@/shared/ui'
 import { edgeOf, revealLeft, rowExtent, type Edge } from '../model/edges'
-import { checkDrop, isReorderable, siblingMove, stretchRefusal, type DropCheck, type ItemOf, type Place, type Size } from '../model/edits'
+import { checkDrop, hasGrip, siblingMove, stretchRefusal, type DropCheck, type ItemOf, type Place, type Size } from '../model/edits'
 import type { GanttRow } from '../model/rows'
 import { ticks } from '../model/scale'
 import type { GanttView } from '../model/view'
@@ -204,7 +204,7 @@ export function GanttChart({
   }
 
   const shortcut = (row: GanttRow) => (event: KeyboardEvent<HTMLDivElement>) => {
-    if (!editing || !event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) {
+    if (!editing || !hasGrip(row, editing.itemOf(row)) || !event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) {
       return
     }
     event.preventDefault()
@@ -262,7 +262,7 @@ export function GanttChart({
               const open = opensDetail(row) && row.reference !== null ? () => onOpen(row.reference as string) : undefined
               const extent = rowExtent(row)
               const edge = edgeOf(extent, placement)
-              const reorderable = editing !== undefined && isReorderable(row, editing.itemOf(row))
+              const reorderable = editing !== undefined && hasGrip(row, editing.itemOf(row))
               const stretch = stretchOf(row)
               return (
                 <li

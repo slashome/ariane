@@ -9,11 +9,12 @@ interface ConfirmDialogProps {
   description: ReactNode
   confirmLabel: string
   pending?: boolean
+  tone?: 'destructive' | 'default'
   onConfirm: () => void
 }
 
 // The action button does not close the dialog by itself: the caller closes it once the work is done.
-export function ConfirmDialog({ open, onOpenChange, title, description, confirmLabel, pending, onConfirm }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, onOpenChange, title, description, confirmLabel, pending, tone = 'destructive', onConfirm }: ConfirmDialogProps) {
   return (
     <AlertDialog.Root open={open} onOpenChange={onOpenChange}>
       <AlertDialog.Portal>
@@ -24,7 +25,7 @@ export function ConfirmDialog({ open, onOpenChange, title, description, confirmL
           <div className="mt-2 flex justify-end gap-2">
             <AlertDialog.Cancel className={buttonVariants({ variant: 'outline', size: 'sm' })}>Cancel</AlertDialog.Cancel>
             <AlertDialog.Action
-              className={buttonVariants({ variant: 'destructive', size: 'sm' })}
+              className={buttonVariants({ variant: tone, size: 'sm' })}
               disabled={pending}
               onClick={(event) => {
                 event.preventDefault()

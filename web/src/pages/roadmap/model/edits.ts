@@ -23,6 +23,10 @@ export function isReorderable(row: GanttRow, item: Item | undefined): item is It
   return row.level !== 'release' && row.reference !== null && item !== undefined && !item.archived
 }
 
+export function hasGrip(row: GanttRow, item: Item | undefined): item is Item {
+  return isReorderable(row, item) && item.category !== 'done'
+}
+
 export function checkDrop(dragged: GanttRow, over: GanttRow, place: Place, itemOf: ItemOf): DropCheck {
   if (over.key === dragged.key) {
     return { ok: false, reason: 'Drop it before or after another row' }

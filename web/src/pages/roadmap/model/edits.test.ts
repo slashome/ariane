@@ -1,5 +1,5 @@
 import { makeItem, type Item, type Pricing } from '@/shared/api'
-import { checkDrop, currentSize, groupOf, siblingMove, snapSize, stepSize, stretchedHours, stretchRefusal } from './edits'
+import { checkDrop, currentSize, groupOf, hasGrip, siblingMove, snapSize, stepSize, stretchedHours, stretchRefusal } from './edits'
 import { makeRoadmap, makeEpic, makeRelease, makeStory, makeWork, planned, sampleRoadmap } from './fixtures'
 import { buildRows, type GanttRow } from './rows'
 
@@ -54,6 +54,13 @@ describe('reordering Gantt rows', () => {
     expect(siblingMove(rows, row('p#T1'), 1, itemOf)).toMatchObject({ ok: true, other: row('p#T2'), place: 'after' })
     expect(siblingMove(rows, row('p#T2'), 1, itemOf)).toEqual({ ok: false, reason: 'Already last of its group' })
     expect(siblingMove(rows, row('p#S1'), -1, itemOf)).toEqual({ ok: false, reason: 'Already first of its group' })
+  })
+
+  it('gives no grip to the row of a done item, which stays a place to drop beside', () => {
+    const done = makeItem({ id: 'T1', path: 'tree/p/T1.md', category: 'done', status: 'done' })
+    expect(hasGrip(row('p#T1'), done)).toBe(false)
+    expect(hasGrip(row('p#T2'), itemOf(row('p#T2')))).toBe(true)
+    expect(checkDrop(row('p#T2'), row('p#T1'), 'after', (entry) => (entry.reference === 'p#T1' ? done : itemOf(entry)))).toMatchObject({ ok: true })
   })
 })
 

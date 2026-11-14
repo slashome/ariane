@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useItems } from '@/entities/item'
+import { useItems, useRankConfirmation } from '@/entities/item'
 import { useNodes } from '@/entities/node'
 import { useItemFilters } from '@/features/filter-items'
 import type { Estimate, ForecastWarningKind, Roadmap } from '@/shared/api'
@@ -48,6 +48,7 @@ export function GanttPage() {
   const { data: items = [] } = useItems()
   const { data: nodes = [] } = useNodes()
   const edits = useGanttEdits()
+  const ranking = useRankConfirmation(items)
   const [levels, toggleLevel] = useGanttLevels()
   const [unfolded, toggleColumn] = useUnfoldedColumns()
   const [width, measure] = useElementWidth()
@@ -67,7 +68,7 @@ export function GanttPage() {
   const editing: GanttEditing = {
     itemOf: (row) => (row.reference === null ? undefined : byReference.get(row.reference)),
     pricingOf: (item) => pricing.get(item.node),
-    move: edits.move,
+    move: (item, other, place) => ranking.confirm(item, place, other, () => edits.move(item, other, place)),
     resize: edits.resize,
   }
   const estimates = useMemo(
@@ -116,6 +117,7 @@ export function GanttPage() {
         />
         <UndatedColumns columns={columns} unfolded={unfolded} estimates={estimates} onToggle={toggleColumn} onOpen={open} />
       </div>
+      {ranking.dialog}
     </div>
   )
 }

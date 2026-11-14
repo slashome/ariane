@@ -232,19 +232,47 @@ describe('the Gantt page', () => {
     expect(screen.queryByRole('button', { name: 'Scroll to T4, earlier' })).not.toBeInTheDocument()
   })
 
-  it('moves a row after its next sibling with Alt+↓, through the rank route of the kanban, then refreshes the forecast', async () => {
+  it('moves a row before its previous sibling with Alt+↑, through the rank route of the kanban, then refreshes the forecast', async () => {
     const { fetch } = renderAt('/roadmap/gantt?node=p')
-    const grip = await screen.findByRole('button', { name: 'Reorder T1' })
+    const grip = await screen.findByRole('button', { name: 'Reorder T2' })
     await waitFor(() => expect(screen.getByRole('button', { name: 'Resize T2' })).toBeInTheDocument())
     const before = roadmapFetches(fetch)
     grip.focus()
-    await userEvent.keyboard('{Alt>}{ArrowDown}{/Alt}')
+    await userEvent.keyboard('{Alt>}{ArrowUp}{/Alt}')
     await waitFor(() =>
       expect(sent(fetch, 'POST', '/api/items/rank')).toEqual([
-        { path: 'tree/p/tasks/T1.md', place: 'after', other: 'tree/p/tasks/T2.md', seen: { 'tree/p/tasks/T1.md': 1000, 'tree/p/tasks/T2.md': 2000 } },
+        { path: 'tree/p/tasks/T2.md', place: 'before', other: 'tree/p/tasks/T1.md', seen: { 'tree/p/tasks/T2.md': 2000, 'tree/p/tasks/T1.md': 1000 } },
       ]),
     )
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     await waitFor(() => expect(roadmapFetches(fetch)).toBeGreaterThan(before))
+  })
+
+  it('takes the reorder grip away from done rows', async () => {
+    renderAt('/roadmap/gantt?node=p')
+    await screen.findByRole('button', { name: 'Reorder T2' })
+    expect(screen.queryByRole('button', { name: 'Reorder T1' })).not.toBeInTheDocument()
+  })
+
+  it('asks before a move that ranks every unranked item of the node, and sends it only once confirmed', async () => {
+    const { fetch } = renderAt('/roadmap/gantt?node=p')
+    const grip = await screen.findByRole('button', { name: 'Reorder S1' })
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Resize T2' })).toBeInTheDocument())
+    grip.focus()
+    await userEvent.keyboard('{Alt>}{ArrowDown}{/Alt}')
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog).toHaveTextContent('This move ranks the 2 items of this node: 2 files modified, not committed. Continue?')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(sent(fetch, 'POST', '/api/items/rank')).toEqual([])
+    grip.focus()
+    await userEvent.keyboard('{Alt>}{ArrowDown}{/Alt}')
+    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Continue' }))
+    await waitFor(() =>
+      expect(sent(fetch, 'POST', '/api/items/rank')).toEqual([
+        { path: 'tree/p/stories/S1.md', place: 'after', other: 'tree/p/stories/S2.md', seen: { 'tree/p/stories/S1.md': null, 'tree/p/stories/S2.md': null } },
+      ]),
+    )
   })
 
   it('reorders a row dropped on a sibling and refuses a drop in another group', async () => {
@@ -257,7 +285,7 @@ describe('the Gantt page', () => {
     fireEvent.pointerDown(grip, { pointerId: 1, clientY: 0 })
     fireEvent.pointerMove(grip, { pointerId: 1, clientY: 5 })
     expect(await screen.findByRole('status')).toHaveTextContent('Drop it among its siblings')
-    pointAt.mockImplementation(() => rowOf('Reorder T1'))
+    pointAt.mockImplementation(() => rowOf('T1 bar'))
     fireEvent.pointerMove(grip, { pointerId: 1, clientY: -5 })
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
     fireEvent.pointerUp(grip, { pointerId: 1 })

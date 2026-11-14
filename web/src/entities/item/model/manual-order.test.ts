@@ -1,5 +1,5 @@
 import { makeItem, type Item } from '@/shared/api'
-import { compareManualOrder, placeInOrder, sortByManualOrder } from './manual-order'
+import { compareManualOrder, itemsRankedByMove, placeInOrder, sortByManualOrder } from './manual-order'
 
 const ids = (items: Item[]) => [...items].sort(compareManualOrder).map((item) => item.id)
 
@@ -32,5 +32,41 @@ describe('manual order', () => {
     expect(placeInOrder(items, third, 'before', first).map((item) => item.id)).toEqual(['T3', 'T1', 'T2'])
     expect(placeInOrder(items, first, 'after', third).map((item) => item.id)).toEqual(['T2', 'T3', 'T1'])
     expect(placeInOrder(items, third, 'top', null, { status: 'done' }).map((item) => `${item.id}:${item.status}`)).toEqual(['T3:done', 'T1:todo', 'T2:todo'])
+  })
+
+  describe('the items a move ranks', () => {
+    const node = [
+      makeItem({ id: 'T1', path: 'T1', rank: 1000 }),
+      makeItem({ id: 'T2', path: 'T2', rank: 2000 }),
+      makeItem({ id: 'T3', path: 'T3', priority: 'high' }),
+      makeItem({ id: 'T4', path: 'T4' }),
+      makeItem({ id: 'T5', path: 'T5', category: 'done', status: 'done' }),
+    ]
+    const [t1, t2, t3, t4, t5] = node as [Item, Item, Item, Item, Item]
+
+    it('ranks every unranked item of the node and kind, the moved one included, when it lands below an unranked item', () => {
+      expect(itemsRankedByMove(node, t1, 'after', t3)).toBe(4)
+      expect(itemsRankedByMove(node, t2, 'before', t5)).toBe(4)
+      expect(itemsRankedByMove(node, t5, 'after', t4)).toBe(3)
+    })
+
+    it('ranks nothing else when the move lands above every unranked item', () => {
+      expect(itemsRankedByMove(node, t4, 'before', t3)).toBe(0)
+      expect(itemsRankedByMove(node, t4, 'after', t2)).toBe(0)
+      expect(itemsRankedByMove(node, t2, 'before', t1)).toBe(0)
+      expect(itemsRankedByMove(node, t5, 'top', null)).toBe(0)
+      expect(itemsRankedByMove(node, t5, 'bottom', null)).toBe(0)
+    })
+
+    it('leaves out archived items, items without id, and other nodes and kinds', () => {
+      const crowded = [
+        ...node,
+        makeItem({ id: 'T6', path: 'T6', archived: true }),
+        makeItem({ id: null, path: 'loose' }),
+        makeItem({ id: 'T7', path: 'T7', node: 'q' }),
+        makeItem({ id: 'S1', path: 'S1', kind: 'story' }),
+      ]
+      expect(itemsRankedByMove(crowded, t1, 'after', t4)).toBe(4)
+    })
   })
 })
