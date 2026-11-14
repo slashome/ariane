@@ -185,6 +185,7 @@ name = "Responsable RH"
 
 - `ariane release add <node> <name>` declares a release, last unless `--top`, `--before <release>` or `--after <release>` places it, with `--parking` and `--target YYYY-MM-DD`. The name is trimmed; a blank name, a name the list already has or a target that is not a date is refused. A node with no list anywhere above it starts its own.
 - `ariane release move <node> <name>` with one of `--top`, `--bottom`, `--before <release>`, `--after <release>` changes its place in the delivery order.
+- `ariane release set <node> <name>` with `--parking` or `--no-parking`, and `--target YYYY-MM-DD` or `--no-target`, marks it as a parking release or not and sets or removes its target date, the rest of its entry kept; at least one is required, and a target that is not a date is refused. `PATCH /api/releases` takes the same as `parking` (a boolean) and `target` (a date, or `null` to remove it).
 - `ariane release rename <node> <old> <new>` renames it and rewrites `release` in every item, archived ones included, whose own value is the old name and whose node plans against that list.
 - `ariane release remove <node> <name>` removes it, and is refused while an item of that scope still names it, listing them. Removing the last entry removes the list: the node then plans against its ancestors' list, or none.
 - `ariane release assign <node>#<id> <name>` writes `release` on an epic, a story or a task that is not archived, and `--none` removes it. A name the item's effective list does not declare is refused, and so is any name when no list applies.

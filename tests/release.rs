@@ -121,6 +121,50 @@ fn the_list_is_written_in_place_and_printed_after_each_change() {
 }
 
 #[test]
+fn a_release_is_marked_and_given_a_target_after_the_fact() {
+    let fixture = Fixture::new();
+    let text = stdout(&fixture.run(&[
+        "release",
+        "set",
+        "p",
+        "1.0",
+        "--parking",
+        "--target",
+        "2027-02-01",
+    ]));
+    assert_eq!(
+        text,
+        "p: 1.0 (parking) (target 2027-02-01), plus-tard (parking)\n"
+    );
+    let text = stdout(&fixture.run(&["release", "set", "p", "1.0", "--no-parking", "--no-target"]));
+    assert_eq!(text, "p: 1.0, plus-tard (parking)\n");
+    assert_eq!(
+        fixture.read("tree/p/node.toml"),
+        "# p plans here\n[[release]]\nname = \"1.0\"\n\n[[release]]\nname = \"plus-tard\"\nparking = true\n"
+    );
+    assert!(
+        !fixture
+            .run(&["release", "set", "p", "1.0"])
+            .status
+            .success()
+    );
+    assert!(
+        !fixture
+            .run(&["release", "set", "p", "1.0", "--parking", "--no-parking"])
+            .status
+            .success()
+    );
+    assert!(
+        refused(&fixture.run(&["release", "set", "p", "1.0", "--target", "soon"])).contains("soon")
+    );
+    assert!(
+        refused(&fixture.run(&["release", "set", "p/c", "1.0", "--parking"]))
+            .contains("`p/c` inherits its releases from `p`")
+    );
+    assert!(fixture.run(&["doctor", "--all"]).status.success());
+}
+
+#[test]
 fn an_item_is_assigned_from_its_node_and_an_inherited_list_is_refused() {
     let fixture = Fixture::new();
     let text = stdout(&fixture.run_in("tree/p", &["release", "assign", "T2", "plus-tard"]));

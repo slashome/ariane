@@ -648,10 +648,10 @@ pub struct PersonRequest {
 }
 
 /// Tells an absent key (`None`) from a `null` one (`Some(None)`).
-fn present<'de, D: serde::Deserializer<'de>>(
+fn present<'de, D: serde::Deserializer<'de>, T: Deserialize<'de>>(
     deserializer: D,
-) -> Result<Option<Option<i64>>, D::Error> {
-    Option::<i64>::deserialize(deserializer).map(Some)
+) -> Result<Option<Option<T>>, D::Error> {
+    Option::<T>::deserialize(deserializer).map(Some)
 }
 
 /// Runs one change of the directory, reloads the tree and answers the new
@@ -884,16 +884,27 @@ pub struct ReleaseRequest {
     /// The release it is placed before or after.
     #[serde(default)]
     pub other: Option<String>,
+    /// Whether it is a parking release: `false` on an add when absent,
+    /// unchanged on a change.
     #[serde(default)]
-    pub parking: bool,
-    #[serde(default)]
-    pub target: Option<String>,
+    pub parking: Option<bool>,
+    /// Its target date; on a change, `null` removes it and absent keeps it.
+    #[serde(default, deserialize_with = "present")]
+    pub target: Option<Option<String>>,
     /// A new name, rewritten in the items that name the release.
     #[serde(default)]
     pub rename_to: Option<String>,
 }
 
 impl ReleaseRequest {
+    /// The marks a change sets: those the request gives.
+    fn marks(&self) -> declare::Marks<'_> {
+        declare::Marks {
+            parking: self.parking,
+            target: self.target.as_ref().map(Option::as_deref),
+        }
+    }
+
     /// The place the request asks for, `None` when it asks none; refuses
     /// `before` or `after` without `other`.
     fn place(&self) -> Result<Option<Place<'_>>, String> {
@@ -985,8 +996,8 @@ pub async fn add_release(
         let place = request.place()?.unwrap_or(Place::Bottom);
         let declaration = declare::Declaration {
             name: request.name.clone(),
-            parking: request.parking,
-            target: request.target.clone(),
+            parking: request.parking.unwrap_or(false),
+            target: request.target.clone().flatten(),
         };
         Ok(
             declare::add(tree, &NodePath::new(&request.node), &declaration, place)
@@ -996,9 +1007,10 @@ pub async fn add_release(
     .await
 }
 
-/// `PATCH /api/releases`: moves a release when `place` is given, then renames
-/// it (items rewritten) when `rename_to` is, as `ariane release move` and
-/// `rename`.
+/// `PATCH /api/releases`: moves a release when `place` is given, sets its
+/// `parking` mark and its `target` (`null` removes it) when given, then
+/// renames it (items rewritten) when `rename_to` is, as `ariane release move`,
+/// `set` and `rename`.
 pub async fn change_release(
     Shared(state): Shared<Arc<State>>,
     Json(request): Json<ReleaseRequest>,
@@ -1006,17 +1018,24 @@ pub async fn change_release(
     change_releases(state, request, |tree, request| {
         let node = NodePath::new(&request.node);
         let place = request.place()?;
-        if place.is_none() && request.rename_to.is_none() {
-            return Err("nothing to change: give `place` or `rename_to`".to_owned());
+        let marks = request.marks();
+        if place.is_none()
+            && request.rename_to.is_none()
+            && marks.parking.is_none()
+            && marks.target.is_none()
+        {
+            return Err(
+                "nothing to change: give `place`, `parking`, `target` or `rename_to`".to_owned(),
+            );
         }
-        Ok(move_then_rename(tree, &node, request, place))
+        Ok(move_set_then_rename(tree, &node, request, place))
     })
     .await
 }
 
-/// Moves the release `request` names to `place`, if any, then renames it to
-/// `rename_to`, if any.
-fn move_then_rename(
+/// Moves the release `request` names to `place`, if any, then sets its marks,
+/// if any, then renames it to `rename_to`, if any.
+fn move_set_then_rename(
     tree: &Tree,
     node: &NodePath,
     request: &ReleaseRequest,
@@ -1024,6 +1043,12 @@ fn move_then_rename(
 ) -> ReleaseOutcome {
     if let Some(place) = place
         && let Err(refusal) = declare::move_to(tree, node, &request.name, place)?
+    {
+        return Ok(Err(refusal));
+    }
+    let marks = request.marks();
+    if (marks.parking.is_some() || marks.target.is_some())
+        && let Err(refusal) = declare::set(tree, node, &request.name, marks)?
     {
         return Ok(Err(refusal));
     }

@@ -363,6 +363,8 @@ pub enum ReleaseCommand {
     },
     #[command(about = "Remove a release no item names any more")]
     Remove { node: String, name: String },
+    #[command(about = "Mark a release as parking or not, and set or clear its target date")]
+    Set(ReleaseSetArgs),
     #[command(about = "Plan an epic, a story or a task in a release, or in none")]
     Assign(ReleaseAssignArgs),
 }
@@ -415,6 +417,58 @@ pub struct ReleaseMoveArgs {
 
     #[arg(long, group = "place", help = "Place it last")]
     pub bottom: bool,
+}
+
+/// Arguments of `ariane release set`: the node, the release, and at least one
+/// mark to change.
+#[derive(Args)]
+#[command(group(clap::ArgGroup::new("marks").required(true).multiple(true)))]
+pub struct ReleaseSetArgs {
+    #[arg(help = "The node that declares the release list")]
+    pub node: String,
+    pub name: String,
+
+    #[arg(
+        long,
+        group = "marks",
+        conflicts_with = "no_parking",
+        help = "Make it a parking release: never scheduled nor closed"
+    )]
+    pub parking: bool,
+
+    #[arg(long, group = "marks", help = "Make it a scheduled release again")]
+    pub no_parking: bool,
+
+    #[arg(
+        long,
+        group = "marks",
+        conflicts_with = "no_target",
+        help = "The desired date, YYYY-MM-DD"
+    )]
+    pub target: Option<String>,
+
+    #[arg(long, group = "marks", help = "Remove its target date")]
+    pub no_target: bool,
+}
+
+impl ReleaseSetArgs {
+    /// `Some(true)` for `--parking`, `Some(false)` for `--no-parking`.
+    pub fn parking(&self) -> Option<bool> {
+        match (self.parking, self.no_parking) {
+            (true, _) => Some(true),
+            (_, true) => Some(false),
+            _ => None,
+        }
+    }
+
+    /// `Some(Some(date))` for `--target`, `Some(None)` for `--no-target`.
+    pub fn target(&self) -> Option<Option<&str>> {
+        match (&self.target, self.no_target) {
+            (Some(date), _) => Some(Some(date.as_str())),
+            (None, true) => Some(None),
+            (None, false) => None,
+        }
+    }
 }
 
 /// Arguments of `ariane release assign`: the item, and a release or `none`.

@@ -173,6 +173,19 @@ fn last_position(table: &Table) -> isize {
         .unwrap_or(0)
 }
 
+/// A `YYYY-MM-DD` target as a TOML date, or its refusal.
+fn parse_target(date: &str) -> Result<Result<toml_edit::Datetime, Refusal>> {
+    let date = date.trim();
+    if !is_date(date) {
+        return Ok(Err(Refusal::Invalid(format!(
+            "`{date}` is not a YYYY-MM-DD date"
+        ))));
+    }
+    Ok(Ok(date
+        .parse::<toml_edit::Datetime>()
+        .with_context(|| format!("reading the date {date}"))?))
+}
+
 /// Declares `release` in the list of `node`, at `place`, and returns the list.
 ///
 /// # Errors
@@ -192,16 +205,9 @@ pub fn add(
         Ok(name) => name,
         Err(refusal) => return Ok(Err(refusal)),
     };
-    let target = match release.target.as_deref().map(str::trim) {
-        Some(date) if !is_date(date) => {
-            return Ok(Err(Refusal::Invalid(format!(
-                "`{date}` is not a YYYY-MM-DD date"
-            ))));
-        }
-        Some(date) => Some(
-            date.parse::<toml_edit::Datetime>()
-                .with_context(|| format!("reading the date {date}"))?,
-        ),
+    let target = match release.target.as_deref().map(parse_target).transpose()? {
+        Some(Err(refusal)) => return Ok(Err(refusal)),
+        Some(Ok(date)) => Some(date),
         None => None,
     };
     crate::node::edit(&tree.node_dir(node).join(NODE_FILE), |document| {
@@ -268,6 +274,67 @@ pub fn move_to(
         entries.insert(index, moved);
         for (entry, position) in entries.iter_mut().zip(positions) {
             entry.set_position(position);
+        }
+        Ok(())
+    })
+}
+
+/// What [`set`] changes on a declared release; `None` leaves a mark as it is.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Marks<'a> {
+    /// Whether the release is a parking one: `false` removes the key.
+    pub parking: Option<bool>,
+    /// The target date, `YYYY-MM-DD`; `Some(None)` removes it.
+    pub target: Option<Option<&'a str>>,
+}
+
+/// Changes whether the release `name` of `node` is a parking one, and its
+/// target date, the rest of its entry and of the file kept.
+///
+/// # Errors
+///
+/// Fails when `node.toml` cannot be read or written; refuses an unknown
+/// release, a bad target, a request that sets nothing, an inherited list.
+pub fn set(tree: &Tree, node: &NodePath, name: &str, marks: Marks) -> Result<Result<(), Refusal>> {
+    if let Err(refusal) = check_declarer(tree, node) {
+        return Ok(Err(refusal));
+    }
+    if marks.parking.is_none() && marks.target.is_none() {
+        return Ok(Err(Refusal::Invalid(
+            "nothing to set: give a parking mark or a target".to_owned(),
+        )));
+    }
+    let target = match marks.target {
+        Some(Some(date)) => match parse_target(date)? {
+            Ok(date) => Some(Some(date)),
+            Err(refusal) => return Ok(Err(refusal)),
+        },
+        Some(None) => Some(None),
+        None => None,
+    };
+    crate::node::edit(&tree.node_dir(node).join(NODE_FILE), |document| {
+        let entries = list(document)?;
+        let index = index_of(&names(entries), name, node)?;
+        let Some(entry) = entries.get_mut(index) else {
+            return Ok(());
+        };
+        match marks.parking {
+            Some(true) => {
+                entry.insert("parking", value(true));
+            }
+            Some(false) => {
+                entry.remove("parking");
+            }
+            None => {}
+        }
+        match target {
+            Some(Some(date)) => {
+                entry.insert("target", value(date));
+            }
+            Some(None) => {
+                entry.remove("target");
+            }
+            None => {}
         }
         Ok(())
     })
@@ -783,5 +850,69 @@ mod tests {
         refused("p", "D1", None);
         refused("p", "T0", Some("0.2"));
         assert!(errors(&repo).is_empty(), "{:?}", errors(&repo));
+    }
+
+    #[test]
+    fn a_set_changes_the_parking_mark_and_the_target_and_nothing_else() {
+        let repo = sample();
+        let p = NodePath::new("p");
+        let marks =
+            |parking: Option<bool>, target: Option<Option<&'static str>>| Marks { parking, target };
+        set(&tree(&repo), &p, "0.1", marks(None, Some(None)))
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            node_toml(&repo, "p"),
+            NODE.replace("target = 2027-01-01 # soon\n", "")
+        );
+        set(
+            &tree(&repo),
+            &p,
+            "0.1",
+            marks(None, Some(Some(" 2027-02-01 "))),
+        )
+        .unwrap()
+        .unwrap();
+        set(&tree(&repo), &p, "plus-tard", marks(Some(false), None))
+            .unwrap()
+            .unwrap();
+        set(
+            &tree(&repo),
+            &p,
+            "0.2",
+            marks(Some(true), Some(Some("2027-03-01"))),
+        )
+        .unwrap()
+        .unwrap();
+        let text = node_toml(&repo, "p");
+        assert!(
+            text.contains("[[release]]\nname = \"0.1\"\ntarget = 2027-02-01\n"),
+            "{text}"
+        );
+        assert!(
+            text.contains("[[release]]\nname = \"0.2\"\nparking = true\ntarget = 2027-03-01\n"),
+            "{text}"
+        );
+        assert!(
+            text.contains("[[release]]\nname = \"plus-tard\"\n\n[tracker]"),
+            "{text}"
+        );
+        assert!(text.starts_with("# Releases of p\ndescription = \"P.\"\n\n# the next one\n"));
+        assert!(errors(&repo).is_empty(), "{:?}", errors(&repo));
+        let tree = tree(&repo);
+        for (node, name, marks) in [
+            ("p", "0.1", marks(None, None)),
+            ("p", "0.1", marks(None, Some(Some("soon")))),
+            ("p", "9.9", marks(Some(true), None)),
+        ] {
+            assert!(matches!(
+                set(&tree, &NodePath::new(node), name, marks).unwrap(),
+                Err(Refusal::Invalid(_))
+            ));
+        }
+        assert!(matches!(
+            set(&tree, &NodePath::new("p/c"), "0.1", marks(Some(true), None)).unwrap(),
+            Err(Refusal::Inherited { .. })
+        ));
     }
 }

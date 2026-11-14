@@ -1010,6 +1010,53 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_release_change_sets_its_parking_mark_and_clears_or_keeps_its_target() {
+        let repo = sample();
+        let (status, body) = send(
+            &repo,
+            "PATCH",
+            "/api/releases",
+            serde_json::json!({ "node": "p", "name": "plus-tard", "parking": false, "target": "2027-06-01" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["releases"][1]["parking"], false);
+        assert_eq!(body["releases"][1]["target"], "2027-06-01");
+        let (status, body) = send(
+            &repo,
+            "PATCH",
+            "/api/releases",
+            serde_json::json!({ "node": "p", "name": "1.0", "parking": true }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["releases"][0]["parking"], true);
+        assert_eq!(body["releases"][0]["target"], "2027-03-01");
+        let (status, body) = send(
+            &repo,
+            "PATCH",
+            "/api/releases",
+            serde_json::json!({ "node": "p", "name": "1.0", "target": null }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert!(body["releases"][0]["target"].is_null(), "{body}");
+        let (status, body) = send(
+            &repo,
+            "PATCH",
+            "/api/releases",
+            serde_json::json!({ "node": "p", "name": "1.0", "target": "someday" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+        let text = std::fs::read_to_string(repo.root().join("tree/p/node.toml")).unwrap();
+        assert!(
+            text.contains("[[release]]\nname = \"1.0\"\nparking = true\n\n[[release]]\nname = \"plus-tard\"\ntarget = 2027-06-01\n"),
+            "{text}"
+        );
+    }
+
+    #[tokio::test]
     async fn a_release_write_is_refused_with_its_reason_and_an_inherited_list_names_its_node() {
         let repo = sample();
         repo.write(

@@ -1,5 +1,5 @@
-//! `ariane release`: declares, orders, renames and removes the releases of a
-//! node, and plans an item in one (ADR-0023). Every subcommand writes at once
+//! `ariane release`: declares, orders, renames, marks and removes the releases
+//! of a node, and plans an item in one (ADR-0023). Every subcommand writes at once
 //! and never commits, like `ariane people`; it goes through [`super::declare`],
 //! the code `ariane serve` runs for the same gestures.
 
@@ -7,7 +7,7 @@ use std::process::ExitCode;
 
 use anyhow::{Result, bail};
 
-use super::declare::{self, Declaration, Place, Refusal};
+use super::declare::{self, Declaration, Marks, Place, Refusal};
 use crate::cli::{ReleaseArgs, ReleaseCommand};
 use crate::tree::{NodePath, Tree};
 
@@ -93,6 +93,15 @@ pub fn run(tree: &Tree, args: &ReleaseArgs, here: Option<&NodePath>) -> Result<E
         ReleaseCommand::Remove { node, name } => {
             let node = NodePath::new(node);
             settle(declare::remove(tree, &node, name)?)?;
+            Some(node)
+        }
+        ReleaseCommand::Set(marked) => {
+            let node = NodePath::new(&marked.node);
+            let marks = Marks {
+                parking: marked.parking(),
+                target: marked.target(),
+            };
+            settle(declare::set(tree, &node, &marked.name, marks)?)?;
             Some(node)
         }
         ReleaseCommand::Assign(assign) => {
