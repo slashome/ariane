@@ -15,6 +15,8 @@
 //! The writing endpoints — `PATCH /api/items`, `PUT /api/dashboard`,
 //! `PUT /api/settings/theme`, `PUT` and `DELETE /api/proxy/routes`,
 //! `POST`, `PATCH` and `DELETE /api/releases` (`ariane release`),
+//! `PATCH` and `DELETE /api/calendar` (`ariane calendar set|unset`),
+//! `PATCH /api/estimates` (`ariane estimates set|unset`),
 //! `POST /api/commit`, `POST /api/push`, `POST /api/pull`, `POST /api/discard` — run on the
 //! blocking pool under the state's `busy` lock, one at a time, and never commit
 //! unless asked.
@@ -37,6 +39,9 @@ use tokio_stream::{Stream, StreamExt};
 use super::State;
 use super::git;
 use super::write::{self, Move, Patch, Refusal};
+use crate::calendar::write::{
+    BlockSpec, Change as CalendarChange, NodeChange, Refusal as CalendarRefusal,
+};
 use crate::item::Kind;
 use crate::release::declare::{self, Place, Refusal as ReleaseRefusal};
 use crate::tree::{NodePath, Tree};
@@ -185,7 +190,7 @@ pub async fn show(Shared(state): Shared<Arc<State>>, Query(query): Query<ShowQue
 }
 
 /// `GET /api/nodes`: every node with its own `description`, its item count, effective
-/// workflow, releases in delivery order (`[[release]]`, inherited, `null` when none applies) and the node that declares them, what sizes cost (`[estimates]`, inherited key by key), people (`[people]`, inherited), personas (`[personas]`, inherited) and tracker binding (after `node.toml` inheritance, ADR-0008 and
+/// workflow, releases in delivery order (`[[release]]`, inherited, `null` when none applies) and the node that declares them, what sizes cost (`[estimates]`, inherited key by key) and the node each key comes from (`estimates_from`, `null` for the value of ADR-0025), people (`[people]`, inherited), personas (`[personas]`, inherited) and tracker binding (after `node.toml` inheritance, ADR-0008 and
 /// ADR-0011) and the date of its latest commit, computed when the tree was
 /// loaded. The tracker is the raw `[tracker]` table, or `null`.
 pub async fn nodes(Shared(state): Shared<Arc<State>>) -> Response {
@@ -217,6 +222,7 @@ pub async fn nodes(Shared(state): Shared<Arc<State>>) -> Response {
                     "releases": effective.releases,
                     "releases_from": effective.releases_from,
                     "estimates": effective.estimates,
+                    "estimates_from": crate::estimate::declare::sources(&tree.configs, &node.path),
                     "people": effective.people,
                     "personas": effective.personas,
                     "tracker": effective.tracker,
@@ -467,8 +473,19 @@ pub async fn settings(Shared(state): Shared<Arc<State>>) -> Response {
 
 /// `GET /api/calendar`: the personal work calendar, as `ariane calendar
 /// --json`: the file read, whether it exists, its valid part and its problems.
-/// Read only.
 pub async fn calendar(Shared(state): Shared<Arc<State>>) -> Response {
+    with_personal_tree(&state, |personal, tree| {
+        overview(crate::calendar::overview(personal, tree))
+    })
+}
+
+/// Runs `answer` on the personal repository and its tree: the served tree
+/// when the server serves the personal repository, else that repository's,
+/// loaded for the occasion.
+fn with_personal_tree(
+    state: &State,
+    answer: impl FnOnce(&std::path::Path, &Tree) -> Response,
+) -> Response {
     let personal = crate::calendar::personal_of(&state.root, state.config.repo_path().as_deref());
     if crate::calendar::is_personal(&state.root, &personal) {
         let Ok(tree) = state.tree.read() else {
@@ -477,12 +494,211 @@ pub async fn calendar(Shared(state): Shared<Arc<State>>) -> Response {
                 "the tree lock is poisoned",
             );
         };
-        return overview(crate::calendar::overview(&personal, &tree));
+        return answer(&personal, &tree);
     }
     match Tree::load(&personal) {
-        Ok(tree) => overview(crate::calendar::overview(&personal, &tree)),
+        Ok(tree) => answer(&personal, &tree),
         Err(failure) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
     }
+}
+
+/// The body of `PATCH /api/calendar`: a node and what changes in its table,
+/// or no node and the global keys. An absent key is left as it is.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CalendarRequest {
+    /// The node whose table changes; absent for the global keys.
+    #[serde(default)]
+    pub node: Option<String>,
+    /// The node's blocks, replacing the old ones; `[]` removes them.
+    #[serde(default)]
+    pub blocks: Option<Vec<BlockSpec>>,
+    /// The node's focus; `null` removes it.
+    #[serde(default, deserialize_with = "present")]
+    pub focus: Option<Option<f64>>,
+    /// The node's days off, or every node's without a node; `[]` removes them.
+    #[serde(default)]
+    pub days_off: Option<Vec<String>>,
+    /// The time zone of every block; only without a node.
+    #[serde(default)]
+    pub timezone: Option<String>,
+}
+
+impl CalendarRequest {
+    /// The change the request asks for; refuses keys of a node table without
+    /// a node, and the time zone with one.
+    fn change(self) -> Result<CalendarChange, String> {
+        match self.node {
+            Some(node) => {
+                if self.timezone.is_some() {
+                    return Err("`timezone` is global: send it without `node`".to_owned());
+                }
+                Ok(CalendarChange::Node {
+                    node: NodePath::new(node),
+                    change: NodeChange {
+                        blocks: self.blocks,
+                        focus: self.focus,
+                        days_off: self.days_off,
+                    },
+                })
+            }
+            None => {
+                if self.blocks.is_some() || self.focus.is_some() {
+                    return Err("`blocks` and `focus` belong to a node: send `node`".to_owned());
+                }
+                Ok(CalendarChange::Globals {
+                    timezone: self.timezone,
+                    days_off: self.days_off,
+                })
+            }
+        }
+    }
+}
+
+/// The body of `DELETE /api/calendar`.
+#[derive(Debug, Deserialize)]
+pub struct CalendarRemoval {
+    /// The node whose table goes.
+    pub node: String,
+}
+
+/// Writes one change of the personal calendar, reloads the tree so that the
+/// browsers are told, and answers the calendar as `GET /api/calendar` does.
+/// `422` for a refused change: `error`, and for a result with errors the
+/// `problems` it would have, each overlap naming its two nodes (`node`,
+/// `other`) and the position of each block in its node's list (`block`,
+/// `other_block`).
+async fn change_calendar(state: Arc<State>, change: CalendarChange) -> Response {
+    exclusive(state, move |state| {
+        let written = with_personal_tree(
+            state,
+            |personal, tree| match crate::calendar::write::write(personal, tree, &change) {
+                Err(failure) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
+                Ok(Err(refusal)) => refused_calendar(&refusal),
+                Ok(Ok(_)) => StatusCode::OK.into_response(),
+            },
+        );
+        if written.status() != StatusCode::OK {
+            return written;
+        }
+        if let Err(failure) = state.reload() {
+            return error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}"));
+        }
+        with_personal_tree(state, |personal, tree| {
+            overview(crate::calendar::overview(personal, tree))
+        })
+    })
+    .await
+}
+
+/// The `422` of a refused change of the calendar.
+fn refused_calendar(refusal: &CalendarRefusal) -> Response {
+    let mut body = json!({ "error": refusal.to_string() });
+    if let CalendarRefusal::Problems(problems) = refusal {
+        body["problems"] = serde_json::to_value(problems).unwrap_or(Value::Null);
+    }
+    (StatusCode::UNPROCESSABLE_ENTITY, Json(body)).into_response()
+}
+
+/// `PATCH /api/calendar`: sets a node's `blocks`, `focus` (`null` removes it)
+/// and `days_off`, or without `node` the `timezone` and the `days_off` of
+/// every node, as `ariane calendar set`; `400` for a malformed request.
+pub async fn change_calendar_entry(
+    Shared(state): Shared<Arc<State>>,
+    Json(request): Json<CalendarRequest>,
+) -> Response {
+    match request.change() {
+        Ok(change) => change_calendar(state, change).await,
+        Err(malformed) => error(StatusCode::BAD_REQUEST, &malformed),
+    }
+}
+
+/// `DELETE /api/calendar`: removes a node's table, as `ariane calendar unset`.
+pub async fn remove_calendar_entry(
+    Shared(state): Shared<Arc<State>>,
+    Json(request): Json<CalendarRemoval>,
+) -> Response {
+    let change = CalendarChange::Remove {
+        node: NodePath::new(request.node),
+    };
+    change_calendar(state, change).await
+}
+
+/// The body of `PATCH /api/estimates`.
+#[derive(Debug, Deserialize)]
+pub struct EstimatesRequest {
+    /// The node whose own `[estimates]` changes.
+    pub node: String,
+    /// The keys to change: a number or a string sets one, `null` removes it.
+    pub estimates: serde_json::Map<String, Value>,
+}
+
+impl EstimatesRequest {
+    /// The changes as [`crate::estimate::declare::change`] takes them;
+    /// refuses a value that is neither a number, a string nor `null`.
+    fn changes(&self) -> Result<Vec<(String, Option<toml::Value>)>, String> {
+        self.estimates
+            .iter()
+            .map(|(key, value)| {
+                let value = match value {
+                    Value::Null => None,
+                    Value::String(text) => Some(toml::Value::String(text.clone())),
+                    Value::Number(number) => Some(match number.as_i64() {
+                        Some(integer) => toml::Value::Integer(integer),
+                        None => toml::Value::Float(number.as_f64().unwrap_or(f64::NAN)),
+                    }),
+                    other => {
+                        return Err(format!(
+                            "`{key}`: {other} is neither a number, a string nor null"
+                        ));
+                    }
+                };
+                Ok((key.clone(), value))
+            })
+            .collect()
+    }
+}
+
+/// `PATCH /api/estimates`: sets or removes keys of a node's own `[estimates]`
+/// all at once, as `ariane estimates set|unset`, and answers the node's
+/// `estimates` and, key by key, the node each comes from (`estimates_from`,
+/// `null` for the value of ADR-0025). `400` for a value of the wrong type,
+/// `422` for a refused change, nothing written.
+pub async fn change_estimates(
+    Shared(state): Shared<Arc<State>>,
+    Json(request): Json<EstimatesRequest>,
+) -> Response {
+    let changes = match request.changes() {
+        Ok(changes) => changes,
+        Err(malformed) => return error(StatusCode::BAD_REQUEST, &malformed),
+    };
+    exclusive(state, move |state| {
+        let node = NodePath::new(&request.node);
+        let outcome = match state.tree.read() {
+            Ok(tree) => crate::estimate::declare::change(&tree, &node, &changes),
+            Err(_) => {
+                return error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "the tree lock is poisoned",
+                );
+            }
+        };
+        match outcome {
+            Err(failure) => {
+                return error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}"));
+            }
+            Ok(Err(refusal)) => return error(StatusCode::UNPROCESSABLE_ENTITY, &refusal),
+            Ok(Ok(())) => {}
+        }
+        if let Err(failure) = state.reload() {
+            return error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}"));
+        }
+        with_tree(state, |tree| {
+            serde_json::to_value(crate::estimate::declare::report(tree, &node))
+                .unwrap_or(Value::Null)
+        })
+    })
+    .await
 }
 
 /// The query of `GET /api/roadmap`.
@@ -1129,7 +1345,7 @@ pub async fn commit(
             Ok(git::Committed::Commit(hash)) => Json(json!({ "commit": hash })).into_response(),
             Ok(git::Committed::NothingToCommit) => error(
                 StatusCode::CONFLICT,
-                "nothing to commit in tree/ or settings.toml",
+                "nothing to commit in tree/, settings.toml or calendar.toml",
             ),
             Err(failure) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
         }
@@ -1216,7 +1432,7 @@ pub async fn discard(
             }
             Ok(git::Discarded::NothingToDiscard) => error(
                 StatusCode::CONFLICT,
-                "nothing to discard in tree/ or settings.toml",
+                "nothing to discard in tree/, settings.toml or calendar.toml",
             ),
             Err(failure) => error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}")),
         }

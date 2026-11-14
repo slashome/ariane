@@ -6,7 +6,8 @@
 //! [`OsString`] without assuming UTF-8 (ADR-0005).
 //!
 //! It also dates each node by its latest commit, and runs the git actions the
-//! interface offers on the content it edits — `tree/` and `settings.toml`:
+//! interface offers on the content it edits — `tree/`, `settings.toml` and
+//! the personal `calendar.toml`:
 //! commit what changed there, push, pull, discard changes there, and show the
 //! diff of one file. Commit, push and pull use the
 //! machine's own git identity and configured upstream; nothing here sets an
@@ -19,10 +20,14 @@ use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 
+use crate::calendar::FILE as CALENDAR;
 use crate::settings::FILE as SETTINGS;
 
 /// The paths the interface edits, and the only ones its git actions touch.
-const CONTENT: [&str; 2] = ["tree", SETTINGS];
+const CONTENT: [&str; 3] = ["tree", SETTINGS, CALENDAR];
+
+/// The files at the root of the repository among [`CONTENT`].
+const ROOT_FILES: [&str; 2] = [SETTINGS, CALENDAR];
 
 /// One uncommitted path and its two-letter porcelain code, such as ` M` or `??`.
 #[derive(Debug, PartialEq, Eq)]
@@ -90,12 +95,12 @@ pub enum Committed {
     NothingToCommit,
 }
 
-/// Stages every change of the content — `tree/` and `settings.toml` — and
-/// commits it with `message`.
+/// Stages every change of the content — `tree/`, `settings.toml` and
+/// `calendar.toml` — and commits it with `message`.
 ///
-/// Staging is limited to what the interface edits. `settings.toml` is staged
-/// only when it exists or git knows it: a pathspec that matches nothing makes
-/// `git add` fail. Whether
+/// Staging is limited to what the interface edits. A file at the root is
+/// staged only when it exists or git knows it: a pathspec that matches nothing
+/// makes `git add` fail. Whether
 /// anything is staged is asked to `git diff --cached --quiet`, which exits `1`
 /// when there is something to commit.
 ///
@@ -104,10 +109,12 @@ pub enum Committed {
 /// Fails when a git command cannot run or reports an error.
 pub fn commit(root: &Path, message: &str) -> Result<Committed> {
     let mut paths = vec!["tree"];
-    if root.join(SETTINGS).exists()
-        || run(root, &["ls-files", "--error-unmatch", "--", SETTINGS]).is_ok()
-    {
-        paths.push(SETTINGS);
+    for file in ROOT_FILES {
+        if root.join(file).exists()
+            || run(root, &["ls-files", "--error-unmatch", "--", file]).is_ok()
+        {
+            paths.push(file);
+        }
     }
     let mut args = vec!["add", "-A", "--"];
     args.extend(paths);
@@ -182,8 +189,8 @@ fn run(root: &Path, args: &[&str]) -> Result<String> {
 }
 
 /// Checks that `path` names content the interface edits — something under
-/// `tree/`, or `settings.toml` — relative to the repository root, and returns
-/// it as a path.
+/// `tree/`, `settings.toml` or `calendar.toml` — relative to the repository
+/// root, and returns it as a path.
 ///
 /// Only plain components are accepted: an absolute path, `.` or `..` anywhere
 /// is refused, so the result can never leave the content.
@@ -199,11 +206,11 @@ pub fn in_content(path: &str) -> Result<PathBuf> {
     {
         bail!("{path} is not a plain relative path");
     }
-    if candidate == Path::new(SETTINGS) {
+    if ROOT_FILES.iter().any(|file| candidate == Path::new(file)) {
         return Ok(candidate.to_path_buf());
     }
     if candidate.components().next() != Some(Component::Normal(OsStr::new("tree"))) {
-        bail!("{path} is neither under tree/ nor {SETTINGS}");
+        bail!("{path} is neither under tree/ nor {SETTINGS} nor {CALENDAR}");
     }
     Ok(candidate.to_path_buf())
 }
@@ -218,7 +225,7 @@ pub enum Discarded {
 }
 
 /// Throws away the uncommitted changes under `paths`, or of all the content
-/// (`tree/` and `settings.toml`) when `paths` is empty.
+/// (`tree/`, `settings.toml` and `calendar.toml`) when `paths` is empty.
 ///
 /// The changed paths are read from `git status` over the content, then kept when
 /// they fall under one of `paths` (a status limited to a path would not see the
@@ -663,7 +670,11 @@ mod tests {
         assert!(in_content("tree/a.md").is_ok());
         assert!(in_content("tree").is_ok());
         assert!(in_content("settings.toml").is_ok());
+        assert!(in_content("calendar.toml").is_ok());
         for refused in [
+            "calendar.toml/x",
+            "tree/../calendar.toml",
+            "tree/calendar.toml/../../calendar.toml",
             "/etc/passwd",
             "tree/../outside.md",
             "../tree/a.md",
@@ -758,6 +769,39 @@ mod tests {
         assert!(diff(dir.path(), "tree/a.md").unwrap().contains("-a"));
         assert!(diff(dir.path(), "tree/missing.md").is_err());
         assert!(diff(dir.path(), "../etc/passwd").is_err());
+    }
+
+    #[test]
+    fn the_calendar_is_committed_diffed_and_discarded_like_the_settings() {
+        let dir = repository();
+        let calendar = dir.path().join("calendar.toml");
+        std::fs::write(&calendar, "version = 1\ntimezone = \"UTC\"\n").unwrap();
+        let untracked = diff(dir.path(), "calendar.toml").unwrap();
+        assert!(untracked.contains("+timezone = \"UTC\""), "{untracked}");
+        assert!(matches!(
+            commit(dir.path(), "calendar").unwrap(),
+            Committed::Commit(_)
+        ));
+        assert!(status(dir.path()).unwrap().entries.is_empty());
+        std::fs::write(&calendar, "version = 1\ntimezone = \"Europe/Paris\"\n").unwrap();
+        let tracked = diff(dir.path(), "calendar.toml").unwrap();
+        assert!(
+            tracked.contains("+timezone = \"Europe/Paris\""),
+            "{tracked}"
+        );
+        assert_eq!(
+            discard(dir.path(), &[PathBuf::from("calendar.toml")]).unwrap(),
+            Discarded::Paths(vec![OsString::from("calendar.toml")])
+        );
+        assert_eq!(
+            std::fs::read_to_string(&calendar).unwrap(),
+            "version = 1\ntimezone = \"UTC\"\n"
+        );
+        std::fs::write(&calendar, "version = 1\ntimezone = \"Asia/Tokyo\"\n").unwrap();
+        let Discarded::Paths(everything) = discard(dir.path(), &[]).unwrap() else {
+            panic!("expected the calendar discarded");
+        };
+        assert_eq!(everything, vec![OsString::from("calendar.toml")]);
     }
 
     #[test]

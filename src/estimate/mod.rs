@@ -21,6 +21,8 @@
 //! A story or an epic whose children are all dropped is split all the same and
 //! weighs zero hours, never its provisional or default size.
 
+pub mod declare;
+
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
 

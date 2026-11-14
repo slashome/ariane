@@ -157,6 +157,13 @@ tester = "owner"
 
 The hours an item weighs are computed, never written: a task weighs the hours of its `size`, else those of `default`; a story with tasks weighs the sum of its tasks and an epic with stories the sum of its stories, their own `size` ignored; a story or an epic not split yet weighs its provisional `size`, else `default`. Dropped work counts in no sum, and a story or an epic whose children are all dropped weighs 0 hours. Finished work has nothing remaining; a task in a status of the `testing` stage has no hours of work remaining, and all its testing. Each piece of work adds `hours × test_ratio` of testing, priced by its own node. `ariane tasks --json`, `ariane show --json` and the interface give each task, story and epic its `estimate`: `hours` and `test_hours`, the `remaining_hours` and `remaining_test_hours` of the work neither done nor dropped, the `tester`, the `basis` (`size`, `provisional`, `default` or `tasks`), the `size` priced, and how many of the summed `parts` are `guessed` from a default or provisional size.
 
+**Changing estimates.** A key of `[estimates]` is always written in the node's own `node.toml`, through `ariane estimates` or the interface (`PATCH /api/estimates`), which run the same code, write at once and never commit. Since the table is inherited key by key, setting a key on a node that inherits the others writes only that key there; nothing is copied down:
+
+- `ariane estimates [node]` prints the eight values that apply to a node, by default the current directory's, each with where it comes from: the node itself (`own`), an ancestor, or the default above. `--json` gives `node`, `estimates` and `estimates_from`, which maps each key to the node that declares it, `null` for a default; `GET /api/nodes` gives `estimates_from` along with `estimates` for every node.
+- `ariane estimates set <node> <key> <value>` writes one key: the hours of a size and `test_ratio` are numbers, `default` and `tester` words. A value the rules above refuse, or another key, is refused and nothing is written.
+- `ariane estimates unset <node> <key>` removes it: the key is inherited again. Removing the last key removes the table.
+- `PATCH /api/estimates` takes `node` and `estimates`, an object of keys whose value sets the key, or `null` to remove it; all of them are written or none. It answers as `--json`.
+
 **People.** Each `[people.<handle>]` table declares one person an item may wait for: `name` MUST be given, free text; every other key is the person's id in a tracker, such as `monday = 58294966`. A handle matches `^[a-z][a-z0-9-]*$`.
 
 **Personas.** Each `[personas."<id>"]` table declares one persona a story may be written for ([ADR-0018](docs/adr/0018-name-the-personas-a-story-is-written-for.md)): `name` MUST be given, free text, the readable label; no other key is allowed. An id SHOULD read `<group>:<role>`, such as `cmc:dev` or `user:rh`; it is a quoted TOML key because of its colon:
@@ -352,7 +359,7 @@ blocks = [
 | `node."<path>".blocks[].to` | string | MUST | `HH:MM` after `from`, `24:00` at the latest. A block never crosses midnight: one that does is written as two. |
 | `node."<path>".days_off` | list of strings | MAY | Days off of this node only, written as the global `days_off`. |
 
-No other key is allowed. Writing the file keeps its comments and layout: `ariane calendar edit` saves the text exactly as the owner wrote it.
+No other key is allowed. Writing the file keeps its comments and layout: `ariane calendar edit` saves the text exactly as the owner wrote it, and `ariane calendar set|unset` (§2.5) change only the keys they name.
 
 ### 2.3 Resolution
 
@@ -376,6 +383,17 @@ A node works on the blocks of the nearest node, itself or an ancestor, whose tab
 | A `node."<path>"` table that names no node of the tree, such as a node renamed or moved | warning — its blocks still count, and still take part in the overlap checks |
 | A `node."<path>"` table without blocks: its `focus` and `days_off` are never used | warning |
 | A `calendar.toml` in a content repository that is not the personal one | warning — it is never read |
+
+### 2.5 Writing the calendar
+
+Besides `ariane calendar edit`, the calendar is changed one node or one global key at a time, through `ariane calendar set|unset` or the interface (`PATCH` and `DELETE /api/calendar`), which run the same code, write at once and never commit:
+
+- `ariane calendar set <node>` with `--blocks "mon-fri 09:00-18:00; sat 10:00-13:00"` (the days, then the hours, blocks separated by `;`; empty for none) replaces the node's blocks, `--focus <0..1>` sets its focus and `--no-focus` removes it, `--days-off "2026-12-24..2027-01-02, 2027-05-01"` (separated by `,`; empty for none) replaces its own days off. The node's table is created, last, when it has none.
+- `ariane calendar set` without a node, with `--timezone <IANA>` and `--days-off`, sets the keys of every node. `--timezone` is refused with a node, `--blocks` and `--focus` without one.
+- `ariane calendar unset <node>` removes the node's table.
+- `PATCH /api/calendar` takes `node` with `blocks` (a list of `{days, from, to}`), `focus` (`null` removes it) and `days_off`, or no `node` with `timezone` and `days_off`; an absent key is left as it is. `DELETE /api/calendar` takes `node`. Both answer as `GET /api/calendar`.
+
+A missing file is created from `version` and the system's time zone. Every change is checked with the rules of §2.4 on the calendar it would leave, and written only when that calendar has no error: an overlap, a value out of its format or range, refuse the change and the file is left as it was, an error already in the file included, until a change fixes it. The command prints each error; the interface answers `422` with `error` and `problems`, where an overlap names its two nodes (`node`, `other`) and the position of each block in its node's list, from 0 (`block`, `other_block`). Warnings do not stop a change and are printed, or found in the answer's `problems`. A new table for a node the tree does not have is refused; an existing one can still be changed or removed. The rest of the file, its comments and its other tables, is kept.
 
 ## 3. Forecast
 

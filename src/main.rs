@@ -177,6 +177,7 @@ fn run() -> Result<ExitCode> {
         cli::Command::Settings(args) => settings::run(&location.root, &args),
         cli::Command::Calendar(args) => calendar::run(&location.root, &tree, &args, here),
         cli::Command::Roadmap(args) => roadmap::run(&location.root, &tree, &args, here),
+        cli::Command::Estimates(args) => estimate::declare::run(&tree, &args, here),
         cli::Command::Release(args) => {
             release::command::run(&tree, &args, here.filter(|node| !node.is_home()))
         }

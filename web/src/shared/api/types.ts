@@ -164,6 +164,90 @@ export interface ReleaseList {
   rewritten: string[]
 }
 
+export type EstimateKey = keyof Pricing
+
+export type EstimateSources = Record<EstimateKey, string | null>
+
+export interface EstimatesChange {
+  node: string
+  estimates: Partial<Record<EstimateKey, number | string | null>>
+}
+
+export interface EstimatesReport {
+  node: string
+  estimates: Pricing
+  estimates_from: EstimateSources
+}
+
+export interface CalendarBlock {
+  days: string
+  weekdays: string[]
+  from: string
+  to: string
+  hours: number
+}
+
+export interface DaysOff {
+  from: string
+  to: string
+}
+
+export interface NodeCalendar {
+  focus: number
+  blocks: CalendarBlock[]
+  days_off: DaysOff[]
+}
+
+export interface Calendar {
+  version: number
+  timezone: string
+  days_off: DaysOff[]
+  nodes: Record<string, NodeCalendar>
+}
+
+export type CalendarProblemKind = 'invalid' | 'overlap' | 'unknown_node' | 'unused'
+
+export interface CalendarProblem {
+  kind: CalendarProblemKind
+  node: string | null
+  other?: string
+  block?: number
+  other_block?: number
+  message: string
+}
+
+export interface CalendarOverview {
+  file: string
+  present: boolean
+  calendar: Calendar | null
+  problems: CalendarProblem[]
+}
+
+export interface BlockSpec {
+  days: string
+  from: string
+  to: string
+}
+
+export interface NodeCalendarChange {
+  node: string
+  blocks?: BlockSpec[]
+  focus?: number | null
+  days_off?: string[]
+}
+
+export interface GlobalCalendarChange {
+  timezone?: string
+  days_off?: string[]
+}
+
+export type CalendarChange = NodeCalendarChange | GlobalCalendarChange
+
+export interface CalendarRefusal {
+  error: string
+  problems?: CalendarProblem[]
+}
+
 export interface NodeSummary {
   path: string
   description?: string | null
@@ -172,6 +256,7 @@ export interface NodeSummary {
   releases?: Release[] | null
   releases_from?: string | null
   estimates?: Pricing
+  estimates_from?: EstimateSources
   people?: Record<string, Person>
   personas?: Record<string, Persona>
   tracker_from?: string | null

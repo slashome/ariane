@@ -1,6 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, addRelease, changeRelease, fetchRoadmap, removeRelease } from './client'
-import type { ReleaseList, Roadmap } from './types'
+import {
+  ApiError,
+  addRelease,
+  changeCalendar,
+  changeEstimates,
+  changeRelease,
+  fetchRoadmap,
+  removeCalendarNode,
+  removeRelease,
+} from './client'
+import type { CalendarOverview, CalendarRefusal, EstimatesReport, ReleaseList, Roadmap } from './types'
 
 const roadmap: Roadmap = {
   node: 'slashome/ariane',
@@ -97,5 +106,69 @@ describe('release writes', () => {
     const inherited = await addRelease({ node: 'p/c', name: '2.0' }).catch((error: unknown) => error)
     expect((inherited as ApiError).message).toBe('`p/c` inherits its releases from `p`: change them there')
     expect((inherited as ApiError).body).toMatchObject({ declared_in: 'p' })
+  })
+})
+
+const overview: CalendarOverview = {
+  file: '/home/me/_ariane/calendar.toml',
+  present: true,
+  calendar: {
+    version: 1,
+    timezone: 'Europe/Paris',
+    days_off: [],
+    nodes: {
+      p: {
+        focus: 0.5,
+        blocks: [{ days: 'mon-fri', weekdays: ['mon', 'tue', 'wed', 'thu', 'fri'], from: '09:00', to: '12:00', hours: 15 }],
+        days_off: [],
+      },
+    },
+  },
+  problems: [],
+}
+
+describe('calendar writes', () => {
+  it('sends a node change, a global change and a removal to /api/calendar', async () => {
+    const fetch = receiving(200, overview)
+    const change = { node: 'p', blocks: [{ days: 'mon-fri', from: '09:00', to: '12:00' }], focus: null }
+    expect(await changeCalendar(change)).toEqual(overview)
+    await changeCalendar({ timezone: 'Europe/Paris', days_off: [] })
+    await removeCalendarNode('p')
+    const sent = fetch.mock.calls.map(([url, init]) => [url, init?.method, JSON.parse(String(init?.body))])
+    expect(sent).toEqual([
+      ['/api/calendar', 'PATCH', change],
+      ['/api/calendar', 'PATCH', { timezone: 'Europe/Paris', days_off: [] }],
+      ['/api/calendar', 'DELETE', { node: 'p' }],
+    ])
+  })
+
+  it('keeps the problems of a refused change, with the blocks that overlap', async () => {
+    const refusal: CalendarRefusal = {
+      error: 'calendar.toml not written: the blocks overlap',
+      problems: [{ kind: 'overlap', node: 'p', other: 'q', block: 1, other_block: 0, message: 'the blocks overlap' }],
+    }
+    receiving(422, refusal)
+    const refused = await changeCalendar({ node: 'q', blocks: [{ days: 'wed', from: '11:00', to: '13:00' }] }).catch(
+      (error: unknown) => error,
+    )
+    expect(refused).toBeInstanceOf(ApiError)
+    expect((refused as ApiError).status).toBe(422)
+    expect((refused as ApiError).message).toBe('calendar.toml not written: the blocks overlap')
+    expect(((refused as ApiError).body as CalendarRefusal).problems?.[0]).toMatchObject({ block: 1, other_block: 0 })
+  })
+})
+
+describe('estimates writes', () => {
+  it('sends the keys to set or remove and returns where each value comes from', async () => {
+    const report: EstimatesReport = {
+      node: 'p/c',
+      estimates: { XS: 2, S: 4, M: 10, L: 24, XL: 48, default: 'S', test_ratio: 0.25, tester: 'owner' },
+      estimates_from: { XS: null, S: null, M: 'p', L: null, XL: null, default: 'p/c', test_ratio: null, tester: null },
+    }
+    const fetch = receiving(200, report)
+    const change = { node: 'p/c', estimates: { default: 'S', XL: null } }
+    expect(await changeEstimates(change)).toEqual(report)
+    const [url, init] = fetch.mock.calls[0] ?? []
+    expect([url, init?.method, JSON.parse(String(init?.body))]).toEqual(['/api/estimates', 'PATCH', change])
   })
 })

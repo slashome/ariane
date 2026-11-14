@@ -12,8 +12,11 @@
 //! The interface writes too, within limits: it edits four header keys of an
 //! item ([`mod@write`]), the theme and the dashboard pins in the content's
 //! `settings.toml` ([`crate::settings`]), the `[proxy]` table of a node's
-//! `node.toml` ([`crate::proxy::declare`]), and commits or pushes only when the
-//! owner asks ([`git`]). Writes and git actions
+//! `node.toml` ([`crate::proxy::declare`]), its releases
+//! ([`crate::release::declare`]) and its `[estimates]`
+//! ([`crate::estimate::declare`]), the personal `calendar.toml`
+//! ([`crate::calendar::write`]), and commits or pushes only when the owner
+//! asks ([`git`]). Writes and git actions
 //! are serialized, one at a time.
 //!
 //! As it starts, the server pulls the content once, fast-forward only, in the
@@ -34,7 +37,7 @@ use std::sync::{Arc, Mutex, RwLock};
 
 use anyhow::{Context, Result};
 use axum::Router;
-use axum::routing::{get, post, put};
+use axum::routing::{get, patch, post, put};
 use tokio::sync::{broadcast, watch as signal};
 
 use crate::cli::ServeArgs;
@@ -157,7 +160,13 @@ pub fn router(state: Arc<State>) -> Router {
         .route("/api/dashboard", get(api::dashboard).put(api::pin))
         .route("/api/settings", get(api::settings))
         .route("/api/settings/theme", put(api::theme))
-        .route("/api/calendar", get(api::calendar))
+        .route(
+            "/api/calendar",
+            get(api::calendar)
+                .patch(api::change_calendar_entry)
+                .delete(api::remove_calendar_entry),
+        )
+        .route("/api/estimates", patch(api::change_estimates))
         .route("/api/roadmap", get(api::roadmap))
         .route("/api/commit", post(api::commit))
         .route("/api/sync/monday", post(api::sync_monday))
@@ -582,6 +591,7 @@ mod tests {
         assert!(root["tracker"].is_null());
         assert!(root["description"].is_null());
         assert!(root["releases"].is_null());
+        assert_eq!(root["estimates_from"]["M"], serde_json::Value::Null);
         assert_eq!(
             root["estimates"],
             serde_json::json!({
@@ -729,7 +739,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_personal_calendar_is_served_read_only() {
+    async fn the_personal_calendar_is_served() {
         let repo = sample();
         let (status, body, _) = get(&repo, "/api/calendar").await;
         assert_eq!(status, StatusCode::OK);
@@ -754,6 +764,182 @@ mod tests {
             serde_json::json!(["mon", "tue", "wed", "thu", "fri"])
         );
         assert_eq!(body["problems"][0]["kind"], "unknown_node");
+    }
+
+    #[tokio::test]
+    async fn the_calendar_is_written_through_the_api_and_an_overlap_is_refused_with_its_blocks() {
+        let repo = sample();
+        repo.write("q/node.toml", "");
+        let (status, body) = send(
+            &repo,
+            "PATCH",
+            "/api/calendar",
+            serde_json::json!({ "timezone": "Europe/Paris", "days_off": ["2026-12-25"] }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["present"], true);
+        assert_eq!(body["calendar"]["timezone"], "Europe/Paris");
+        let (status, body) = send(
+            &repo,
+            "PATCH",
+            "/api/calendar",
+            serde_json::json!({
+                "node": "p",
+                "focus": 0.5,
+                "blocks": [
+                    { "days": "sat", "from": "08:00", "to": "09:00" },
+                    { "days": "mon-fri", "from": "09:00", "to": "12:00" },
+                ],
+            }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["calendar"]["nodes"]["p"]["focus"], 0.5);
+        let written = std::fs::read_to_string(repo.root().join("calendar.toml")).unwrap();
+        let (status, body) = send(
+            &repo,
+            "PATCH",
+            "/api/calendar",
+            serde_json::json!({ "node": "q", "blocks": [{ "days": "wed", "from": "11:00", "to": "13:00" }] }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+        let overlap = &body["problems"][0];
+        assert_eq!(overlap["kind"], "overlap");
+        assert_eq!(
+            (&overlap["node"], &overlap["block"]),
+            (&serde_json::json!("p"), &serde_json::json!(1))
+        );
+        assert_eq!(
+            (&overlap["other"], &overlap["other_block"]),
+            (&serde_json::json!("q"), &serde_json::json!(0))
+        );
+        assert!(body["error"].as_str().unwrap().contains("not written"));
+        assert_eq!(
+            std::fs::read_to_string(repo.root().join("calendar.toml")).unwrap(),
+            written
+        );
+        let (status, body) = send(
+            &repo,
+            "PATCH",
+            "/api/calendar",
+            serde_json::json!({ "node": "p", "focus": null }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["calendar"]["nodes"]["p"]["focus"], 1.0);
+        let (status, body) = send(
+            &repo,
+            "DELETE",
+            "/api/calendar",
+            serde_json::json!({ "node": "p" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["calendar"]["nodes"], serde_json::json!({}));
+    }
+
+    #[tokio::test]
+    async fn a_malformed_calendar_change_is_a_400_and_a_refused_one_a_422() {
+        let repo = sample();
+        for malformed in [
+            serde_json::json!({ "focus": 0.5 }),
+            serde_json::json!({ "node": "p", "timezone": "UTC" }),
+        ] {
+            let (status, _) = send(&repo, "PATCH", "/api/calendar", malformed.clone()).await;
+            assert_eq!(status, StatusCode::BAD_REQUEST, "{malformed}");
+        }
+        for refused in [
+            serde_json::json!({ "node": "nowhere", "focus": 0.5 }),
+            serde_json::json!({ "node": "p" }),
+            serde_json::json!({ "node": "p", "focus": 2 }),
+        ] {
+            let (status, body) = send(&repo, "PATCH", "/api/calendar", refused.clone()).await;
+            assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{refused}");
+            assert!(body["error"].is_string(), "{body}");
+        }
+        let (status, _) = send(
+            &repo,
+            "DELETE",
+            "/api/calendar",
+            serde_json::json!({ "node": "p" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        assert!(!repo.root().join("calendar.toml").exists());
+    }
+
+    #[tokio::test]
+    async fn estimates_are_set_on_the_node_s_own_table_and_each_key_says_where_it_comes_from() {
+        let repo = sample();
+        repo.write("p/c/node.toml", "");
+        let (status, body) = send(
+            &repo,
+            "PATCH",
+            "/api/estimates",
+            serde_json::json!({ "node": "p", "estimates": { "M": 10, "test_ratio": 0.5 } }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["estimates"]["M"], 10.0);
+        assert_eq!(body["estimates_from"]["M"], "p");
+        let (status, body) = send(
+            &repo,
+            "PATCH",
+            "/api/estimates",
+            serde_json::json!({ "node": "p/c", "estimates": { "default": "S" } }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["estimates"]["M"], 10.0);
+        assert_eq!(
+            (
+                &body["estimates_from"]["M"],
+                &body["estimates_from"]["default"],
+                &body["estimates_from"]["XS"]
+            ),
+            (
+                &serde_json::json!("p"),
+                &serde_json::json!("p/c"),
+                &serde_json::Value::Null
+            )
+        );
+        let (status, body) = send(
+            &repo,
+            "PATCH",
+            "/api/estimates",
+            serde_json::json!({ "node": "p", "estimates": { "M": null } }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["estimates"]["M"], 12.0);
+        assert_eq!(body["estimates_from"]["M"], serde_json::Value::Null);
+        let before = std::fs::read_to_string(repo.root().join("tree/p/node.toml")).unwrap();
+        let (status, body) = send(
+            &repo,
+            "PATCH",
+            "/api/estimates",
+            serde_json::json!({ "node": "p", "estimates": { "S": 3, "test_ratio": -1 } }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+        assert!(
+            body["error"].as_str().unwrap().contains("negative"),
+            "{body}"
+        );
+        let (status, _) = send(
+            &repo,
+            "PATCH",
+            "/api/estimates",
+            serde_json::json!({ "node": "p", "estimates": { "S": [3] } }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(
+            std::fs::read_to_string(repo.root().join("tree/p/node.toml")).unwrap(),
+            before
+        );
     }
 
     /// What `ariane roadmap <node> --json` prints for `repo`, from the moment

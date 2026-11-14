@@ -1,5 +1,9 @@
 import type {
+  CalendarChange,
+  CalendarOverview,
   CommitResult,
+  EstimatesChange,
+  EstimatesReport,
   Dashboard,
   DiscardResult,
   PullResult,
@@ -119,6 +123,10 @@ export const pushChanges = () => request<{ ok: boolean }>('POST', '/api/push', {
 export const pullChanges = () => request<PullResult>('POST', '/api/pull', {})
 export const discardChanges = (paths?: string[]) =>
   request<DiscardResult>('POST', '/api/discard', paths === undefined ? {} : { paths })
+export const fetchCalendar = () => request<CalendarOverview>('GET', '/api/calendar')
+export const changeCalendar = (change: CalendarChange) => request<CalendarOverview>('PATCH', '/api/calendar', change)
+export const removeCalendarNode = (node: string) => request<CalendarOverview>('DELETE', '/api/calendar', { node })
+export const changeEstimates = (change: EstimatesChange) => request<EstimatesReport>('PATCH', '/api/estimates', change)
 export const fetchProxy = () => request<ProxyReport>('GET', '/api/proxy')
 export const setRoute = (route: RouteChange) => request<RouteTable>('PUT', '/api/proxy/routes', route)
 export const removeRoute = (route: RouteRemoval) => request<RouteTable>('DELETE', '/api/proxy/routes', route)

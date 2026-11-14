@@ -31,7 +31,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
-use toml_edit::DocumentMut;
+use toml_edit::{DocumentMut, Item as TomlItem, TableLike, Value as TomlValue};
 
 use crate::estimate::{self, Pricing};
 use crate::schema::is_date;
@@ -581,6 +581,15 @@ pub fn edit<E>(
     })?;
     std::fs::write(file, edited).with_context(|| format!("writing {}", file.display()))?;
     Ok(Ok(()))
+}
+
+/// Sets `key` of `table` to `new`, keeping the spacing and the trailing
+/// comment of the value it replaces, so that only the value changes.
+pub fn set_value(table: &mut dyn TableLike, key: &str, mut new: TomlValue) {
+    if let Some(old) = table.get(key).and_then(TomlItem::as_value) {
+        *new.decor_mut() = old.decor().clone();
+    }
+    table.insert(key, TomlItem::Value(new));
 }
 
 /// Path of the `node.toml` a node would hold.

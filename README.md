@@ -116,9 +116,10 @@ Each command describes itself with `ariane <command> --help`; `ariane --help` li
 | `schema` | Print the item header schema |
 | `serve`, `service` | Serve the interface, in the foreground or as a background service |
 | `config`, `settings` | The machine's configuration, and the settings versioned with the content |
-| `calendar` | The personal work calendar: the hours each node works on, and editing it |
+| `calendar` | The personal work calendar: the hours each node works on; edit it, or set and unset a node's blocks, focus and days off |
 | `roadmap` | When each release should be delivered: the forecast of a node, with its warnings |
 | `release` | Declare, order, rename, mark and remove a node's releases, and plan items in them |
+| `estimates` | What sizes cost on a node and where each value comes from; set or unset a key of its own `[estimates]` |
 | `pull` | Fast-forward the content repository to its upstream |
 | `people` | Declare the people items wait for |
 | `connect`, `sync` | Store a tracker's token, and send the items' statuses to it |

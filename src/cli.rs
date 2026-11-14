@@ -100,7 +100,7 @@ pub enum Command {
     )]
     Settings(SettingsArgs),
     #[command(
-        about = "The personal work calendar: the blocks, focus and days off a node works on, or edit it"
+        about = "The personal work calendar: the blocks, focus and days off a node works on; edit, set or unset it"
     )]
     Calendar(CalendarArgs),
     #[command(
@@ -111,6 +111,10 @@ pub enum Command {
         about = "Declare, order, rename and remove a node's releases, and plan items in them"
     )]
     Release(ReleaseArgs),
+    #[command(
+        about = "What sizes cost on a node and where each value comes from; set or unset a key of its [estimates]"
+    )]
+    Estimates(EstimatesArgs),
     #[command(about = "Keep `ariane serve` running in the background (launchd, systemd)")]
     Service(ServiceArgs),
 }
@@ -489,6 +493,38 @@ pub struct ReleaseAssignArgs {
     pub none: bool,
 }
 
+/// Arguments of `ariane estimates`: the node to describe, or a subcommand
+/// that changes its own `[estimates]`, and `json` to print JSON.
+#[derive(Args)]
+#[command(args_conflicts_with_subcommands = true)]
+pub struct EstimatesArgs {
+    #[command(subcommand)]
+    pub command: Option<EstimatesCommand>,
+
+    #[arg(help = "The node to describe (default: the node of the current directory)")]
+    pub node: Option<String>,
+
+    #[arg(long)]
+    pub json: bool,
+}
+
+/// The subcommands of `ariane estimates`, each writing the node's own
+/// `node.toml`; the other keys keep being inherited.
+#[derive(Subcommand)]
+pub enum EstimatesCommand {
+    #[command(
+        about = "Set a key of the node's [estimates]: XS, S, M, L, XL (hours), default (a size), test_ratio, tester (owner, others)"
+    )]
+    Set {
+        node: String,
+        key: String,
+        #[arg(allow_negative_numbers = true)]
+        value: String,
+    },
+    #[command(about = "Remove a key of the node's [estimates]: it is inherited again")]
+    Unset { node: String, key: String },
+}
+
 /// The trackers Ariane has a connector for (ADR-0011).
 #[derive(Clone, Copy, clap::ValueEnum)]
 pub enum Connector {
@@ -778,6 +814,75 @@ pub enum CalendarCommand {
         about = "Open calendar.toml in $VISUAL or $EDITOR, and save it only once it is valid"
     )]
     Edit,
+    #[command(
+        about = "Set a node's blocks, focus and days off, or without a node the time zone and the days off of every node"
+    )]
+    Set(CalendarSetArgs),
+    #[command(about = "Remove a node's table from calendar.toml")]
+    Unset {
+        #[arg(help = "The node whose table goes")]
+        node: String,
+    },
+}
+
+/// Arguments of `ariane calendar set`: a node and what changes in its table,
+/// or no node and the global keys; at least one change.
+#[derive(Args)]
+#[command(group(clap::ArgGroup::new("changes").required(true).multiple(true)))]
+pub struct CalendarSetArgs {
+    #[arg(help = "The node whose table changes; without it, the keys of every node")]
+    pub node: Option<String>,
+
+    #[arg(
+        long,
+        group = "changes",
+        requires = "node",
+        help = "The node's blocks, replacing its old ones: `mon-fri 09:00-18:00; sat 10:00-13:00`, empty for none"
+    )]
+    pub blocks: Option<String>,
+
+    #[arg(
+        long,
+        group = "changes",
+        requires = "node",
+        conflicts_with = "no_focus",
+        help = "The share of the blocks that is focused work, above 0 and at most 1"
+    )]
+    pub focus: Option<f64>,
+
+    #[arg(
+        long,
+        group = "changes",
+        requires = "node",
+        help = "Remove the node's focus: it counts as 1"
+    )]
+    pub no_focus: bool,
+
+    #[arg(
+        long,
+        group = "changes",
+        help = "Days off, replacing the old ones: `2026-12-24..2027-01-02, 2027-05-01`, empty for none; the node's, else every node's"
+    )]
+    pub days_off: Option<String>,
+
+    #[arg(
+        long,
+        group = "changes",
+        conflicts_with = "node",
+        help = "The IANA time zone of every block, such as Europe/Paris"
+    )]
+    pub timezone: Option<String>,
+}
+
+impl CalendarSetArgs {
+    /// `Some(Some(focus))` for `--focus`, `Some(None)` for `--no-focus`.
+    pub fn focus(&self) -> Option<Option<f64>> {
+        match (self.focus, self.no_focus) {
+            (Some(focus), _) => Some(Some(focus)),
+            (None, true) => Some(None),
+            (None, false) => None,
+        }
+    }
 }
 
 /// Arguments of `ariane roadmap`: the node to forecast, the release to read

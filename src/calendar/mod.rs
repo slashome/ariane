@@ -11,13 +11,17 @@
 //! The schema is declared once, in [`CALENDAR_KEYS`], and published by
 //! `ariane schema --json`. [`check`] reads a file against it and returns the
 //! valid part of the calendar with every problem found, so that `doctor`,
-//! `ariane calendar edit` and the interface judge a file the same way. The
-//! module never rewrites the file: `ariane calendar edit` saves exactly the
-//! text the owner wrote, comments and layout included.
+//! `ariane calendar edit` and the interface judge a file the same way.
+//! `ariane calendar edit` saves exactly the text the owner wrote, comments and
+//! layout included; `ariane calendar set|unset` and the interface change one
+//! node's table or the global keys through [`write`], which keeps the rest of
+//! the file and refuses a result [`check`] finds an error in.
 //!
 //! A node's forecast runs on the nearest node, itself or an ancestor, whose
 //! table carries blocks ([`Calendar::carrier`]); its descendants share those
 //! hours. A missing file is not an error: the roadmap then has no dates.
+
+pub mod write;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -352,6 +356,14 @@ pub struct Problem {
     /// The other node of an overlap between two nodes.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub other: Option<NodePath>,
+    /// Of an overlap, the position of the first block in the `blocks` list of
+    /// `node` as written, from 0.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub block: Option<usize>,
+    /// Of an overlap, the position of the second block in the `blocks` list of
+    /// `other`, or of `node` when both blocks are the same node's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub other_block: Option<usize>,
     /// What is wrong, in one sentence.
     pub message: String,
 }
@@ -426,6 +438,7 @@ pub fn check(text: &str, known: impl Fn(&NodePath) -> bool) -> Checked {
     }
     let days_off = dates(&raw.days_off, None, &mut problems);
     let mut nodes = BTreeMap::new();
+    let mut positions = BTreeMap::new();
     for (path, entry) in raw.node {
         let node = NodePath::new(path.as_str());
         if !known(&node) {
@@ -436,12 +449,15 @@ pub fn check(text: &str, known: impl Fn(&NodePath) -> bool) -> Checked {
                 message: format!(
                     "`[node.\"{path}\"]` names no node of the tree: was the node renamed or moved? Its blocks still count, against overlaps too"
                 ),
+                block: None,
+                other_block: None,
             });
         }
-        let checked = node_calendar(&node, entry, &mut problems);
+        let (checked, written_at) = node_calendar(&node, entry, &mut problems);
+        positions.insert(node.clone(), written_at);
         nodes.insert(node, checked);
     }
-    overlaps(&nodes, &mut problems);
+    overlaps(&nodes, &positions, &mut problems);
     Checked {
         calendar: Some(Calendar {
             version: raw.version,
@@ -453,8 +469,13 @@ pub fn check(text: &str, known: impl Fn(&NodePath) -> bool) -> Checked {
     }
 }
 
-/// Checks one node table, keeping its valid focus, blocks and days off.
-fn node_calendar(node: &NodePath, entry: RawNode, problems: &mut Vec<Problem>) -> NodeCalendar {
+/// Checks one node table, keeping its valid focus, blocks and days off, with
+/// the position of each valid block in the list as written.
+fn node_calendar(
+    node: &NodePath,
+    entry: RawNode,
+    problems: &mut Vec<Problem>,
+) -> (NodeCalendar, Vec<usize>) {
     let here = format!("[node.\"{}\"]", node.as_str());
     let focus = match &entry.focus {
         None => DEFAULT_FOCUS,
@@ -470,9 +491,13 @@ fn node_calendar(node: &NodePath, entry: RawNode, problems: &mut Vec<Problem>) -
         },
     };
     let mut blocks = Vec::new();
-    for raw in &entry.blocks {
+    let mut written_at = Vec::new();
+    for (position, raw) in entry.blocks.iter().enumerate() {
         match block(raw) {
-            Ok(block) => blocks.push(block),
+            Ok(block) => {
+                blocks.push(block);
+                written_at.push(position);
+            }
             Err(reason) => problems.push(invalid(Some(node), format!("{here}: {reason}"))),
         }
     }
@@ -485,13 +510,18 @@ fn node_calendar(node: &NodePath, entry: RawNode, problems: &mut Vec<Problem>) -
             message: format!(
                 "{here} has no blocks: its focus and days off are never used, the node works on the blocks of its nearest ancestor that has some"
             ),
+            block: None,
+            other_block: None,
         });
     }
-    NodeCalendar {
-        focus,
-        blocks,
-        days_off,
-    }
+    (
+        NodeCalendar {
+            focus,
+            blocks,
+            days_off,
+        },
+        written_at,
+    )
 }
 
 /// `focus` when `value` is a number in `]0, 1]`.
@@ -615,14 +645,28 @@ fn days_off(entry: &str) -> Result<DaysOff, &'static str> {
 }
 
 /// Reports every pair of blocks that share time: of two nodes, an hour counted
-/// twice; of one node, blocks that may touch but not overlap.
-fn overlaps(nodes: &BTreeMap<NodePath, NodeCalendar>, problems: &mut Vec<Problem>) {
-    let blocks: Vec<(&NodePath, &Block)> = nodes
+/// twice; of one node, blocks that may touch but not overlap. `positions`
+/// gives, per node, where each valid block stands in its list as written.
+fn overlaps(
+    nodes: &BTreeMap<NodePath, NodeCalendar>,
+    positions: &BTreeMap<NodePath, Vec<usize>>,
+    problems: &mut Vec<Problem>,
+) {
+    let blocks: Vec<(&NodePath, usize, &Block)> = nodes
         .iter()
-        .flat_map(|(node, entry)| entry.blocks.iter().map(move |block| (node, block)))
+        .flat_map(|(node, entry)| {
+            let written_at = positions.get(node);
+            entry.blocks.iter().enumerate().map(move |(index, block)| {
+                let position = written_at
+                    .and_then(|list| list.get(index))
+                    .copied()
+                    .unwrap_or(index);
+                (node, position, block)
+            })
+        })
         .collect();
-    for (index, (node, block)) in blocks.iter().enumerate() {
-        for (other_node, other) in &blocks[index + 1..] {
+    for (index, (node, position, block)) in blocks.iter().enumerate() {
+        for (other_node, other_position, other) in &blocks[index + 1..] {
             if !block.overlaps(other) {
                 continue;
             }
@@ -648,6 +692,8 @@ fn overlaps(nodes: &BTreeMap<NodePath, NodeCalendar>, problems: &mut Vec<Problem
                 node: Some((*node).clone()),
                 other: (node != other_node).then(|| (*other_node).clone()),
                 message,
+                block: Some(*position),
+                other_block: Some(*other_position),
             });
         }
     }
@@ -660,6 +706,8 @@ fn invalid(node: Option<&NodePath>, message: String) -> Problem {
         node: node.cloned(),
         other: None,
         message,
+        block: None,
+        other_block: None,
     }
 }
 
@@ -788,7 +836,8 @@ pub fn resolve(calendar: &Calendar, node: &NodePath) -> Resolved {
     }
 }
 
-/// Runs `ariane calendar`: prints what applies to a node, or edits the file.
+/// Runs `ariane calendar`: prints what applies to a node, or edits, sets or
+/// unsets the file.
 ///
 /// The calendar read is the personal repository's ([`personal_root`]); a
 /// `calendar.toml` in `root`, when `root` is another repository, is ignored
@@ -818,8 +867,18 @@ pub fn run(
         loaded = Tree::load(&personal)?;
         &loaded
     };
-    if let Some(CalendarCommand::Edit) = args.command {
-        return edit(&personal, tree, &crate::config::command::editor());
+    match &args.command {
+        Some(CalendarCommand::Edit) => {
+            return edit(&personal, tree, &crate::config::command::editor());
+        }
+        Some(CalendarCommand::Set(set)) => return write::set_command(&personal, tree, set),
+        Some(CalendarCommand::Unset { node }) => {
+            let change = write::Change::Remove {
+                node: NodePath::new(node),
+            };
+            return write::run_change(&personal, tree, &change);
+        }
+        None => {}
     }
     let node = args
         .node
