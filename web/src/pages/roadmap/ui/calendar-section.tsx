@@ -4,7 +4,7 @@ import { Link, useLocation } from 'react-router'
 import { ApiError, type Calendar, type CalendarOverview, type CalendarProblem, type CalendarRefusal } from '@/shared/api'
 import { searchParamKeys } from '@/shared/config'
 import { cn, displayNode } from '@/shared/lib'
-import { Button, ErrorState, Input, LoadingState, NativeSelect } from '@/shared/ui'
+import { Button, ErrorState, Input, LoadingState, NativeSelect, Tooltip } from '@/shared/ui'
 import { useCalendar, useCreateCalendar, useSaveCalendar } from '../api/use-calendar'
 import {
   carrierOf,
@@ -21,7 +21,7 @@ import {
   type NodeDraft,
   type Refused,
 } from '../model/calendar-draft'
-import { describeBlock, focusSummary, fromCalendarBlock, overlapsOf, weeklyHours, type Block } from '../model/week-grid'
+import { describeOverlap, focusSummary, fromCalendarBlock, overlapsOf, saveBlocker, weeklyHours, type Block, type NodeBlocks } from '../model/week-grid'
 import { BlockList } from './block-list'
 import { DaysOffList } from './days-off-list'
 import { WeekGrid } from './week-grid'
@@ -151,23 +151,56 @@ function FocusField({ value, onChange }: { value: number; onChange: (focus: numb
   )
 }
 
-function SaveBar({ pending, onSave, onDiscard }: { pending: boolean; onSave: () => void; onDiscard: () => void }) {
+function SaveBar({
+  pending,
+  blocker,
+  refusal,
+  onSave,
+  onDiscard,
+}: {
+  pending: boolean
+  blocker: string | null
+  refusal: string | null
+  onSave: () => void
+  onDiscard: () => void
+}) {
+  const save = (
+    <Button size="sm" disabled={pending || blocker !== null} onClick={onSave}>
+      <Save className="size-4" aria-hidden />
+      {pending ? 'Saving…' : 'Save'}
+    </Button>
+  )
   return (
     <div
       role="region"
       aria-label="Unsaved calendar"
-      className="sticky bottom-0 z-20 flex flex-wrap items-center gap-2 rounded-lg border border-primary/40 bg-background/95 px-3 py-2 shadow-md backdrop-blur"
+      className={cn(
+        'sticky bottom-0 z-20 flex flex-wrap items-center gap-2 rounded-lg border bg-background/95 px-3 py-2 shadow-md backdrop-blur',
+        refusal === null ? 'border-primary/40' : 'border-red-600 bg-red-50/95 dark:bg-red-950/90',
+      )}
     >
-      <span className="text-sm">
-        Unsaved changes to <code className="font-mono text-xs">calendar.toml</code>
-      </span>
+      {refusal === null ? (
+        <span className="text-sm">
+          Unsaved changes to <code className="font-mono text-xs">calendar.toml</code>
+        </span>
+      ) : (
+        <span role="alert" aria-label="Save refused" className="flex items-start gap-1.5 text-sm font-medium text-red-700 dark:text-red-300">
+          <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
+          {refusal}
+        </span>
+      )}
       <Button variant="ghost" size="sm" className="ml-auto" disabled={pending} onClick={onDiscard}>
         Discard
       </Button>
-      <Button size="sm" disabled={pending} onClick={onSave}>
-        <Save className="size-4" aria-hidden />
-        {pending ? 'Saving…' : 'Save'}
-      </Button>
+      {blocker === null ? (
+        save
+      ) : (
+        <Tooltip content={blocker}>
+          <span tabIndex={0} aria-label={blocker} data-testid="save-blocked" className="rounded-md outline-2 outline-offset-2 outline-amber-500">
+            {save}
+          </span>
+        </Tooltip>
+      )}
     </div>
   )
 }
@@ -180,12 +213,14 @@ function NodeHours({
   node,
   calendar,
   draft,
+  others,
   refused,
   onNode,
 }: {
   node: string
   calendar: Calendar
   draft: CalendarDraft
+  others: NodeBlocks[]
   refused: Refused | null
   onNode: (next: NodeDraft | null) => void
 }) {
@@ -193,7 +228,6 @@ function NodeHours({
   const inheritedFrom = carrier !== null && carrier !== node ? carrier : null
   const own = draft.node
   const editable = own !== null || inheritedFrom === null
-  const others = useMemo(() => otherBlocks(calendar, node), [calendar, node])
   const blocks = own?.blocks ?? []
   const overlaps = overlapsOf(blocks, others)
   const overlapping = new Set(overlaps.flatMap((overlap) => (overlap.other === null ? [overlap.block, overlap.otherBlock] : [overlap.block])))
@@ -224,19 +258,13 @@ function NodeHours({
         onChange={(next) => change({ blocks: next })}
       />
       {overlaps.length > 0 && (
-        <p role="alert" className="flex items-start gap-1.5 text-xs text-red-700 dark:text-red-300">
+        <p role="alert" className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
           <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
-          {overlaps
-            .map((overlap) => {
-              const other = overlap.other === null ? blocks[overlap.otherBlock] : others.find((entry) => entry.node === overlap.other)?.blocks[overlap.otherBlock]
-              const mine = blocks[overlap.block]
-              return `${mine ? describeBlock(mine) : ''} overlaps ${overlap.other === null ? '' : `${displayNode(overlap.other)} `}${other ? describeBlock(other) : ''}`
-            })
-            .join('; ')}
-          . An hour counts once: saving is refused until they no longer share time.
+          {overlaps.map((overlap) => describeOverlap(overlap, blocks, others)).join('; ')}
+          . An hour counts once: Save stays off until they no longer share time.
         </p>
       )}
-      {own !== null && <BlockList blocks={blocks} overlapping={overlapping} onChange={(next) => change({ blocks: next })} />}
+      {own !== null && <BlockList blocks={blocks} overlapping={overlapping} refused={new Set(refused?.own ?? [])} onChange={(next) => change({ blocks: next })} />}
       {own !== null ? (
         <FocusField value={focus} onChange={(next) => change({ focus: next })} />
       ) : (
@@ -262,24 +290,33 @@ function CalendarEditor({ overview, calendar, node }: { overview: CalendarOvervi
   const saved = useMemo(() => savedDraft(calendar, node), [calendar, node])
   const [draft, setDraft] = useState<CalendarDraft | null>(null)
   const [refused, setRefused] = useState<Refused | null>(null)
+  const [refusal, setRefusal] = useState<string | null>(null)
   const save = useSaveCalendar()
   const current = draft ?? saved
   const dirty = draft !== null && !sameDraft(saved, draft)
+  const others = useMemo(() => otherBlocks(calendar, node), [calendar, node])
+  const blocker = node === null ? null : saveBlocker(current.node?.blocks ?? [], others)
 
+  const forgetRefusal = () => {
+    setRefused(null)
+    setRefusal(null)
+  }
   const edit = (next: CalendarDraft) => {
     setDraft(next)
-    setRefused(null)
+    forgetRefusal()
   }
   const discard = () => {
     setDraft(null)
-    setRefused(null)
+    forgetRefusal()
   }
   const submit = () => {
     save.mutate(requestsFor(saved, current, node), {
       onSuccess: () => setDraft(null),
       onError: (error) => {
-        const problems = error instanceof ApiError && error.status === 422 ? ((error.body as CalendarRefusal | null)?.problems ?? []) : []
+        const rejected = error instanceof ApiError && error.status === 422
+        const problems = rejected ? ((error.body as CalendarRefusal | null)?.problems ?? []) : []
         setRefused(node === null ? null : refusedBlocks(problems, node))
+        setRefusal(rejected ? `The server refused the save: ${error.message}` : null)
       },
     })
   }
@@ -290,7 +327,7 @@ function CalendarEditor({ overview, calendar, node }: { overview: CalendarOvervi
       {node === null ? (
         <p className="text-sm text-muted-foreground">Choose a node in the header to set its blocks, focus and days off.</p>
       ) : (
-        <NodeHours node={node} calendar={calendar} draft={current} refused={refused} onNode={(next) => edit({ ...current, node: next })} />
+        <NodeHours node={node} calendar={calendar} draft={current} others={others} refused={refused} onNode={(next) => edit({ ...current, node: next })} />
       )}
       <div className="space-y-4 border-t border-border pt-4">
         <h3 className="text-sm font-semibold">Every node</h3>
@@ -301,7 +338,7 @@ function CalendarEditor({ overview, calendar, node }: { overview: CalendarOvervi
         </div>
         <DaysOffList label="Days off of every node" days={current.daysOff} editable onChange={(daysOff) => edit({ ...current, daysOff })} />
       </div>
-      {dirty && <SaveBar pending={save.isPending} onSave={submit} onDiscard={discard} />}
+      {dirty && <SaveBar pending={save.isPending} blocker={blocker} refusal={refusal} onSave={submit} onDiscard={discard} />}
     </div>
   )
 }

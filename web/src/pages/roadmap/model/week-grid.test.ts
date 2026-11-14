@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  describeOverlap,
   drawnBlock,
   focusSummary,
   formatDays,
@@ -8,6 +9,7 @@ import {
   overlapsOf,
   parseDays,
   resizedBlock,
+  saveBlocker,
   snap,
   toBlockSpec,
   toggledDay,
@@ -80,6 +82,21 @@ describe('overlaps', () => {
 
   it('lets blocks touch', () => {
     expect(overlapsOf([{ days: ['mon'], from: 18 * 60, to: 20 * 60 }], [{ node: 'cmc', blocks: [office] }])).toEqual([])
+  })
+
+  it('names both blocks of an overlap, and the other node when there is one', () => {
+    const own: Block[] = [evening, { days: ['thu'], from: 22 * 60, to: 24 * 60 }, { days: ['wed'], from: 17 * 60, to: 19 * 60 }]
+    const others = [{ node: 'cmc', blocks: [office] }]
+    expect(describeOverlap({ block: 0, other: null, otherBlock: 1 }, own, others)).toBe('tue,thu 20:00–23:00 overlaps thu 22:00–24:00')
+    expect(describeOverlap({ block: 2, other: 'cmc', otherBlock: 0 }, own, others)).toBe('wed 17:00–19:00 overlaps cmc mon-fri 09:00–18:00')
+  })
+
+  it('blocks the save while any overlap remains, with every reason', () => {
+    const others = [{ node: 'cmc', blocks: [office] }]
+    expect(saveBlocker([evening], others)).toBeNull()
+    expect(saveBlocker([evening, { days: ['wed'], from: 17 * 60, to: 19 * 60 }, { days: ['thu'], from: 22 * 60, to: 24 * 60 }], others)).toBe(
+      'Cannot save: tue,thu 20:00–23:00 overlaps thu 22:00–24:00; wed 17:00–19:00 overlaps cmc mon-fri 09:00–18:00',
+    )
   })
 })
 

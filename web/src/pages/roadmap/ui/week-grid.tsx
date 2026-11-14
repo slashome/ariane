@@ -203,7 +203,6 @@ export function WeekGrid({
             theirs.flatMap((block, index) =>
               block.days.map((day) => {
                 const key = `${owner}#${index}`
-                const conflict = clashingOthers.has(key) || refusedOthers.has(key)
                 const isCarrier = owner === carrier
                 return (
                   <Tooltip key={`${key}-${day}`} content={`${displayNode(owner)} · ${describeBlock(block)}`}>
@@ -216,7 +215,8 @@ export function WeekGrid({
                       className={cn(
                         'absolute overflow-hidden rounded-sm border px-1 text-[10px] leading-tight',
                         isCarrier ? 'border-primary/40 bg-primary/15 text-foreground' : 'border-border bg-muted text-muted-foreground',
-                        conflict && 'border-red-500 ring-2 ring-red-500/60',
+                        clashingOthers.has(key) && 'outline-2 outline-dashed outline-amber-500',
+                        refusedOthers.has(key) && 'border-red-600 bg-red-500/40 text-foreground ring-2 ring-red-600',
                       )}
                       style={segmentStyle(block, weekdays.indexOf(day))}
                     >
@@ -229,7 +229,6 @@ export function WeekGrid({
           )}
           {shown.flatMap((block, index) =>
             block.days.map((day) => {
-              const conflict = clashing.has(index) || refusedOwn.has(index)
               return (
                 <div
                   key={`${index}-${day}`}
@@ -253,7 +252,8 @@ export function WeekGrid({
                   className={cn(
                     'group absolute rounded-sm border border-primary bg-primary/80 px-1 text-[10px] leading-tight text-primary-foreground focus-visible:outline-2 focus-visible:outline-ring',
                     editable && 'cursor-move',
-                    conflict && 'border-red-600 bg-red-500/80 ring-2 ring-red-500',
+                    clashing.has(index) && 'outline-2 outline-dashed outline-offset-1 outline-amber-500',
+                    refusedOwn.has(index) && 'border-red-700 bg-red-600 ring-2 ring-red-600',
                   )}
                   style={segmentStyle(block, weekdays.indexOf(day))}
                 >

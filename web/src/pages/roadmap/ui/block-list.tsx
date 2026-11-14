@@ -28,7 +28,17 @@ function TimeSelect({ label, value, choices, onChange }: { label: string; value:
   )
 }
 
-export function BlockList({ blocks, overlapping, onChange }: { blocks: Block[]; overlapping: Set<number>; onChange: (blocks: Block[]) => void }) {
+export function BlockList({
+  blocks,
+  overlapping,
+  refused,
+  onChange,
+}: {
+  blocks: Block[]
+  overlapping: Set<number>
+  refused: Set<number>
+  onChange: (blocks: Block[]) => void
+}) {
   if (blocks.length === 0) {
     return null
   }
@@ -37,7 +47,13 @@ export function BlockList({ blocks, overlapping, onChange }: { blocks: Block[]; 
       {blocks.map((block, index) => (
         <li
           key={index}
-          className={cn('flex flex-wrap items-center gap-2 rounded-md border border-border px-2 py-1', overlapping.has(index) && 'border-red-500 bg-red-500/5')}
+          data-overlap={overlapping.has(index) || undefined}
+          data-refused={refused.has(index) || undefined}
+          className={cn(
+            'flex flex-wrap items-center gap-2 rounded-md border border-border px-2 py-1',
+            overlapping.has(index) && 'border-amber-500 border-dashed',
+            refused.has(index) && 'border-2 border-solid border-red-600 bg-red-500/15',
+          )}
         >
           <div role="group" aria-label={`Days of block ${index + 1}`} className="inline-flex overflow-hidden rounded-md border border-border">
             {weekdays.map((day) => (

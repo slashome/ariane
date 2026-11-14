@@ -152,7 +152,25 @@ describe('the roadmap settings', () => {
     await waitFor(() => expect(sent(fetch, 'PATCH', '/api/calendar')).toEqual([{ node: 'slashome/pharmakon', focus: 0.8 }]))
   })
 
-  it('shows an overlap before saving and highlights the blocks the server refuses', async () => {
+  it('keeps Save off while the browser sees an overlap, with the reason on hover', async () => {
+    const { fetch } = renderAt('/roadmap/settings?node=slashome/pharmakon', withCalendar)
+    const blocks = await screen.findByRole('list', { name: 'Blocks' })
+    fireEvent.change(within(blocks).getByRole('combobox', { name: 'Start of block 2' }), { target: { value: String(9 * 60) } })
+    await userEvent.click(within(within(blocks).getByRole('group', { name: 'Days of block 2' })).getByRole('button', { name: 'mo' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('overlaps cmc mon-fri 09:00–18:00')
+    expect(within(blocks).getAllByRole('listitem')[1]?.dataset.overlap).toBe('true')
+    const bar = screen.getByRole('region', { name: 'Unsaved calendar' })
+    expect(within(bar).getByRole('button', { name: 'Save' })).toBeDisabled()
+    const blocked = within(bar).getByTestId('save-blocked')
+    expect(blocked).toHaveAccessibleName('Cannot save: mon,sat 09:00–13:00 overlaps cmc mon-fri 09:00–18:00')
+    await userEvent.hover(blocked)
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('overlaps cmc mon-fri 09:00–18:00')
+    expect(sent(fetch, 'PATCH', '/api/calendar')).toHaveLength(0)
+    await userEvent.click(within(within(blocks).getByRole('group', { name: 'Days of block 2' })).getByRole('button', { name: 'mo' }))
+    expect(within(screen.getByRole('region', { name: 'Unsaved calendar' })).getByRole('button', { name: 'Save' })).toBeEnabled()
+  })
+
+  it('marks the blocks the server refuses apart from the overlaps the browser sees', async () => {
     const { fetch } = renderAt('/roadmap/settings?node=slashome/pharmakon', withCalendar, () => ({
       status: 422,
       body: {
@@ -161,15 +179,15 @@ describe('the roadmap settings', () => {
       },
     }))
     const blocks = await screen.findByRole('list', { name: 'Blocks' })
-    fireEvent.change(within(blocks).getByRole('combobox', { name: 'Start of block 2' }), { target: { value: String(9 * 60) } })
-    await userEvent.click(within(within(blocks).getByRole('group', { name: 'Days of block 2' })).getByRole('button', { name: 'mo' }))
-    expect(screen.getByRole('alert')).toHaveTextContent('overlaps cmc mon-fri 09:00–18:00')
+    fireEvent.change(within(blocks).getByRole('combobox', { name: 'Start of block 2' }), { target: { value: String(11 * 60) } })
     await userEvent.click(within(screen.getByRole('region', { name: 'Unsaved calendar' })).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(sent(fetch, 'PATCH', '/api/calendar')).toHaveLength(1))
-    await waitFor(() => expect(screen.getAllByTestId('own-block').filter((block) => block.dataset.refused)).not.toHaveLength(0))
+    expect(await screen.findByRole('alert', { name: 'Save refused' })).toHaveTextContent('The server refused the save: calendar.toml not written: the blocks overlap')
     const refused = screen.getAllByTestId('own-block').filter((block) => block.dataset.refused)
-    expect(refused.every((block) => block.getAttribute('aria-label')?.endsWith('block 2'))).toBe(true)
+    expect(refused).not.toHaveLength(0)
+    expect(refused.every((block) => block.getAttribute('aria-label')?.endsWith('block 2') && !block.dataset.overlap)).toBe(true)
     expect(screen.getAllByTestId('other-block').filter((block) => block.dataset.refused)).toHaveLength(5)
+    expect(within(blocks).getAllByRole('listitem')[1]?.dataset.refused).toBe('true')
     expect(screen.getByRole('region', { name: 'Unsaved calendar' })).toBeInTheDocument()
   })
 

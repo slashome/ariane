@@ -1,4 +1,5 @@
 import type { BlockSpec, CalendarBlock } from '@/shared/api'
+import { displayNode } from '@/shared/lib'
 
 export const weekdays = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 
@@ -159,6 +160,21 @@ export function overlapsOf(own: Block[], others: NodeBlocks[]): Overlap[] {
     }
   })
   return found
+}
+
+export function describeOverlap(overlap: Overlap, own: Block[], others: NodeBlocks[]): string {
+  const mine = own[overlap.block]
+  const other = overlap.other === null ? own[overlap.otherBlock] : others.find((entry) => entry.node === overlap.other)?.blocks[overlap.otherBlock]
+  const owner = overlap.other === null ? '' : `${displayNode(overlap.other)} `
+  return `${mine ? describeBlock(mine) : ''} overlaps ${owner}${other ? describeBlock(other) : ''}`
+}
+
+export function saveBlocker(own: Block[], others: NodeBlocks[]): string | null {
+  const overlaps = overlapsOf(own, others)
+  if (overlaps.length === 0) {
+    return null
+  }
+  return `Cannot save: ${overlaps.map((overlap) => describeOverlap(overlap, own, others)).join('; ')}`
 }
 
 export function weeklyHours(blocks: Block[]): number {
