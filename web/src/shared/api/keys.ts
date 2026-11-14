@@ -15,5 +15,6 @@ export const queryKeys = {
   people: ['people'],
   personas: ['personas'],
   proxy: ['proxy'],
+  calendar: ['calendar'],
   roadmap: (node: string) => ['roadmap', node] as const,
 } as const
