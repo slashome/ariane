@@ -3,7 +3,9 @@
 //! `ariane fix` is part of fix's plan). Two repairs, both moves of a file:
 //! give every item the file name SPEC.md §1.4 requires, `<id>-<slug>.md`, and
 //! move the items of the former `backlog/` directory into `tasks/` (SPEC.md
-//! §1.1); then rewrite the references to the old path.
+//! §1.1); then rewrite the references to the old path, and the relative
+//! links of a moved file to the files that stay. `ariane release close`
+//! moves the finished work of a release under `archives/` the same way.
 //!
 //! An id lives in the file name, so a new id — a task promoted to a story —
 //! means a new name, and every link to the old one breaks. This command is the
@@ -128,19 +130,11 @@ pub fn run(tree: &Tree, args: &FixArgs, scope: Option<&NodePath>) -> Result<Exit
     let markdown = markdown_files(tree)?;
     let (entries, texts) = plan(tree, scope, &markdown)?;
     if args.apply {
-        for (file, text) in &texts {
-            std::fs::write(file, text).with_context(|| format!("writing {}", file.display()))?;
-        }
-        for entry in &entries {
-            if let Some(target) = &entry.target {
-                if let Some(directory) = target.parent() {
-                    std::fs::create_dir_all(directory)
-                        .with_context(|| format!("creating {}", directory.display()))?;
-                }
-                std::fs::rename(&entry.file, target)
-                    .with_context(|| format!("renaming {}", entry.file.display()))?;
-            }
-        }
+        let moves: Vec<(PathBuf, PathBuf)> = entries
+            .iter()
+            .filter_map(|entry| Some((entry.file.clone(), entry.target.clone()?)))
+            .collect();
+        relocate(&texts, &moves)?;
     }
     if args.json {
         println!("{}", serde_json::to_string_pretty(&entries)?);
@@ -186,13 +180,9 @@ fn markdown_files(tree: &Tree) -> Result<BTreeMap<PathBuf, String>> {
     Ok(files)
 }
 
-/// Plans the renames and moves and the rewritten texts, writing nothing.
-///
-/// Every target is chosen first, so that a reference is rewritten from where
-/// its holder will sit once moved too. The texts are then rewritten in memory
-/// one move after the other, so a file that links to several moved items gets
-/// all its references rewritten. They are keyed by the path the file has
-/// before any move.
+/// Plans the renames and moves and the rewritten texts, writing nothing:
+/// every target is chosen first, then [`rewrite_references`] rewrites the
+/// texts, keyed by the path each file has before any move.
 fn plan(
     tree: &Tree,
     scope: Option<&NodePath>,
@@ -228,35 +218,186 @@ fn plan(
         }
         entries.push(entry);
     }
-    let moves: BTreeMap<PathBuf, PathBuf> = entries
+    let moves: Vec<(PathBuf, PathBuf)> = entries
         .iter()
         .filter_map(|entry| Some((entry.file.clone(), entry.target.clone()?)))
         .collect();
+    let (references, texts) = rewrite_references(tree, markdown, &moves);
+    let mut references = references.into_iter();
+    for entry in entries.iter_mut().filter(|entry| entry.target.is_some()) {
+        if let Some(found) = references.next() {
+            entry.rewritten = found.rewritten;
+            entry.mentioned = found.mentioned;
+        }
+    }
+    Ok((entries, texts))
+}
+
+/// What moving one file changes in the other Markdown files of the repository.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct References {
+    /// Files whose references to the moved file are rewritten, with how many.
+    pub rewritten: BTreeMap<String, usize>,
+    /// Files that still mention the old name in prose, to be read by a human.
+    pub mentioned: Vec<String>,
+}
+
+/// Rewrites, in memory, the references every Markdown file of `markdown` holds
+/// to the files `moves` moves, `(from, to)`; gives what each move rewrites, in
+/// the order of `moves`, and the rewritten texts keyed by the path each file
+/// has before any move.
+///
+/// Every target is known first, so that a reference is rewritten from where
+/// its holder will sit once moved too, and the texts are rewritten one move
+/// after the other, so a file that links to several moved files gets all its
+/// references rewritten.
+fn rewrite_references(
+    tree: &Tree,
+    markdown: &BTreeMap<PathBuf, String>,
+    moves: &[(PathBuf, PathBuf)],
+) -> (Vec<References>, BTreeMap<PathBuf, String>) {
+    let destinations: BTreeMap<&PathBuf, &PathBuf> =
+        moves.iter().map(|(from, to)| (from, to)).collect();
     let mut texts: BTreeMap<PathBuf, String> = BTreeMap::new();
-    for entry in &mut entries {
-        let Some(target) = entry.target.clone() else {
-            continue;
-        };
-        let mark = mark(&entry.file, &target);
+    let mut found = Vec::with_capacity(moves.len());
+    for (old, target) in moves {
+        let mut references = References::default();
+        if let (Some(text), Some(before), Some(after)) =
+            (markdown.get(old), old.parent(), target.parent())
+        {
+            let (rebased, count) = rebase(text, before, after, &destinations);
+            if count > 0 {
+                references.rewritten.insert(relative(tree, old), count);
+                texts.insert(old.clone(), rebased);
+            }
+        }
+        found.push(references);
+    }
+    for ((old, target), references) in moves.iter().zip(found.iter_mut()) {
+        let mark = mark(old, target);
         for (file, original) in markdown {
             let text = texts.get(file).unwrap_or(original);
-            let after = moves.get(file).unwrap_or(file);
+            let after = destinations.get(file).copied().unwrap_or(file);
             let holder = Holder {
                 before: file,
                 after: after.parent().unwrap_or(after),
             };
-            let (rewritten, count) = rewrite(text, &holder, &entry.file, &target);
+            let (rewritten, count) = rewrite(text, &holder, old, target);
             if count > 0 {
-                entry.rewritten.insert(relative(tree, file), count);
+                references.rewritten.insert(relative(tree, file), count);
                 texts.insert(file.clone(), rewritten);
             }
             let after = texts.get(file).unwrap_or(original);
             if mentions(after, &mark) {
-                entry.mentioned.push(relative(tree, file));
+                references.mentioned.push(relative(tree, file));
             }
         }
     }
-    Ok((entries, texts))
+    (found, texts)
+}
+
+/// Rebases, in `text` of a file moving from the directory `before` to the
+/// directory `after`, the relative link targets to existing files that stay
+/// where they are, so they still point to them from the new place; counts
+/// them. A reference to a file that moves too is left to [`rewrite`].
+fn rebase(
+    text: &str,
+    before: &Path,
+    after: &Path,
+    moving: &BTreeMap<&PathBuf, &PathBuf>,
+) -> (String, usize) {
+    let mut out = String::with_capacity(text.len());
+    let mut count = 0;
+    let mut rest = text;
+    while let Some((start, end, next)) = next_reference(rest) {
+        out.push_str(&rest[..start]);
+        let reference = &rest[start..end];
+        let target = out.ends_with("](");
+        match rebased(reference, before, after, moving).filter(|_| target) {
+            Some(rewritten) => {
+                out.push_str(&rewritten);
+                count += 1;
+            }
+            None => out.push_str(reference),
+        }
+        out.push_str(&rest[end..next]);
+        rest = &rest[next..];
+    }
+    out.push_str(rest);
+    (out, count)
+}
+
+/// `reference` written from `after` when, read from `before`, it is a
+/// relative path to an existing file that does not move and that it no
+/// longer reaches from `after`.
+fn rebased(
+    reference: &str,
+    before: &Path,
+    after: &Path,
+    moving: &BTreeMap<&PathBuf, &PathBuf>,
+) -> Option<String> {
+    let (path, anchor) = match reference.split_once('#') {
+        Some((path, anchor)) => (path, Some(anchor)),
+        None => (reference, None),
+    };
+    let (lead, candidate) = match path.rfind(char::is_whitespace) {
+        Some(index) => path.split_at(index + 1),
+        None => ("", path),
+    };
+    let trimmed = candidate.trim_matches(['<', '>']);
+    if trimmed.is_empty() || trimmed.contains("://") || trimmed.starts_with('/') {
+        return None;
+    }
+    let resolved = normalize(&before.join(trimmed));
+    if !resolved.is_file()
+        || moving.contains_key(&resolved)
+        || normalize(&after.join(trimmed)) == resolved
+    {
+        return None;
+    }
+    let replacement = path_between(after, &resolved);
+    let mut rewritten = format!("{lead}{}", candidate.replacen(trimmed, &replacement, 1));
+    if let Some(anchor) = anchor {
+        rewritten.push('#');
+        rewritten.push_str(anchor);
+    }
+    Some(rewritten)
+}
+
+/// Plans moving the files `moves` names, `(from, to)`, with every reference
+/// to them in the Markdown files of the repository rewritten: what each move
+/// rewrites, in the order of `moves`, and the texts to write. Nothing is
+/// written; [`relocate`] writes the plan.
+///
+/// # Errors
+///
+/// Fails when a Markdown file cannot be read.
+pub fn plan_relocation(
+    tree: &Tree,
+    moves: &[(PathBuf, PathBuf)],
+) -> Result<(Vec<References>, BTreeMap<PathBuf, String>)> {
+    let markdown = markdown_files(tree)?;
+    Ok(rewrite_references(tree, &markdown, moves))
+}
+
+/// Writes the texts [`plan_relocation`] rewrote, then moves each file of
+/// `moves`, creating the directories it goes to.
+///
+/// # Errors
+///
+/// Fails when a file cannot be written or moved.
+pub fn relocate(texts: &BTreeMap<PathBuf, String>, moves: &[(PathBuf, PathBuf)]) -> Result<()> {
+    for (file, text) in texts {
+        std::fs::write(file, text).with_context(|| format!("writing {}", file.display()))?;
+    }
+    for (from, to) in moves {
+        if let Some(directory) = to.parent() {
+            std::fs::create_dir_all(directory)
+                .with_context(|| format!("creating {}", directory.display()))?;
+        }
+        std::fs::rename(from, to).with_context(|| format!("moving {}", from.display()))?;
+    }
+    Ok(())
 }
 
 /// Where `item` must go: `None` when it is where it belongs, the reason a

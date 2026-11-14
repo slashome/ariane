@@ -397,6 +397,38 @@ fn parking_unplanned_and_undeclared_work_is_shown_not_scheduled() {
 }
 
 #[test]
+fn a_closed_release_is_delivered_its_finished_work_shown_and_its_open_work_not_scheduled() {
+    let repo = repo(&NODE.replace("name = \"1.0\"\n", "name = \"1.0\"\nclosed = 2026-11-10\n"));
+    repo.write(
+        "p/archives/tasks/T1-a.md",
+        &item(
+            "T1",
+            "done",
+            "release: '1.0'\nclosed: 2026-11-09\nsize: S\n",
+        ),
+    )
+    .write(
+        "p/tasks/T2-b.md",
+        &item("T2", "todo", "release: '1.0'\nsize: S\n"),
+    )
+    .write(
+        "p/tasks/T3-c.md",
+        &item("T3", "todo", "release: '2.0'\nsize: S\n"),
+    );
+    let forecast = relative(&repo);
+    assert_eq!(sequence(&forecast), ["p#T3"]);
+    let closed = release(&forecast, "1.0");
+    assert_eq!(closed.closed.as_deref(), Some("2026-11-10"));
+    assert!(closed.summary.span.is_none());
+    assert_eq!((closed.summary.done, closed.summary.open), (1, 0));
+    assert_eq!(release(&forecast, "2.0").closed, None);
+    assert_eq!(forecast.unscheduled.len(), 1);
+    assert_eq!(forecast.unscheduled[0].reference, "p#T2");
+    assert_eq!(forecast.unscheduled[0].reason, Reason::ClosedRelease);
+    assert_eq!(forecast.unscheduled[0].release.as_deref(), Some("1.0"));
+}
+
+#[test]
 fn an_unsplit_story_or_epic_is_one_block_at_its_provisional_size() {
     let repo = repo(NODE);
     repo.write("p/epics/E1-a.md", &item("E1", "todo", "release: '1.0'\n"))

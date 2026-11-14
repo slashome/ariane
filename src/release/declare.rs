@@ -57,6 +57,9 @@ pub enum Refusal {
     Inherited { node: NodePath, from: NodePath },
     /// The release is still named by these items.
     Used { release: String, items: Vec<String> },
+    /// The release still has this open work, and closing it was asked
+    /// without carrying it over.
+    Open { release: String, items: Vec<String> },
 }
 
 impl std::fmt::Display for Refusal {
@@ -72,13 +75,18 @@ impl std::fmt::Display for Refusal {
                 "`{release}` is still the release of {}: assign them to another release, or none, first",
                 items.join(", ")
             ),
+            Refusal::Open { release, items } => write!(
+                f,
+                "`{release}` still has open work: {}; finish it, or carry it over to the next release",
+                items.join(", ")
+            ),
         }
     }
 }
 
 /// Refuses an unknown node, and a node whose release list is declared by an
 /// ancestor.
-fn check_declarer(tree: &Tree, node: &NodePath) -> Result<(), Refusal> {
+pub fn check_declarer(tree: &Tree, node: &NodePath) -> Result<(), Refusal> {
     if !tree.node_dir(node).is_dir() {
         return Err(Refusal::Invalid(format!("`{node}` is not a node")));
     }
@@ -318,6 +326,11 @@ pub fn set(tree: &Tree, node: &NodePath, name: &str, marks: Marks) -> Result<Res
         let Some(entry) = entries.get_mut(index) else {
             return Ok(());
         };
+        if marks.parking == Some(true) && entry.contains_key("closed") {
+            return Err(Refusal::Invalid(format!(
+                "`{name}` is closed: a closed release cannot become a parking one"
+            )));
+        }
         match marks.parking {
             Some(true) => {
                 entry.insert("parking", value(true));
@@ -454,8 +467,13 @@ pub fn check_assignable(tree: &Tree, item: &Item, release: Option<&str>) -> Resu
         return Ok(());
     };
     let effective = tree.configs.effective(&item.node);
-    if effective.release(name).is_some() {
-        return Ok(());
+    if let Some((_, release)) = effective.release(name) {
+        return match &release.closed {
+            Some(closed) => Err(Refusal::Invalid(format!(
+                "`{name}` was closed on {closed}: plan the item in a later release"
+            ))),
+            None => Ok(()),
+        };
     }
     Err(Refusal::Invalid(
         match (&effective.releases, &effective.releases_from) {

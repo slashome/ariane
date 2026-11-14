@@ -99,6 +99,9 @@ pub struct ReleasePlan {
     pub declared_by: NodePath,
     /// Its desired date, `YYYY-MM-DD`.
     pub target: Option<String>,
+    /// The day it was closed, `YYYY-MM-DD`: it is delivered, and nothing is
+    /// scheduled in it (ADR-0029).
+    pub closed: Option<String>,
     /// What it adds up to.
     #[serde(flatten)]
     pub summary: Summary,
@@ -259,6 +262,8 @@ pub struct DateRange {
 pub enum Reason {
     /// Its release is a parking one.
     Parking,
+    /// Its release is closed.
+    ClosedRelease,
     /// No release on it, its story or its epic.
     NoRelease,
     /// Its release is declared in no applicable list.

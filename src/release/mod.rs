@@ -5,16 +5,23 @@
 //! none. The nearest declaration wins, task, then story, then epic. This module
 //! resolves that precedence once, for `ariane tasks --json`, `ariane show
 //! --json` and the interface, and places the result in the node's declared
-//! order. [`declare`] writes releases, [`command`] is `ariane release`.
+//! order. [`declare`] writes releases, [`close`] closes one, [`changelog`]
+//! gives its changelog entry, [`command`] is `ariane release`.
 
+pub mod changelog;
+pub mod close;
 pub mod command;
 pub mod declare;
+
+use std::collections::HashMap;
 
 use serde::Serialize;
 
 use crate::item::Kind;
-use crate::node::Effective;
-use crate::tree::{Item, Tree, parse_reference};
+use crate::node::{Category, Effective};
+use crate::rank::{self, Placement};
+use crate::relations::Index;
+use crate::tree::{Item, NodePath, Tree, parse_reference};
 
 /// Where an item's effective release comes from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -93,6 +100,120 @@ fn parent<'a>(tree: &'a Tree, child: &Item) -> Option<&'a Item> {
     tree.items
         .iter()
         .find(|candidate| candidate.node == node && candidate.id() == Some(id.as_str()))
+}
+
+/// An epic, a story or a task that plans against a node's release list.
+#[derive(Debug, Clone)]
+pub struct Listed<'a> {
+    /// The item.
+    pub item: &'a Item,
+    /// Its effective release's name, `None` when no header of its chain has one.
+    pub release: Option<&'a str>,
+    /// The category of its status, `None` for a status its workflow lacks.
+    pub category: Option<Category>,
+    /// Its `parent`, when it resolves.
+    pub parent: Option<&'a Item>,
+    /// The items whose `parent` is this one, archived ones included.
+    pub children: Vec<&'a Item>,
+}
+
+impl Listed<'_> {
+    /// Tells whether its status is done or dropped.
+    pub fn is_closed(&self) -> bool {
+        self.category.is_some_and(Category::is_closed)
+    }
+
+    /// Tells whether its status is in the `done` category.
+    pub fn is_done(&self) -> bool {
+        self.category == Some(Category::Done)
+    }
+
+    /// Tells whether it is work of its own: a task, or a story or an epic
+    /// not split yet.
+    pub fn is_work(&self) -> bool {
+        self.item.kind == Kind::Task || self.children.is_empty()
+    }
+}
+
+/// The epics, stories and tasks with an id whose node plans against the list
+/// `node` declares, archived ones included, in the order of their node paths,
+/// then epics, stories and tasks, then the manual order (ADR-0022).
+pub fn listed<'a>(tree: &'a Tree, node: &NodePath) -> Vec<Listed<'a>> {
+    let mut configs: HashMap<&NodePath, Effective> = HashMap::new();
+    let mut items: Vec<&Item> = Vec::new();
+    for item in tree.items.iter().filter(|item| item.node.is_within(node)) {
+        if !matches!(item.kind, Kind::Task | Kind::Story | Kind::Epic) || item.id().is_none() {
+            continue;
+        }
+        let effective = configs
+            .entry(&item.node)
+            .or_insert_with(|| tree.configs.effective(&item.node));
+        if effective.releases_from.as_ref() == Some(node) {
+            items.push(item);
+        }
+    }
+    items.sort_by(|a, b| {
+        a.node
+            .cmp(&b.node)
+            .then_with(|| kind_order(a.kind).cmp(&kind_order(b.kind)))
+            .then_with(|| rank::compare(&Placement::of_item(a), &Placement::of_item(b)))
+    });
+    let index = Index::new(tree);
+    let parent_of = |item: &Item| {
+        item.document
+            .text("parent")
+            .and_then(|raw| index.resolve(raw, &item.node))
+    };
+    let mut children: HashMap<*const Item, Vec<&Item>> = HashMap::new();
+    for item in &tree.items {
+        if let Some(parent) = parent_of(item) {
+            children
+                .entry(std::ptr::from_ref(parent))
+                .or_default()
+                .push(item);
+        }
+    }
+    items
+        .into_iter()
+        .map(|item| Listed {
+            item,
+            release: configs
+                .get(&item.node)
+                .and_then(|effective| effective_name(tree, item, effective)),
+            category: item
+                .document
+                .text("status")
+                .and_then(|status| tree.configs.category(&item.node, status)),
+            parent: parent_of(item),
+            children: children
+                .get(&std::ptr::from_ref(item))
+                .cloned()
+                .unwrap_or_default(),
+        })
+        .collect()
+}
+
+/// The name of the effective release of `item`.
+fn effective_name<'a>(tree: &'a Tree, item: &'a Item, config: &Effective) -> Option<&'a str> {
+    effective(tree, item, config).map(|found| found.name)
+}
+
+/// Epics first, then stories, then tasks.
+fn kind_order(kind: Kind) -> u8 {
+    match kind {
+        Kind::Epic => 0,
+        Kind::Story => 1,
+        _ => 2,
+    }
+}
+
+/// The id of `item` as a line of `node`'s release shows it: bare in `node`,
+/// `<node>#<id>` in another node.
+pub fn shown_id(item: &Item, node: &NodePath) -> String {
+    match (item.id(), item.node == *node) {
+        (Some(id), true) => id.to_owned(),
+        _ => item.reference().unwrap_or_default(),
+    }
 }
 
 /// Unit tests of the release precedence.

@@ -1,14 +1,16 @@
 //! `ariane release`: declares, orders, renames, marks and removes the releases
-//! of a node, and plans an item in one (ADR-0023). Every subcommand writes at once
-//! and never commits, like `ariane people`; it goes through [`super::declare`],
-//! the code `ariane serve` runs for the same gestures.
+//! of a node, plans an item in one (ADR-0023), closes one and prints its
+//! changelog entry (ADR-0029). Every subcommand writes at once and never
+//! commits, like `ariane people`; it goes through [`super::declare`] and
+//! [`super::close`], the code `ariane serve` runs for the same gestures.
 
 use std::process::ExitCode;
 
 use anyhow::{Result, bail};
 
+use super::close::{self, Closing, Request};
 use super::declare::{self, Declaration, Marks, Place, Refusal};
-use crate::cli::{ReleaseArgs, ReleaseCommand};
+use crate::cli::{ReleaseArgs, ReleaseCloseArgs, ReleaseCommand};
 use crate::tree::{NodePath, Tree};
 
 /// The place the flags name, `default` when none is given.
@@ -117,11 +119,139 @@ pub fn run(tree: &Tree, args: &ReleaseArgs, here: Option<&NodePath>) -> Result<E
             }
             None
         }
+        ReleaseCommand::Close(args) => return run_close(tree, args),
+        ReleaseCommand::Changelog(args) => {
+            let node = NodePath::new(&args.node);
+            let (_, releases) = declare::effective_list(tree, &node);
+            if let Err(refusal) = declare::check_declarer(tree, &node) {
+                bail!("{refusal}");
+            }
+            if !releases.iter().any(|release| release.name == args.name) {
+                bail!("no release `{}` declared in `{node}`", args.name);
+            }
+            let entry = super::changelog::entry(tree, &node, &args.name);
+            if args.json {
+                println!("{}", serde_json::to_string_pretty(&entry)?);
+            } else {
+                print!("{}", entry.markdown);
+            }
+            None
+        }
     };
     if let Some(node) = listed {
         print_list(&tree.root, &node)?;
     }
     Ok(ExitCode::SUCCESS)
+}
+
+/// Runs `ariane release close`: prints the plan, or JSON; exits `2` on a dry
+/// run the close would refuse for its open work.
+fn run_close(tree: &Tree, args: &ReleaseCloseArgs) -> Result<ExitCode> {
+    let node = NodePath::new(&args.node);
+    let today = crate::closed::today();
+    let request = Request {
+        node: &node,
+        name: &args.name,
+        carry_over: args.carry_over,
+        dry_run: args.dry_run,
+        today: &today,
+    };
+    let closing = settle(close::close(tree, &request)?)?;
+    if args.json {
+        println!("{}", serde_json::to_string_pretty(&closing)?);
+    } else {
+        print_closing(&closing);
+    }
+    Ok(if closing.blocked {
+        ExitCode::from(2)
+    } else {
+        ExitCode::SUCCESS
+    })
+}
+
+/// Prints the plan of a close: the open work, what is archived and what
+/// stays, then the changelog entry.
+fn print_closing(closing: &Closing) {
+    let would = |done: &str, planned: &str| {
+        if closing.dry_run {
+            planned.to_owned()
+        } else {
+            done.to_owned()
+        }
+    };
+    let head = match (closing.dry_run, closing.blocked) {
+        (true, true) => format!(
+            "{} {}: cannot close yet (dry run, nothing written)",
+            closing.node, closing.release
+        ),
+        (true, false) => format!(
+            "{} {}: would close on {} (dry run, nothing written)",
+            closing.node, closing.release, closing.closed
+        ),
+        (false, _) => format!(
+            "{} {}: closed on {}",
+            closing.node, closing.release, closing.closed
+        ),
+    };
+    println!("{head}");
+    if !closing.open.is_empty() {
+        let destination = match (&closing.carry_to, closing.carry_over) {
+            (Some(next), true) => would(
+                &format!("carried over to {next}"),
+                &format!("would be carried over to {next}"),
+            ),
+            (Some(next), false) => format!("refused; --carry-over moves it to {next}"),
+            (None, _) => "refused; no later release to carry it over to".to_owned(),
+        };
+        println!("\nopen work, {destination}:");
+        for work in &closing.open {
+            println!(
+                "  {}  {}  ({})",
+                work.id,
+                work.title,
+                work.status.as_deref().unwrap_or("no status")
+            );
+        }
+    }
+    println!(
+        "\n{} {}:",
+        would("archived", "would archive"),
+        plural(closing.archived.len(), "item")
+    );
+    for archived in &closing.archived {
+        let mut line = format!(
+            "  {}  {} -> {}",
+            archived.work.id, archived.from, archived.to
+        );
+        if archived.references > 0 {
+            line.push_str(&format!(
+                " ({} in {})",
+                plural(archived.references, "reference"),
+                plural(archived.files, "file")
+            ));
+        }
+        println!("{line}");
+        for file in &archived.mentioned {
+            println!("    still mentioned in {file}, to read by hand");
+        }
+    }
+    if !closing.kept.is_empty() {
+        println!("\nkept outside archives:");
+        for kept in &closing.kept {
+            println!("  {}  {}: {}", kept.work.id, kept.work.title, kept.reason);
+        }
+    }
+    println!("\nchangelog entry:\n");
+    print!("{}", closing.changelog.markdown);
+}
+
+/// `count` followed by `word`, with an `s` when it is not one.
+fn plural(count: usize, word: &str) -> String {
+    if count == 1 {
+        format!("1 {word}")
+    } else {
+        format!("{count} {word}s")
+    }
 }
 
 /// The value of a change that went through, or its refusal as an error.

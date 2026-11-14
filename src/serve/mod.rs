@@ -190,6 +190,8 @@ pub fn router(state: Arc<State>) -> Router {
                 .patch(api::change_release)
                 .delete(api::remove_release),
         )
+        .route("/api/releases/close", post(api::close_release))
+        .route("/api/releases/changelog", get(api::changelog))
         .route("/api/monday/users", get(api::monday_users))
         .route("/api/push", post(api::push))
         .route("/api/pull", post(api::pull))
@@ -575,8 +577,8 @@ mod tests {
         assert_eq!(
             node["releases"],
             serde_json::json!([
-                {"name": "1.0", "parking": false, "target": "2027-03-01"},
-                {"name": "plus-tard", "parking": true, "target": null},
+                {"name": "1.0", "parking": false, "target": "2027-03-01", "closed": null},
+                {"name": "plus-tard", "parking": true, "target": null, "closed": null},
             ])
         );
         assert_eq!(node["releases_from"], "p");
@@ -1193,6 +1195,76 @@ mod tests {
             text.ends_with("[tracker]\nkind = \"monday\"\nboard = 7\n"),
             "{text}"
         );
+    }
+
+    #[tokio::test]
+    async fn a_release_is_planned_refused_carried_over_and_closed_and_its_changelog_given() {
+        let repo = sample();
+        repo.write(
+            "p/node.toml",
+            "[[release]]\nname = \"1.0\"\n\n[[release]]\nname = \"2.0\"\n\n[[release]]\nname = \"plus-tard\"\nparking = true\n",
+        )
+        .write(
+            "p/tasks/T001-a.md",
+            "---\nariane: 2\nnode: p\nid: T001\ntitle: Open\nstatus: todo\nrelease: '1.0'\n---\n# A\n",
+        )
+        .write(
+            "p/tasks/T002-b.md",
+            "---\nariane: 2\nnode: p\nid: T002\ntitle: Shipped\nstatus: done\nrelease: '1.0'\n---\n# B\n\nSee [T001](T001-a.md).\n",
+        );
+        let close = |carry_over: bool, dry_run: bool| serde_json::json!({ "node": "p", "name": "1.0", "carry_over": carry_over, "dry_run": dry_run });
+        let (status, body) = send(&repo, "POST", "/api/releases/close", close(false, true)).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["blocked"], true);
+        assert_eq!(body["carry_to"], "2.0");
+        assert_eq!(body["open"][0]["id"], "T001");
+        assert_eq!(body["archived"][0]["to"], "tree/p/archives/tasks/T002-b.md");
+        assert_eq!(
+            body["changelog"]["markdown"],
+            "## 1.0\n\n### Added\n\n- **Shipped**. (T002)\n"
+        );
+        let (status, body) = send(&repo, "POST", "/api/releases/close", close(false, false)).await;
+        assert_eq!(status, StatusCode::CONFLICT, "{body}");
+        assert_eq!(body["items"], serde_json::json!(["T001"]));
+        assert!(repo.root().join("tree/p/tasks/T002-b.md").exists());
+        let (status, body) = send(
+            &repo,
+            "POST",
+            "/api/releases/close",
+            serde_json::json!({ "node": "p", "name": "plus-tard" }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
+        let (status, body) = send(&repo, "POST", "/api/releases/close", close(true, false)).await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+        assert_eq!(body["dry_run"], false);
+        let archived =
+            std::fs::read_to_string(repo.root().join("tree/p/archives/tasks/T002-b.md")).unwrap();
+        assert!(
+            archived.contains("See [T001](../../tasks/T001-a.md)."),
+            "{archived}"
+        );
+        let open = std::fs::read_to_string(repo.root().join("tree/p/tasks/T001-a.md")).unwrap();
+        assert!(open.contains("release: '2.0'\n"), "{open}");
+        let text = std::fs::read_to_string(repo.root().join("tree/p/node.toml")).unwrap();
+        assert!(text.contains("name = \"1.0\"\nclosed = "), "{text}");
+        let (status, body, _) = get(&repo, "/api/releases/changelog?node=p&name=1.0").await;
+        assert_eq!(status, StatusCode::OK);
+        let entry: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(
+            entry["sections"][0]["lines"][0]["changes"][0]["archived"],
+            true
+        );
+        let (status, _, _) = get(&repo, "/api/releases/changelog?node=p&name=9.9").await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+        let (status, body) = send(
+            &repo,
+            "PATCH",
+            "/api/items",
+            serde_json::json!({ "path": "tree/p/tasks/T001-a.md", "changes": { "release": { "from": "2.0", "to": "1.0" } } }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY, "{body}");
     }
 
     #[tokio::test]

@@ -371,6 +371,45 @@ pub enum ReleaseCommand {
     Set(ReleaseSetArgs),
     #[command(about = "Plan an epic, a story or a task in a release, or in none")]
     Assign(ReleaseAssignArgs),
+    #[command(
+        about = "Close a delivered release: archive its finished work, mark it closed, print its changelog entry"
+    )]
+    Close(ReleaseCloseArgs),
+    #[command(about = "Print the changelog entry of a release")]
+    Changelog(ReleaseChangelogArgs),
+}
+
+/// Arguments of `ariane release close`: the node, the release, whether to
+/// carry its open work over, to only print the plan, to print JSON.
+#[derive(Args)]
+pub struct ReleaseCloseArgs {
+    #[arg(help = "The node that declares the release list")]
+    pub node: String,
+    pub name: String,
+
+    #[arg(
+        long,
+        help = "Move the open work to the next release instead of refusing"
+    )]
+    pub carry_over: bool,
+
+    #[arg(long, help = "Print what would be done, and write nothing")]
+    pub dry_run: bool,
+
+    #[arg(long)]
+    pub json: bool,
+}
+
+/// Arguments of `ariane release changelog`: the node, the release, and
+/// whether to print the structured entry as JSON.
+#[derive(Args)]
+pub struct ReleaseChangelogArgs {
+    #[arg(help = "The node that declares the release list")]
+    pub node: String,
+    pub name: String,
+
+    #[arg(long)]
+    pub json: bool,
 }
 
 /// Arguments of `ariane release add`: the node, the name, an optional place,

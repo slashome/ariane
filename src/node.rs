@@ -1,7 +1,7 @@
 //! `node.toml`: what a node declares about its items (SPEC.md §1.5, ADR-0008).
 //!
 //! A node may carry a `node.toml` at the root of its directory: a top-level
-//! `description` of the node in Markdown, never inherited, and eight tables:
+//! `description` of the node in Markdown, never inherited, and nine tables:
 //!
 //! - `[fields.<key>]` declares a custom header key and its type;
 //! - `[[workflow]]` lists the statuses its items may take, each with a stable
@@ -16,11 +16,13 @@
 //!   in the node's trackers;
 //! - `[personas."<id>"]` names the personas a user story is written for
 //!   (ADR-0018);
+//! - `[changelog]` gives the language of a release's changelog and the
+//!   reader it is written for (ADR-0029);
 //! - `[tracker]` binds the node to an external tracker (ADR-0011, not used yet);
 //! - `[proxy]`, or several `[[proxy]]`, give the node's development servers
 //!   local names (ADR-0016).
 //!
-//! A node inherits from its ancestors: fields, estimates, people and personas accumulate key by
+//! A node inherits from its ancestors: fields, estimates, changelog, people and personas accumulate key by
 //! key (the nearest declaration wins), a workflow or a release list replaces the inherited one as a whole, and
 //! a node with no workflow above it uses the default one, one status per category. A node with
 //! no release list above it has none: its items keep free `release` values.
@@ -185,9 +187,14 @@ pub struct Release {
     /// only checks a forecast, never changes the order (ADR-0028).
     #[serde(default, deserialize_with = "target")]
     pub target: Option<String>,
+    /// The day the release was closed, `YYYY-MM-DD`, written by `ariane
+    /// release close`: its work is delivered and archived, and it takes no
+    /// more (ADR-0029).
+    #[serde(default, deserialize_with = "target")]
+    pub closed: Option<String>,
 }
 
-/// Reads a release's `target`, a TOML date such as `2027-03-01` or the same
+/// Reads a release's `target` or `closed`, a TOML date such as `2027-03-01` or the same
 /// date as a string, and refuses anything else.
 fn target<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<String>, D::Error> {
     let text = match toml::Value::deserialize(deserializer)? {
@@ -195,13 +202,13 @@ fn target<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<String>, 
         toml::Value::String(text) => text,
         other => {
             return Err(D::Error::custom(format!(
-                "`target = {other}` is not a YYYY-MM-DD date"
+                "`{other}` is not a YYYY-MM-DD date"
             )));
         }
     };
     if !is_date(&text) {
         return Err(D::Error::custom(format!(
-            "`target = {text}` is not a YYYY-MM-DD date"
+            "`{text}` is not a YYYY-MM-DD date"
         )));
     }
     Ok(Some(text))
@@ -224,8 +231,97 @@ fn releases<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Vec<Rel
                 release.name
             )));
         }
+        if release.parking && release.closed.is_some() {
+            return Err(D::Error::custom(format!(
+                "the parking release `{}` cannot be closed",
+                release.name
+            )));
+        }
     }
     Ok(Some(releases))
+}
+
+/// The language of the headings of a changelog entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Language {
+    /// `Added`, `Fixed`.
+    #[default]
+    En,
+    /// `Nouveautés`, `Corrections`.
+    Fr,
+}
+
+impl Language {
+    /// Every language, in the order `ariane schema --json` lists them.
+    pub const ALL: [Language; 2] = [Language::En, Language::Fr];
+
+    /// The word written in `node.toml`.
+    pub fn id(self) -> &'static str {
+        match self {
+            Language::En => "en",
+            Language::Fr => "fr",
+        }
+    }
+}
+
+/// The reader a written changelog is for. Only the skill that writes the
+/// changelog reads it; the raw entry of the CLI is the same for every reader.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Audience {
+    /// A product owner.
+    Po,
+    /// A designer.
+    Designer,
+    /// A user of the product.
+    User,
+}
+
+impl Audience {
+    /// Every audience, in the order `ariane schema --json` lists them.
+    pub const ALL: [Audience; 3] = [Audience::Po, Audience::Designer, Audience::User];
+
+    /// The word written in `node.toml`.
+    pub fn id(self) -> &'static str {
+        match self {
+            Audience::Po => "po",
+            Audience::Designer => "designer",
+            Audience::User => "user",
+        }
+    }
+}
+
+/// The `[changelog]` table of one `node.toml`, each key optional.
+#[derive(Debug, Clone, Copy, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChangelogDeclaration {
+    /// The language of the headings.
+    pub language: Option<Language>,
+    /// The reader the skill writes for.
+    pub audience: Option<Audience>,
+}
+
+/// What applies to a node's changelog once its ancestors' tables are
+/// combined key by key.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
+pub struct Changelog {
+    /// The language of the headings, `en` when no node declares one.
+    pub language: Language,
+    /// The reader the skill writes for, when a node declares one.
+    pub audience: Option<Audience>,
+}
+
+impl Changelog {
+    /// Applies the keys `declaration` gives over the inherited ones.
+    fn apply(&mut self, declaration: &ChangelogDeclaration) {
+        if let Some(language) = declaration.language {
+            self.language = language;
+        }
+        if declaration.audience.is_some() {
+            self.audience = declaration.audience;
+        }
+    }
 }
 
 /// Type of a custom key, as written in `type = "…"` of a `[fields.<key>]` table.
@@ -316,6 +412,9 @@ pub struct NodeFile {
     /// each key optional (ADR-0025).
     #[serde(default)]
     pub estimates: estimate::Declaration,
+    /// The changelog's language and reader declared by this file.
+    #[serde(default)]
+    pub changelog: ChangelogDeclaration,
     /// The people declared by this file, by handle.
     #[serde(default)]
     pub people: BTreeMap<String, Person>,
@@ -367,6 +466,8 @@ pub struct Effective {
     /// What sizes cost, from the `[estimates]` of the node and its ancestors,
     /// key by key, over the values of ADR-0025.
     pub estimates: Pricing,
+    /// The changelog's language and reader, key by key.
+    pub changelog: Changelog,
     /// People of the node and its ancestors, by handle; the nearest wins.
     pub people: BTreeMap<String, Person>,
     /// Personas of the node and its ancestors, by id; the nearest wins.
@@ -494,6 +595,7 @@ impl Configs {
             releases: None,
             releases_from: None,
             estimates: Pricing::default(),
+            changelog: Changelog::default(),
             people: BTreeMap::new(),
             personas: BTreeMap::new(),
             tracker: None,
@@ -509,6 +611,7 @@ impl Configs {
                     .map(|(key, decl)| (key.clone(), decl.clone())),
             );
             effective.estimates.apply(&file.estimates);
+            effective.changelog.apply(&file.changelog);
             effective.people.extend(
                 file.people
                     .iter()
@@ -833,6 +936,37 @@ parking = true
             "[[release]]\nname = \"1.0\"\ntarget = \"mars\"\n",
             "[[release]]\nname = \"1.0\"\ntarget = 2027-03-01T10:00:00\n",
             "[[release]]\nname = \"1.0\"\nwhen = \"soon\"\n",
+            "[[release]]\nname = \"1.0\"\nclosed = \"yesterday\"\n",
+            "[[release]]\nname = \"later\"\nparking = true\nclosed = 2026-11-01\n",
+        ] {
+            assert!(toml::from_str::<NodeFile>(text).is_err(), "{text}");
+        }
+        let closed: NodeFile =
+            toml::from_str("[[release]]\nname = \"0.1\"\nclosed = 2026-11-14\n").unwrap();
+        assert_eq!(
+            closed.release.unwrap()[0].closed.as_deref(),
+            Some("2026-11-14")
+        );
+    }
+
+    #[test]
+    fn the_changelog_table_is_inherited_key_by_key_and_writes_english_by_default() {
+        let repo = Repo::new();
+        repo.write("p/node.toml", "[changelog]\nlanguage = \"fr\"\n")
+            .write("p/a/node.toml", "[changelog]\naudience = \"po\"\n")
+            .write("p/a/tasks/t.md", "# t\n")
+            .write("q/tasks/t.md", "# t\n");
+        let tree = Tree::load(repo.root()).unwrap();
+        let child = tree.configs.effective(&NodePath::new("p/a")).changelog;
+        assert_eq!(child.language, Language::Fr);
+        assert_eq!(child.audience, Some(Audience::Po));
+        let free = tree.configs.effective(&NodePath::new("q")).changelog;
+        assert_eq!(free, Changelog::default());
+        assert_eq!(free.language, Language::En);
+        for text in [
+            "[changelog]\nlanguage = \"de\"\n",
+            "[changelog]\naudience = \"cto\"\n",
+            "[changelog]\nformat = \"md\"\n",
         ] {
             assert!(toml::from_str::<NodeFile>(text).is_err(), "{text}");
         }

@@ -46,6 +46,7 @@ pub fn findings(tree: &Tree, scope: Option<&NodePath>) -> Vec<Finding> {
     }
     duplicates(tree, scope, &mut found);
     epic_parents(tree, scope, &mut found);
+    closed_releases(tree, scope, &mut found);
     calendar(
         tree,
         scope,
@@ -1053,6 +1054,70 @@ fn epic_parents(tree: &Tree, scope: Option<&NodePath>, found: &mut Vec<Finding>)
                 "remove `parent` from the front-matter".to_owned(),
             ]),
         });
+    }
+}
+
+/// Warns on open work whose effective release is closed (ADR-0029): a task,
+/// or a story or an epic not split yet, outside `archives/`, whose status is
+/// neither done nor dropped.
+fn closed_releases(tree: &Tree, scope: Option<&NodePath>, found: &mut Vec<Finding>) {
+    for (node, file) in &tree.configs.files {
+        let Some(releases) = &file.release else {
+            continue;
+        };
+        let closed: Vec<(&str, &str)> = releases
+            .iter()
+            .filter_map(|release| Some((release.name.as_str(), release.closed.as_deref()?)))
+            .collect();
+        if closed.is_empty() {
+            continue;
+        }
+        let next = |name: &str| {
+            releases
+                .iter()
+                .skip_while(|release| release.name != name)
+                .skip(1)
+                .find(|release| !release.parking && release.closed.is_none())
+                .map(|release| release.name.clone())
+        };
+        for listed in crate::release::listed(tree, node) {
+            let item = listed.item;
+            if item.archived
+                || !listed.is_work()
+                || listed.is_closed()
+                || scope.is_some_and(|scope| !item.node.is_within(scope))
+            {
+                continue;
+            }
+            let Some((name, date)) = closed
+                .iter()
+                .find(|(name, _)| listed.release == Some(*name))
+            else {
+                continue;
+            };
+            let mut resolutions = vec![format!(
+                "finish it or drop it, then move it to archives/{}",
+                match item.kind {
+                    Kind::Epic => "epics/",
+                    Kind::Story => "stories/",
+                    _ => "tasks/",
+                }
+            )];
+            if let Some(next) = next(name) {
+                resolutions.push(format!(
+                    "plan it in a later release: `ariane release assign {} {next}`",
+                    item.reference().unwrap_or_default()
+                ));
+            }
+            found.push(Finding {
+                check: Check::OpenInClosedRelease,
+                severity: Severity::Warning,
+                node: Some(item.node.clone()),
+                path: Some(relative(tree, &item.file)),
+                message: format!("open work in the release `{name}`, closed on {date}"),
+                remedy: Remedy::human(resolutions),
+            });
+        }
     }
 }
 

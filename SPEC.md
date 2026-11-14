@@ -77,7 +77,7 @@ The body of the item MUST NOT restate in prose a fact the header carries.
 
 ### 1.5 `node.toml`
 
-A node MAY carry a `node.toml` file at the root of its directory. It describes the node, declares custom fields, the status workflow, the releases, what sizes cost, the people items wait for and the personas stories are written for, and may name the node's development server.
+A node MAY carry a `node.toml` file at the root of its directory. It describes the node, declares custom fields, the status workflow, the releases, what sizes cost, how a release's changelog is written, the people items wait for and the personas stories are written for, and may name the node's development server.
 
 **Description.** A top-level `description` key MAY describe the node: its role, its host repository, its stack, its sources of truth. It is a Markdown string, multi-line with TOML's `"""`, and it is **not inherited**: it describes the node whose `node.toml` holds it ([ADR-0017](docs/adr/0017-keep-a-nodes-judgment-in-its-items.md), amended). Durable rules and conventions of the node belong in its ressources, not here.
 
@@ -118,6 +118,7 @@ stage = "testing"
 - `name` MUST be given, non-blank and unique within the list; it is free (`1.8.0`, `0.3`, `mango`) and is the value items write in `release`.
 - `parking` MAY be `true` to mark a release that is never scheduled and never closed, such as `plus-tard`; it defaults to `false`.
 - `target` MAY give a desired date, `YYYY-MM-DD`, as a TOML date or a string. It only checks a forecast; it never changes the order.
+- `closed` MAY give the day the release was closed, `YYYY-MM-DD`, as a TOML date or a string. `ariane release close` writes it (§1.5 "Closing a release"); a parking release MUST NOT carry it. A closed release takes no more work ([ADR-0029](docs/adr/0029-close-a-release-in-node-toml-and-give-its-changelog.md)).
 
 No other key is allowed. The order of entries is the delivery order.
 
@@ -164,6 +165,19 @@ The hours an item weighs are computed, never written: a task weighs the hours of
 - `ariane estimates unset <node> <key>` removes it: the key is inherited again. Removing the last key removes the table.
 - `PATCH /api/estimates` takes `node` and `estimates`, an object of keys whose value sets the key, or `null` to remove it; all of them are written or none. It answers as `--json`.
 
+**Changelog.** A `[changelog]` table says how the changelog entry of a release is written ([ADR-0029](docs/adr/0029-close-a-release-in-node-toml-and-give-its-changelog.md)). Both keys are optional:
+
+- `language` is the language of the headings: `en` (the default) writes `Added` and `Fixed`, `fr` writes `Nouveautés` and `Corrections`.
+- `audience` names the reader the written changelog is for: `po`, `designer` or `user`. Only the skill that writes the changelog reads it; the raw entry of the CLI is the same for every reader.
+
+No other key is allowed.
+
+```toml
+[changelog]
+language = "fr"
+audience = "po"
+```
+
 **People.** Each `[people.<handle>]` table declares one person an item may wait for: `name` MUST be given, free text; every other key is the person's id in a tracker, such as `monday = 58294966`. A handle matches `^[a-z][a-z0-9-]*$`.
 
 **Personas.** Each `[personas."<id>"]` table declares one persona a story may be written for ([ADR-0018](docs/adr/0018-name-the-personas-a-story-is-written-for.md)): `name` MUST be given, free text, the readable label; no other key is allowed. An id SHOULD read `<group>:<role>`, such as `cmc:dev` or `user:rh`; it is a quoted TOML key because of its colon:
@@ -178,7 +192,7 @@ name = "Responsable RH"
 
 **Inheritance.** A node inherits the `node.toml` of each of its ancestors, from the root down:
 
-- `[fields]`, `[estimates]`, `[people]` and `[personas]` accumulate key by key. A descendant MAY redeclare a key, an estimate, a person or a persona inherited from an ancestor, and the descendant's declaration wins.
+- `[fields]`, `[estimates]`, `[changelog]`, `[people]` and `[personas]` accumulate key by key. A descendant MAY redeclare a key, an estimate, a person or a persona inherited from an ancestor, and the descendant's declaration wins.
 - A `[[workflow]]` declared in a node replaces the inherited workflow **as a whole**; entries are never merged.
 - A `[[release]]` list declared in a node replaces the inherited list **as a whole**, the same way. A node with no list anywhere above it has none, and its items keep free `release` values.
 - `description` and `[proxy]` (or `[[proxy]]`) are never inherited.
@@ -195,9 +209,39 @@ name = "Responsable RH"
 - `ariane release set <node> <name>` with `--parking` or `--no-parking`, and `--target YYYY-MM-DD` or `--no-target`, marks it as a parking release or not and sets or removes its target date, the rest of its entry kept; at least one is required, and a target that is not a date is refused. `PATCH /api/releases` takes the same as `parking` (a boolean) and `target` (a date, or `null` to remove it).
 - `ariane release rename <node> <old> <new>` renames it and rewrites `release` in every item, archived ones included, whose own value is the old name and whose node plans against that list.
 - `ariane release remove <node> <name>` removes it, and is refused while an item of that scope still names it, listing them. Removing the last entry removes the list: the node then plans against its ancestors' list, or none.
-- `ariane release assign <node>#<id> <name>` writes `release` on an epic, a story or a task that is not archived, and `--none` removes it. A name the item's effective list does not declare is refused, and so is any name when no list applies.
+- `ariane release assign <node>#<id> <name>` writes `release` on an epic, a story or a task that is not archived, and `--none` removes it. A name the item's effective list does not declare is refused, and so is a closed release, and any name when no list applies.
+- `ariane release set <node> <name> --parking` is refused on a closed release.
 
 A node that inherits its list cannot change it: the change is refused, naming the node that declares the list, rather than copying the list down. Every change of `node.toml` keeps its comments, the order of its tables and the keys Ariane does not know, touches only the lines it changes, and writes nothing when the result would not be a valid `node.toml`.
+
+**Closing a release.** `ariane release close <node> <name>`, or `POST /api/releases/close` with `node`, `name`, `carry_over` and `dry_run`, closes a delivered release of the list `node` declares ([ADR-0029](docs/adr/0029-close-a-release-in-node-toml-and-give-its-changelog.md)). It writes at once and never commits:
+
+1. It refuses an unknown, parking or already closed release, and a node that inherits its list.
+2. The **open work** of the release is every task, and every story or epic not split yet, outside `archives/`, whose effective release (§1.3) is the release and whose status is neither `done` nor `dropped`. While there is some, the close is refused and lists it (`409` with its `items` from the API). With `--carry-over`, each open item gets `release` set, on itself, to the next release of the list that is neither parking nor closed; there being none is refused.
+3. The **finished work** of the release (`done` and `dropped`, not archived) moves under `archives/tasks/`, `archives/stories/` or `archives/epics/` of its node. A story, then an epic, whose effective release is the release or one of whose children moves, follows when its own status is `done` or `dropped` and none of its children is left outside `archives/`; otherwise it stays, and the plan says why. Every Markdown file of the repository has its references to a moved file rewritten as `ariane fix` rewrites them, and a moved file has its relative link targets to files that stay rebased. A file already at the destination is refused.
+4. It writes `closed = <today>` on the release's entry of `node.toml`, the rest of the file kept.
+5. It prints the plan — the open work and where it goes, what moved and how many references were rewritten, the stories and epics kept and why — then the release's changelog entry. `--json` gives the same plan, with `blocked`, `carry_to` and the structured `changelog`.
+
+`--dry-run` (`dry_run`) computes the same plan and writes nothing; it does not refuse on open work, it reports it with `blocked` true, and the CLI then exits `2`. Nothing is written to the host repository.
+
+**Changelog entry.** `ariane release changelog <node> <name>` (and `--json`), or `GET /api/releases/changelog?node=&name=`, gives the raw changelog entry of a release at any time; closing prints the same. It lists the finished work whose effective release is the release, archived or not: tasks, and stories or epics not split yet, of the `done` category. Its format is shared by every node:
+
+```
+## 0.10.0
+
+### Added
+
+- **Company page**: about page of the organisation; parent and subsidiaries. (T014, T015)
+
+### Fixed
+
+- **Company page**: the certified results tabs are clickable. (T031)
+```
+
+- The title is the release's name, without a date.
+- A section is written only when it has lines: `Added`, then `Fixed`, which holds the work whose own `type` is `bug` or `fix`. The headings follow `[changelog] language` (`Nouveautés` and `Corrections` in `fr`, where the subject is followed by ` : `).
+- One line per subject, in bold: a task's story, else its epic, else the task itself; a story or an epic not split yet is its own subject. The titles of the work of a subject are joined by `; ` on its line, which ends with the ids of that work, bare for the node that declares the list and `<node>#<id>` for a descendant's. Lines come in the order of their subjects: epics, stories, then work of its own, each in the order of items (§1.3).
+- No `type` names a removal yet: the CLI writes no `Removed` section.
 
 **Changing a workflow.** Renaming a status id MUST go through `ariane status rename <node> <old> <new>`; removing a status still in use MUST go through `ariane status remove <node> <id> --into <other>`. Both commands rewrite `node.toml` and every affected item in one operation.
 
@@ -229,6 +273,7 @@ A node that inherits its list cannot change it: the change is refused, naming th
 | `personas` on an item that is not a story, `rank` on a ressource, or `closed` on a reflexion | warning |
 | `waiting_for`, `waiting_on` or `waiting_since` on an item whose status is not in the `waiting` category | warning |
 | `closed` on a task, an epic or a story whose status is not in the `done` category | warning — remedy: remove `closed`, or set a status of the `done` category |
+| Open work (a task, or a story or an epic not split yet, outside `archives/`, neither `done` nor `dropped`) whose effective release is closed | warning — remedy: finish it and archive it, or plan it in a later release |
 | A required custom key is missing | error |
 | A file name that does not begin with the item's `id`, `-` and a slug | error — remedy: `ariane fix` (renames to `<id>-<current name>` and rewrites the links); a human when the name is the bare id |
 | An item in `backlog/` or `archives/backlog/` | error — remedy: `ariane fix` (moves it into `tasks/` or `archives/tasks/` and rewrites the links) |
@@ -407,7 +452,7 @@ The forecast of a node runs on the node's **carrier** (§2.3) over every task, s
 
 - A **piece of work** is a task, or a story or an epic not split yet (a story without tasks, an epic without stories), which counts as one block at its provisional size, else at the default size (§1.5).
 - Its hours are those of §1.5: for open work its remaining hours and testing, the whole of them for work in progress, since partial progress is not recorded. Work in a status of the `testing` stage (§1.5) has done its work: it counts only its testing hours.
-- Its release is its effective release (§1.3). Work of a parking release, work without effective release and work whose release no applicable list declares is listed as **unscheduled**, with the reason, and never scheduled. When the carrier's descendants declare release lists of their own, a release is identified by its name and the node declaring its list; releases are ordered by their place in their list, then by the path of that node.
+- Its release is its effective release (§1.3). Work of a parking release, open work of a closed release, work without effective release and work whose release no applicable list declares is listed as **unscheduled**, with the reason (`parking`, `closed_release`, `no_release`, `undeclared_release`), and never scheduled. A closed release keeps its place and gives its `closed` date: it is delivered, its finished work is shown, and nothing is scheduled in it. When the carrier's descendants declare release lists of their own, a release is identified by its name and the node declaring its list; releases are ordered by their place in their list, then by the path of that node.
 - Dropped work is left out. Finished work (`done` category) takes no hours: it is shown in its release at its `closed` date, else at the date approximated from git (§1.3, marked approximate), else without a date.
 
 ### 3.3 Order

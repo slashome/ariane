@@ -184,3 +184,69 @@ fn an_item_is_assigned_from_its_node_and_an_inherited_list_is_refused() {
     );
     assert!(fixture.run(&["doctor", "--all"]).status.success());
 }
+
+#[test]
+fn a_release_is_closed_after_a_dry_run_and_its_changelog_printed_again() {
+    let fixture = Fixture::new();
+    fixture
+        .write(
+            "tree/p/node.toml",
+            "[changelog]\nlanguage = \"fr\"\n\n[[release]]\nname = \"1.0\"\n\n[[release]]\nname = \"2.0\"\n\n[[release]]\nname = \"plus-tard\"\nparking = true\n",
+        )
+        .write(
+            "tree/p/tasks/T3-c.md",
+            &item("p", "T3", "release: '1.0'\ntype: bug\n").replace("status: todo", "status: done"),
+        );
+    let dry = fixture.run(&["release", "close", "p", "1.0", "--dry-run"]);
+    assert_eq!(dry.status.code(), Some(2));
+    let text = String::from_utf8(dry.stdout).unwrap();
+    assert!(
+        text.starts_with("p 1.0: cannot close yet (dry run, nothing written)\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains("open work, refused; --carry-over moves it to 2.0:\n  T1  T1  (todo)\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains(
+            "would archive 1 item:\n  T3  tree/p/tasks/T3-c.md -> tree/p/archives/tasks/T3-c.md\n"
+        ),
+        "{text}"
+    );
+    assert!(
+        text.ends_with("## 1.0\n\n### Corrections\n\n- **T3**. (T3)\n"),
+        "{text}"
+    );
+    assert!(
+        refused(&fixture.run(&["release", "close", "p", "1.0"]))
+            .contains("still has open work: T1")
+    );
+    assert!(refused(&fixture.run(&["release", "close", "p", "plus-tard"])).contains("parking"));
+    let text = stdout(&fixture.run(&["release", "close", "p", "1.0", "--carry-over"]));
+    assert!(text.contains("open work, carried over to 2.0:"), "{text}");
+    assert!(
+        fixture
+            .read("tree/p/tasks/T1-a.md")
+            .contains("release: '2.0'\n")
+    );
+    assert!(
+        fixture
+            .read("tree/p/node.toml")
+            .contains("name = \"1.0\"\nclosed = ")
+    );
+    let text = stdout(&fixture.run(&["release", "changelog", "p", "1.0"]));
+    assert_eq!(text, "## 1.0\n\n### Corrections\n\n- **T3**. (T3)\n");
+    let json: serde_json::Value = serde_json::from_str(&stdout(&fixture.run(&[
+        "release",
+        "changelog",
+        "p",
+        "1.0",
+        "--json",
+    ])))
+    .unwrap();
+    assert_eq!(json["language"], "fr");
+    assert_eq!(json["sections"][0]["kind"], "fixed");
+    assert!(refused(&fixture.run(&["release", "close", "p", "1.0"])).contains("already closed"));
+    assert!(fixture.run(&["doctor", "--all"]).status.success());
+}

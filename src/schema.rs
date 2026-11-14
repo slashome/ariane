@@ -32,7 +32,7 @@ use crate::calendar::{
 };
 use crate::estimate::{Pricing, TESTERS};
 use crate::item::{Kind, SCHEMA_VERSION};
-use crate::node::{Category, Stage};
+use crate::node::{Audience, Category, Language, Stage};
 
 /// Allowed values of `size`, smallest first.
 pub const SIZES: &[&str] = &["XS", "S", "M", "L", "XL"];
@@ -359,6 +359,12 @@ pub const RELEASE_KEYS: &[ReleaseKey] = &[
         requirement: Requirement::May,
         doc: "The desired date, `YYYY-MM-DD`: it checks a forecast and never changes the order.",
     },
+    ReleaseKey {
+        name: "closed",
+        value: "date",
+        requirement: Requirement::May,
+        doc: "The day `ariane release close` closed it, `YYYY-MM-DD`: its work is delivered and archived, and no item is planned in it any more. Never on a parking release.",
+    },
 ];
 
 /// The `[[release]]` declaration as JSON: its keys, that the order of the
@@ -469,6 +475,35 @@ fn estimates_declaration() -> Json {
         "keys": keys,
         "inheritance": "key",
         "unit": "hours",
+    })
+}
+
+/// The `[changelog]` declaration as JSON: its two optional keys with their
+/// vocabulary and default, inherited key by key.
+fn changelog_declaration() -> Json {
+    let languages: Vec<&str> = Language::ALL.iter().map(|language| language.id()).collect();
+    let audiences: Vec<&str> = Audience::ALL.iter().map(|audience| audience.id()).collect();
+    json!({
+        "table": "[changelog]",
+        "keys": [
+            {
+                "name": "language",
+                "type": "enum",
+                "requirement": Requirement::May,
+                "values": languages,
+                "default": Language::default().id(),
+                "doc": "The language of the headings of a changelog entry: `en` writes Added and Fixed, `fr` Nouveautés and Corrections.",
+            },
+            {
+                "name": "audience",
+                "type": "enum",
+                "requirement": Requirement::May,
+                "values": audiences,
+                "default": null,
+                "doc": "Who the written changelog is for; only the skill that writes it reads this key, the raw entry is the same for every reader.",
+            },
+        ],
+        "inheritance": "key",
     })
 }
 
@@ -597,6 +632,7 @@ pub fn export() -> Json {
             "workflow": workflow_declaration(),
             "release": release_declaration(),
             "estimates": estimates_declaration(),
+            "changelog": changelog_declaration(),
         },
         "calendar_toml": calendar_declaration(),
     })
@@ -787,6 +823,21 @@ mod tests {
     }
 
     #[test]
+    fn the_export_describes_the_changelog_table_and_its_vocabularies() {
+        let changelog = &export()["node_toml"]["changelog"];
+        assert_eq!(changelog["table"], json!("[changelog]"));
+        assert_eq!(changelog["inheritance"], json!("key"));
+        assert_eq!(changelog["keys"][0]["name"], json!("language"));
+        assert_eq!(changelog["keys"][0]["values"], json!(["en", "fr"]));
+        assert_eq!(changelog["keys"][0]["default"], json!("en"));
+        assert_eq!(changelog["keys"][1]["name"], json!("audience"));
+        assert_eq!(
+            changelog["keys"][1]["values"],
+            json!(["po", "designer", "user"])
+        );
+    }
+
+    #[test]
     fn the_export_describes_the_release_declaration_its_inheritance_and_parking() {
         let release = &export()["node_toml"]["release"];
         assert_eq!(release["table"], json!("[[release]]"));
@@ -799,9 +850,10 @@ mod tests {
             .iter()
             .map(|key| key["name"].as_str().unwrap())
             .collect();
-        assert_eq!(names, ["name", "parking", "target"]);
+        assert_eq!(names, ["name", "parking", "target", "closed"]);
         assert_eq!(release["keys"][0]["requirement"], json!("must"));
         assert_eq!(release["keys"][1]["type"], json!("boolean"));
+        assert_eq!(release["keys"][3]["type"], json!("date"));
     }
 
     #[test]

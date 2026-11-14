@@ -28,6 +28,8 @@ What the market calls these levels, checked before deciding:
 5. **Tasks without release**, on themselves, their story and their epic, are "non planifié": shown, not scheduled, like a parking release.
 6. **Closing a release.** `ariane release close <name>` refuses while a task of the release is open, listing them; `--move-open-to <next>` rewrites their `release` instead, so the slip stays visible in git. Then it moves the release's `done` tasks into `archives/`. It writes the working tree and never commits ([ADR-0009](0009-migrate-content-with-versioned-migrations.md)). A parking release cannot be closed. Whether a release is closed is read from the tasks whose effective release it is: none open, none left outside `archives/`. A story or epic forecast in a closing release that still has no tasks blocks the close like an open task.
 
+> **Amended 2026-11-14.** Closing writes `closed = YYYY-MM-DD` on the release's entry, and a release is closed when its entry says so, no longer when its tasks are all archived; the option is `--carry-over`, to the next release neither parking nor closed; closing also prints the release's changelog entry ([ADR-0029](0029-close-a-release-in-node-toml-and-give-its-changelog.md)).
+
 ## Consequences
 
 - One level of target, named the way the forges name it. Epics and stories carry the *what*, releases the *when*.

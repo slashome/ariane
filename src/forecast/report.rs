@@ -169,6 +169,7 @@ pub fn assemble(input: &Input, schedule: &Schedule) -> Forecast {
                 name: spec.name.clone(),
                 declared_by: spec.declared_by.clone(),
                 target: spec.target.map(|date| date.to_string()),
+                closed: spec.closed.map(|date| date.to_string()),
                 summary: summarize(input, &members, &schedule.placed, &mut clock),
                 epics: epic_plans(&context, &members, &mut clock),
             })
@@ -419,6 +420,7 @@ fn unscheduled(input: &Input, schedule: &Schedule) -> Vec<Unscheduled> {
         }
         let reason = match &unit.release {
             Planned::Parking(_) => Reason::Parking,
+            Planned::Closed(_) => Reason::ClosedRelease,
             Planned::Unplanned => Reason::NoRelease,
             Planned::Undeclared(_) => Reason::UndeclaredRelease,
             Planned::Release(_) if schedule.cycles.contains(&index) => Reason::Cycle,
@@ -448,7 +450,9 @@ fn unscheduled(input: &Input, schedule: &Schedule) -> Vec<Unscheduled> {
 fn release_name(input: &Input, planned: &Planned) -> Option<String> {
     match planned {
         Planned::Release(position) => Some(input.releases[*position].name.clone()),
-        Planned::Parking(name) | Planned::Undeclared(name) => Some(name.clone()),
+        Planned::Parking(name) | Planned::Closed(name) | Planned::Undeclared(name) => {
+            Some(name.clone())
+        }
         Planned::Unplanned => None,
     }
 }
@@ -565,7 +569,7 @@ fn hierarchy(unit: &Unit, groups: &HashMap<&str, &GroupSpec>, found: &mut Warnin
                 "release `{name}` is declared in no applicable list"
             )),
         ),
-        Planned::Release(_) | Planned::Parking(_) => {}
+        Planned::Release(_) | Planned::Parking(_) | Planned::Closed(_) => {}
     }
 }
 

@@ -43,6 +43,7 @@ use crate::calendar::write::{
     BlockSpec, Change as CalendarChange, NodeChange, Refusal as CalendarRefusal,
 };
 use crate::item::Kind;
+use crate::release::close;
 use crate::release::declare::{self, Place, Refusal as ReleaseRefusal};
 use crate::tree::{NodePath, Tree};
 
@@ -223,6 +224,7 @@ pub async fn nodes(Shared(state): Shared<Arc<State>>) -> Response {
                     "releases_from": effective.releases_from,
                     "estimates": effective.estimates,
                     "estimates_from": crate::estimate::declare::sources(&tree.configs, &node.path),
+                    "changelog": effective.changelog,
                     "people": effective.people,
                     "personas": effective.personas,
                     "tracker": effective.tracker,
@@ -1195,7 +1197,9 @@ fn refused_release(refusal: &ReleaseRefusal) -> Response {
             StatusCode::UNPROCESSABLE_ENTITY,
             json!({ "declared_in": from }),
         ),
-        ReleaseRefusal::Used { items, .. } => (StatusCode::CONFLICT, json!({ "items": items })),
+        ReleaseRefusal::Used { items, .. } | ReleaseRefusal::Open { items, .. } => {
+            (StatusCode::CONFLICT, json!({ "items": items }))
+        }
     };
     let mut body = extra;
     body["error"] = Value::String(refusal.to_string());
@@ -1287,6 +1291,108 @@ pub async fn remove_release(
         )
     })
     .await
+}
+
+/// The body of `POST /api/releases/close`.
+#[derive(Debug, Deserialize)]
+pub struct CloseRequest {
+    /// The node that declares the list.
+    pub node: String,
+    /// The release to close.
+    pub name: String,
+    /// Moves the open work to the next release instead of refusing.
+    #[serde(default)]
+    pub carry_over: bool,
+    /// Computes the plan and writes nothing.
+    #[serde(default)]
+    pub dry_run: bool,
+}
+
+/// `POST /api/releases/close`: closes a release as `ariane release close`,
+/// or plans it with `dry_run`, and answers the plan: the open work, what is
+/// archived and what stays, the changelog entry. `422` for a refused close,
+/// `409` with the open `items` when work is open and not carried over.
+pub async fn close_release(
+    Shared(state): Shared<Arc<State>>,
+    Json(request): Json<CloseRequest>,
+) -> Response {
+    exclusive(state, move |state| {
+        let node = NodePath::new(&request.node);
+        let today = crate::closed::today();
+        let outcome = match state.tree.read() {
+            Ok(tree) => close::close(
+                &tree,
+                &close::Request {
+                    node: &node,
+                    name: &request.name,
+                    carry_over: request.carry_over,
+                    dry_run: request.dry_run,
+                    today: &today,
+                },
+            ),
+            Err(_) => {
+                return error(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "the tree lock is poisoned",
+                );
+            }
+        };
+        let closing = match outcome {
+            Err(failure) => {
+                return error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}"));
+            }
+            Ok(Err(refusal)) => return refused_release(&refusal),
+            Ok(Ok(closing)) => closing,
+        };
+        if !request.dry_run
+            && let Err(failure) = state.reload()
+        {
+            return error(StatusCode::INTERNAL_SERVER_ERROR, &format!("{failure:#}"));
+        }
+        Json(json!(closing)).into_response()
+    })
+    .await
+}
+
+/// The query of `GET /api/releases/changelog`.
+#[derive(Debug, Deserialize)]
+pub struct ChangelogQuery {
+    /// The node that declares the list.
+    pub node: String,
+    /// The release.
+    pub name: String,
+}
+
+/// `GET /api/releases/changelog?node=&name=`: the changelog entry of a
+/// release, as `ariane release changelog --json`; `422` for an unknown
+/// release or a node that inherits its list.
+pub async fn changelog(
+    Shared(state): Shared<Arc<State>>,
+    Query(query): Query<ChangelogQuery>,
+) -> Response {
+    let node = NodePath::new(&query.node);
+    let Ok(tree) = state.tree.read() else {
+        return error(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "the tree lock is poisoned",
+        );
+    };
+    if let Err(refusal) = declare::check_declarer(&tree, &node) {
+        return refused_release(&refusal);
+    }
+    let (_, releases) = declare::effective_list(&tree, &node);
+    if !releases.iter().any(|release| release.name == query.name) {
+        return error(
+            StatusCode::UNPROCESSABLE_ENTITY,
+            &format!("no release `{}` declared in `{node}`", query.name),
+        );
+    }
+    Json(json!(crate::release::changelog::entry(
+        &tree,
+        &node,
+        &query.name
+    )))
+    .into_response()
 }
 
 /// The query of `GET /api/monday/users`.

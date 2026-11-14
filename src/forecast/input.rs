@@ -45,6 +45,9 @@ pub struct ReleaseSpec {
     pub declared_by: NodePath,
     /// The desired date of the `[[release]]` entry.
     pub target: Option<Date>,
+    /// The day it was closed: its work is delivered and nothing is scheduled
+    /// in it any more (ADR-0029).
+    pub closed: Option<Date>,
 }
 
 /// A story or an epic, as a group of work.
@@ -72,6 +75,8 @@ pub enum Planned {
     Release(usize),
     /// A parking release, never scheduled.
     Parking(String),
+    /// A closed release, for open work: never scheduled.
+    Closed(String),
     /// A release no applicable list declares, which cannot be ordered.
     Undeclared(String),
     /// No release on the item, its story or its epic.

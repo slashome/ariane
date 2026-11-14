@@ -245,6 +245,9 @@ impl View<'_> {
         if homonyms > 1 {
             let _ = write!(label, "  (declared by {})", plan.declared_by);
         }
+        if let Some(closed) = &plan.closed {
+            let _ = write!(label, "  (closed {closed})");
+        }
         lines.push(self.group(
             0,
             label,
@@ -470,6 +473,8 @@ fn unscheduled(view: &View, entries: &[Unscheduled]) -> String {
         let reason = match (entry.reason, entry.release.as_deref()) {
             (Reason::Parking, Some(release)) => format!("parked in {release}"),
             (Reason::Parking, None) => "parked".to_owned(),
+            (Reason::ClosedRelease, Some(release)) => format!("in {release}, closed"),
+            (Reason::ClosedRelease, None) => "in a closed release".to_owned(),
             (Reason::NoRelease, _) => "no release".to_owned(),
             (Reason::UndeclaredRelease, Some(release)) => format!("undeclared release {release}"),
             (Reason::UndeclaredRelease, None) => "undeclared release".to_owned(),

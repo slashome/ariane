@@ -26,6 +26,10 @@ use crate::tree::{Item, NodePath, Tree};
 
 use super::input::{Capacity, GroupSpec, Input, Planned, ReleaseSpec, State, Unit};
 
+/// The index of each declared release by `(list, name)`, with whether it is
+/// closed.
+type ReleaseIndex = HashMap<(NodePath, String), (usize, bool)>;
+
 /// The effective configuration of each node, read once.
 struct Configs<'a> {
     /// The tree whose files are combined.
@@ -165,13 +169,14 @@ fn by_place(a: &Item, b: &Item, node_rank: &impl Fn(&NodePath) -> usize) -> Orde
 
 /// The releases of every list that applies below `scope`, parking ones left
 /// out, in delivery order: by place in their list, lists of different nodes
-/// interleaved in the order of their node paths. Also gives the index of each `(list, name)`.
+/// interleaved in the order of their node paths. Also gives the index of each
+/// `(list, name)`, and whether that release is closed.
 fn releases(
     tree: &Tree,
     scope: &NodePath,
     configs: &mut Configs,
     node_rank: &impl Fn(&NodePath) -> usize,
-) -> (Vec<ReleaseSpec>, HashMap<(NodePath, String), usize>) {
+) -> (Vec<ReleaseSpec>, ReleaseIndex) {
     let mut entries: Vec<(usize, usize, ReleaseSpec)> = Vec::new();
     let mut seen: Vec<NodePath> = Vec::new();
     for node in tree.nodes.iter().filter(|node| node.path.is_within(scope)) {
@@ -194,6 +199,7 @@ fn releases(
                     name: release.name.clone(),
                     declared_by: owner.clone(),
                     target: release.target.as_deref().and_then(|text| text.parse().ok()),
+                    closed: release.closed.as_deref().and_then(|text| text.parse().ok()),
                 },
             ));
         }
@@ -202,7 +208,12 @@ fn releases(
     let index = entries
         .iter()
         .enumerate()
-        .map(|(index, (_, _, spec))| ((spec.declared_by.clone(), spec.name.clone()), index))
+        .map(|(index, (_, _, spec))| {
+            (
+                (spec.declared_by.clone(), spec.name.clone()),
+                (index, spec.closed.is_some()),
+            )
+        })
         .collect();
     (
         entries.into_iter().map(|(_, _, spec)| spec).collect(),
@@ -240,7 +251,7 @@ fn unit(
     tree: &Tree,
     index: &Index,
     configs: &mut Configs,
-    release_index: &HashMap<(NodePath, String), usize>,
+    release_index: &ReleaseIndex,
     history: Option<&History>,
     item: &Item,
     estimate: &estimate::Estimate,
@@ -280,7 +291,10 @@ fn unit(
             .and_then(|owner| release_index.get(&(owner.clone(), found.name.to_owned())))
             .map_or_else(
                 || Planned::Undeclared(found.name.to_owned()),
-                |position| Planned::Release(*position),
+                |(position, closed)| match closed {
+                    true if state.is_open() => Planned::Closed(found.name.to_owned()),
+                    _ => Planned::Release(*position),
+                },
             ),
     };
     let finished = matches!(state, State::Done { .. });

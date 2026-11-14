@@ -62,6 +62,7 @@ A closing *Revisit if* section names the conditions under which the decision wou
 | [0026](0026-keep-the-work-calendar-personal.md) | Keep the work calendar personal, in the personal content repository | Accepted | 2026-11-11 |
 | [0027](0027-record-when-an-item-closes.md) | Record when an item closes | Accepted | 2026-11-11 |
 | [0028](0028-compute-the-forecast-in-one-place.md) | Compute the forecast in one place, and keep its warnings in the roadmap | Accepted | 2026-11-11 |
+| [0029](0029-close-a-release-in-node-toml-and-give-its-changelog.md) | Close a release in `node.toml`, and give its changelog entry | Accepted | 2026-11-14 |
 
 ## Archived
 
