@@ -56,11 +56,11 @@ describe('reordering Gantt rows', () => {
     expect(siblingMove(rows, row('p#S1'), -1, itemOf)).toEqual({ ok: false, reason: 'Already first of its group' })
   })
 
-  it('gives no grip to the row of a done item, which stays a place to drop beside', () => {
-    const done = makeItem({ id: 'T1', path: 'tree/p/T1.md', category: 'done', status: 'done' })
-    expect(hasGrip(row('p#T1'), done)).toBe(false)
+  it.each(['done', 'dropped'] as const)('gives no grip to the row of a %s item, which stays a place to drop beside', (category) => {
+    const closed = makeItem({ id: 'T1', path: 'tree/p/T1.md', category, status: category })
+    expect(hasGrip(row('p#T1'), closed)).toBe(false)
     expect(hasGrip(row('p#T2'), itemOf(row('p#T2')))).toBe(true)
-    expect(checkDrop(row('p#T2'), row('p#T1'), 'after', (entry) => (entry.reference === 'p#T1' ? done : itemOf(entry)))).toMatchObject({ ok: true })
+    expect(checkDrop(row('p#T2'), row('p#T1'), 'after', (entry) => (entry.reference === 'p#T1' ? closed : itemOf(entry)))).toMatchObject({ ok: true })
   })
 })
 

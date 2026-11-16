@@ -3,7 +3,13 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import type { CalendarOverview, NodeSummary } from '@/shared/api'
+import { toast } from '@/shared/ui'
 import { RoadmapSettingsPage } from './roadmap-settings-page'
+
+vi.mock('@/shared/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/shared/ui')>()
+  return { ...actual, toast: { ...actual.toast, error: vi.fn() } }
+})
 
 const file = '/home/me/_ariane/calendar.toml'
 
@@ -180,6 +186,7 @@ describe('the roadmap settings', () => {
     }))
     const blocks = await screen.findByRole('list', { name: 'Blocks' })
     fireEvent.change(within(blocks).getByRole('combobox', { name: 'Start of block 2' }), { target: { value: String(11 * 60) } })
+    vi.mocked(toast.error).mockClear()
     await userEvent.click(within(screen.getByRole('region', { name: 'Unsaved calendar' })).getByRole('button', { name: 'Save' }))
     await waitFor(() => expect(sent(fetch, 'PATCH', '/api/calendar')).toHaveLength(1))
     expect(await screen.findByRole('alert', { name: 'Save refused' })).toHaveTextContent('The server refused the save: calendar.toml not written: the blocks overlap')
@@ -189,6 +196,7 @@ describe('the roadmap settings', () => {
     expect(screen.getAllByTestId('other-block').filter((block) => block.dataset.refused)).toHaveLength(5)
     expect(within(blocks).getAllByRole('listitem')[1]?.dataset.refused).toBe('true')
     expect(screen.getByRole('region', { name: 'Unsaved calendar' })).toBeInTheDocument()
+    expect(toast.error).not.toHaveBeenCalled()
   })
 
   it('shows where each estimate comes from, writes this node and resets its own keys', async () => {

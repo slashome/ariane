@@ -1,3 +1,4 @@
+import { isClosed } from '@/entities/item'
 import type { Item, Pricing } from '@/shared/api'
 import type { GanttRow } from './rows'
 
@@ -24,7 +25,7 @@ export function isReorderable(row: GanttRow, item: Item | undefined): item is It
 }
 
 export function hasGrip(row: GanttRow, item: Item | undefined): item is Item {
-  return isReorderable(row, item) && item.category !== 'done'
+  return isReorderable(row, item) && !isClosed(item.category)
 }
 
 export function checkDrop(dragged: GanttRow, over: GanttRow, place: Place, itemOf: ItemOf): DropCheck {

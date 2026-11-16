@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { changeCalendar, fetchCalendar, queryKeys, removeCalendarNode, type CalendarOverview } from '@/shared/api'
+import { ApiError, changeCalendar, fetchCalendar, queryKeys, removeCalendarNode, type CalendarOverview } from '@/shared/api'
 import { toast } from '@/shared/ui'
 import type { CalendarRequest } from '../model/calendar-draft'
 
@@ -34,7 +34,9 @@ export function useSaveCalendar() {
     onSuccess: refresh,
     onError: (error) => {
       refresh()
-      toast.error(error.message)
+      if (!(error instanceof ApiError && error.status === 422)) {
+        toast.error(error.message)
+      }
     },
   })
 }
