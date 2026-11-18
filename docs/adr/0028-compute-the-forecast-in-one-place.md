@@ -35,6 +35,8 @@ Deviations already have homes: `doctor` reports breaches of the file contract, o
 
 > **Command and route delivered on 2026-11-13 (T122).** `ariane roadmap [node] [--json]` and `GET /api/roadmap?node=<node>` give the same JSON. The forecast of a node below its carrier is computed on the carrier, then narrowed to the work of the node and its descendants, whose summaries are computed again from that work alone; the JSON names the node asked (`node`) and the carrier (`carrier`). SPEC §3.6 describes the reading.
 
+> **Amended 2026-11-18: releases that depend on releases (T150).** The pooled order of releases — place in their list, then path of the declaring node — is rebuilt so that a release comes after the releases its `depends_on` names, the rest unchanged; and no work of a release starts before those releases are delivered, closed or with all their work delivered. A cycle keeps the declared order, ignores the dependency that closes it and warns `dependency_cycle`; a dependency on a release the forecast does not schedule is ignored and warned `unscheduled_dependency`. `doctor` reports unknown targets and cycles, which are contract breaches, not planning gaps ([ADR-0030](0030-let-a-release-depend-on-releases-of-other-nodes.md)).
+
 ## Consequences
 
 - The CLI, the interface and agents read one answer. The engine is testable with fixtures and no browser.

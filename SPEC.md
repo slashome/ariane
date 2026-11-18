@@ -121,8 +121,9 @@ stage = "testing"
 - `parking` MAY be `true` to mark a release that is never scheduled and never closed, such as `plus-tard`; it defaults to `false`.
 - `target` MAY give a desired date, `YYYY-MM-DD`, as a TOML date or a string. It only checks a forecast; it never changes the order.
 - `closed` MAY give the day the release was closed, `YYYY-MM-DD`, as a TOML date or a string. `ariane release close` writes it (§1.5 "Closing a release"); a parking release MUST NOT carry it. A closed release takes no more work ([ADR-0029](docs/adr/0029-close-a-release-in-node-toml-and-give-its-changelog.md)).
+- `depends_on` MAY list the releases that must be delivered before any work of this one starts ([ADR-0030](docs/adr/0030-let-a-release-depend-on-releases-of-other-nodes.md)), each written `<node>@<release>`: `<node>` is the path of a node and `<release>` a release of the list that node plans against, whichever node declares it, so `cmc/cmc-lib@1.1.0`. `@<release>`, the node left out, names a release of the same list. The text before the first `@` is the node, the rest the release, both trimmed; a reference without `@` or without a release is refused, so the `node.toml` does not parse.
 
-No other key is allowed. The order of entries is the delivery order.
+No other key is allowed. The order of entries is the delivery order, which `depends_on` may change only across the releases the forecast pools (§3.3).
 
 ```toml
 [[release]]
@@ -135,6 +136,13 @@ name = "2.0"
 [[release]]
 name = "plus-tard"
 parking = true
+```
+
+```toml
+# tree/cmc/cmc-frontend/commercial/node.toml
+[[release]]
+name = "0.11.0"
+depends_on = ["cmc/cmc-lib@1.1.0"]
 ```
 
 **Estimates.** An `[estimates]` table says what each size costs in hours of focused work, and how testing is added ([ADR-0025](docs/adr/0025-estimate-in-hours-of-focused-work-per-node.md)). Every key is optional:
@@ -206,11 +214,12 @@ name = "Responsable RH"
 
 **Changing releases.** A release list is changed only in the `node.toml` that declares it, through `ariane release` or the interface (`POST`, `PATCH` and `DELETE /api/releases`, and `release` in `PATCH /api/items`), which run the same code; both write at once and never commit:
 
-- `ariane release add <node> <name>` declares a release, last unless `--top`, `--before <release>` or `--after <release>` places it, with `--parking` and `--target YYYY-MM-DD`. The name is trimmed; a blank name, a name the list already has or a target that is not a date is refused. A node with no list anywhere above it starts its own.
+- `ariane release add <node> <name>` declares a release, last unless `--top`, `--before <release>` or `--after <release>` places it, with `--parking`, `--target YYYY-MM-DD` and `--depends-on <node>@<release>`, repeated for several. The name is trimmed; a blank name, a name the list already has or a target that is not a date is refused. A node with no list anywhere above it starts its own.
 - `ariane release move <node> <name>` with one of `--top`, `--bottom`, `--before <release>`, `--after <release>` changes its place in the delivery order.
-- `ariane release set <node> <name>` with `--parking` or `--no-parking`, and `--target YYYY-MM-DD` or `--no-target`, marks it as a parking release or not and sets or removes its target date, the rest of its entry kept; at least one is required, and a target that is not a date is refused. `PATCH /api/releases` takes the same as `parking` (a boolean) and `target` (a date, or `null` to remove it).
-- `ariane release rename <node> <old> <new>` renames it and rewrites `release` in every item, archived ones included, whose own value is the old name and whose node plans against that list.
-- `ariane release remove <node> <name>` removes it, and is refused while an item of that scope still names it, listing them. Removing the last entry removes the list: the node then plans against its ancestors' list, or none.
+- `ariane release set <node> <name>` with `--parking` or `--no-parking`, `--target YYYY-MM-DD` or `--no-target`, and `--depends-on <node>@<release>` (repeated for several) or `--no-depends-on`, marks it as a parking release or not, sets or removes its target date, and replaces or removes the releases it waits for, the rest of its entry kept; at least one is required, and a target that is not a date is refused. `PATCH /api/releases` takes the same as `parking` (a boolean), `target` (a date, or `null` to remove it) and `depends_on` (a list, `[]` to remove it); `POST /api/releases` takes `depends_on` too.
+- A `depends_on` is refused, on an add as on a set, when one of its references is not `<node>@<release>`, names a node that does not exist, a release its list does not declare or a parking release, or would close a cycle of releases, which the refusal names. `--parking` is refused on a release another one waits for.
+- `ariane release rename <node> <old> <new>` renames it and rewrites `release` in every item, archived ones included, whose own value is the old name and whose node plans against that list, and the `depends_on` references to it in every `node.toml`, each keeping its node part.
+- `ariane release remove <node> <name>` removes it, and is refused while an item of that scope still names it, listing them, or while another release waits for it in `depends_on`, naming them. Removing the last entry removes the list: the node then plans against its ancestors' list, or none.
 - `ariane release assign <node>#<id> <name>` writes `release` on an epic, a story or a task that is not archived, and `--none` removes it. A name the item's effective list does not declare is refused, and so is a closed release, and any name when no list applies.
 - `ariane release set <node> <name> --parking` is refused on a closed release.
 
@@ -275,6 +284,8 @@ A node that inherits its list cannot change it: the change is refused, naming th
 | `waiting_for`, `waiting_on` or `waiting_since` on an item whose status is not in the `waiting` category | warning |
 | `closed` on a task, an epic or a story whose status is not in the `done` category | warning — remedy: remove `closed`, or set a status of the `done` category |
 | Open work (a task, or a story or an epic not split yet, outside `archives/`, neither `done` nor `dropped`) whose effective release is closed | warning — remedy: finish it and archive it, or plan it in a later release |
+| A `[[release]]` `depends_on` naming a node that does not exist, a release the named node's list does not declare (or a node no list applies to), or a parking release; reported in the scope of the node declaring the entry | error (`unknown_release_dependency`) — a human fixes the reference or removes it |
+| Releases whose `depends_on` loop back on themselves, a release depending on itself included; reported once, from the first release of the cycle in the order of node paths and names, with the path of the cycle (`a@1 -> b@2 -> a@1`), in the scope of any of its nodes | error (`release_dependency_cycle`) — a human removes one of the dependencies the remedy lists |
 | A required custom key is missing | error |
 | A file name that does not begin with the item's `id`, `-` and a slug | error — remedy: `ariane fix` (renames to `<id>-<current name>` and rewrites the links); a human when the name is the bare id |
 | An item in `backlog/` or `archives/backlog/` | error — remedy: `ariane fix` (moves it into `tasks/` or `archives/tasks/` and rewrites the links) |
@@ -453,16 +464,18 @@ The forecast of a node runs on the node's **carrier** (§2.3) over every task, s
 
 - A **piece of work** is a task, or a story or an epic not split yet (a story without tasks, an epic without stories), which counts as one block at its provisional size, else at the default size (§1.5).
 - Its hours are those of §1.5: for open work its remaining hours and testing, the whole of them for work in progress, since partial progress is not recorded. Work in a status of the `testing` stage (§1.5) has done its work: it counts only its testing hours.
-- Its release is its effective release (§1.3). Work of a parking release, open work of a closed release, work without effective release and work whose release no applicable list declares is listed as **unscheduled**, with the reason (`parking`, `closed_release`, `no_release`, `undeclared_release`), and never scheduled. A closed release keeps its place and gives its closing date in `closed_on`: it is delivered, its finished work is shown, and nothing is scheduled in it. When the carrier's descendants declare release lists of their own, a release is identified by its name and the node declaring its list; releases are ordered by their place in their list, then by the path of that node.
+- Its release is its effective release (§1.3). Work of a parking release, open work of a closed release, work without effective release and work whose release no applicable list declares is listed as **unscheduled**, with the reason (`parking`, `closed_release`, `no_release`, `undeclared_release`), and never scheduled. A closed release keeps its place and gives its closing date in `closed_on`: it is delivered, its finished work is shown, and nothing is scheduled in it. When the carrier's descendants declare release lists of their own, a release is identified by its name and the node declaring its list; releases are ordered by their place in their list, then by the path of that node, then moved after the releases they depend on (§3.3).
 - Dropped work is left out. Finished work (`done` category) takes no hours: it is shown in its release at its `closed` date, else at the date approximated from git (§1.3, marked approximate), else without a date.
 
 ### 3.3 Order
 
-Releases come in their declared order. Within a release, work is grouped by epic, then by story, each level and the work in the order of items (§1.3), nodes in the order of their paths; the work without epic, and within an epic the work without story, comes last.
+Releases come in their declared order (§3.2), except that a release comes after the releases its `depends_on` names ([ADR-0030](docs/adr/0030-let-a-release-depend-on-releases-of-other-nodes.md)): the order is rebuilt by taking, each time, the first release of the declared order whose dependencies are all placed, so that without `depends_on` it is the declared order exactly. When none can be taken, the dependencies left loop: the first release left is placed anyway, its dependencies not placed yet are ignored, and the release is warned about as `dependency_cycle`. A dependency on a release the forecast does not schedule — of a list outside the carrier's scope, or parking — is ignored and warned about as `unscheduled_dependency`. Within a release, work is grouped by epic, then by story, each level and the work in the order of items (§1.3), nodes in the order of their paths; the work without epic, and within an epic the work without story, comes last.
 
 **Started work first.** Work of the `in_progress` category, `testing` stage included, is scheduled before all the rest, whatever its release, since the owner is on it now; among itself, in the order above, release first. Its release's span starts with it, so a later release can start before an earlier one. It still waits for its dependencies: one on work not started is scheduled in its own turn, never pulled forward.
 
 `depends_on` is a constraint, the grouping a preference: the scheduler always takes the first piece of work in that order whose dependencies are delivered, and passes over the ones that are not, so a group can show a gap. A dependency on a story or an epic is a dependency on all its work; the `depends_on` of a story and of an epic apply to every piece of work inside them. A dependency on finished work is met; one on open work that is never scheduled (parking, no release, out of scope) is ignored and warned about. Work caught in a dependency cycle, and work waiting on it, stays unscheduled, and the cycle is warned about.
+
+**Release dependencies are constraints too.** No piece of work of a release starts before every release it depends on is **delivered**: closed, or with all its scheduled work delivered (validation included), and the releases that one depends on in turn, up to a closed one. A release with no work left to schedule is delivered as soon as its own dependencies are. Started work waits like the rest; work handed to someone (waiting, or in testing by others) ignores release dependencies as it ignores its own. Work that waits, through its release, on work that can never be scheduled stays unscheduled, as `cycle` when it is part of the loop, else as `blocked_by_cycle`.
 
 ### 3.4 Scheduling
 
@@ -477,11 +490,11 @@ With a carrier, focused hours become moments: the carrier's weekly blocks are la
 
 ### 3.5 Result
 
-The result gives, per release in delivery order, its epics then their stories then their work, each with its hours left, its span (from the start of its first scheduled work to the delivery of its last) and the first and last closing dates of its finished work. Each piece of work has its `stage` (`open`, `in_progress`, `testing`, `waiting` or `done`), its place in the sequence, its start, its end, its delivery, its segments (work and testing) and its validation. Every moment carries its focused hours from now and, with a carrier, its date. Without a carrier the same sequence comes in hours only (“+36 h”).
+The result gives, per release in delivery order — with its `name`, the node `declared_by`, its `target`, its `closed_on` and its `depends_on`, the releases it waits for as `<node>@<release>` — its epics then their stories then their work, each with its hours left, its span (from the start of its first scheduled work to the delivery of its last) and the first and last closing dates of its finished work. Each piece of work has its `stage` (`open`, `in_progress`, `testing`, `waiting` or `done`), its place in the sequence, its start, its end, its delivery, its segments (work and testing) and its validation. Every moment carries its focused hours from now and, with a carrier, its date. Without a carrier the same sequence comes in hours only (“+36 h”).
 
 ### 3.6 Reading the forecast
 
-`ariane roadmap [node]` prints the forecast of a node, by default the current directory's node: a header naming the node whose blocks give the dates (the node itself, or the carrier and the other nodes sharing its sequence), or saying there is none and that `ariane calendar edit` adds blocks; then the releases in delivery order, their epics, stories and work indented, each with its hours left (work + testing), its span (dates in the calendar's time zone, or `+N h` from now without a carrier), its done and open counts or its stage, its `target` and `MISSED` when the forecast misses it; then the unscheduled work by reason and the warnings by kind, long lists cut with a count. `--release <name>` prints one release. `ariane roadmap <node> --json` and `GET /api/roadmap?node=<node>` give the same JSON: the engine's result, from `now` to the second.
+`ariane roadmap [node]` prints the forecast of a node, by default the current directory's node: a header naming the node whose blocks give the dates (the node itself, or the carrier and the other nodes sharing its sequence), or saying there is none and that `ariane calendar edit` adds blocks; then the releases in delivery order, each followed by `(after <node>@<release>, …)` when it waits for others, their epics, stories and work indented, each with its hours left (work + testing), its span (dates in the calendar's time zone, or `+N h` from now without a carrier), its done and open counts or its stage, its `target` and `MISSED` when the forecast misses it; then the unscheduled work by reason and the warnings by kind, long lists cut with a count. `--release <name>` prints one release. `ariane roadmap <node> --json` and `GET /api/roadmap?node=<node>` give the same JSON: the engine's result, from `now` to the second.
 
 **A node below its carrier** reads its part of the carrier's pooled sequence. The sequence is computed over the whole carrier; the result keeps the work whose node is the node asked or one of its descendants, at the place and moments the pooled sequence gives it (its `sequence` keeps its rank in the whole sequence, so it can show gaps). Every summary — the totals, each release, epic and story — is computed again from that work only: a span is the span of the node's part. A release is kept when it holds some of that work or when its list is declared by the node, an ancestor or a descendant. Unscheduled work and warnings keep the items of the node and its descendants, and the release warnings of the releases kept; a release's missed target is judged on all its work. The JSON says the node asked in `node` and the node whose blocks give the dates in `carrier` (`null` without a carrier, when the sequence runs on the node asked alone).
 
@@ -499,5 +512,5 @@ The forecast carries its own warnings, counted by kind with the items they conce
 | `undeclared_release` | Open work whose release no applicable list declares |
 | `missed_target` | Work, a story, an epic or a release whose `target` is earlier than its forecast delivery, or than its closing date for finished work; checked on future work only when dated |
 | `contradictory_target` | A `target` later than the `target` of the story, the epic or the release that contains the work, or a story's later than its epic's |
-| `dependency_cycle` | Work caught in a dependency cycle, left unscheduled |
-| `unscheduled_dependency` | Work depending on open work that is never scheduled; the dependency is ignored |
+| `dependency_cycle` | Work caught in a dependency cycle, left unscheduled; or `release <name>` whose `depends_on` would close a cycle of releases, the dependency ignored |
+| `unscheduled_dependency` | Work depending on open work that is never scheduled; or `release <name>` depending on a release the forecast does not schedule; the dependency is ignored |

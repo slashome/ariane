@@ -30,6 +30,8 @@ What the market calls these levels, checked before deciding:
 
 > **Amended 2026-11-14.** Closing writes `closed = YYYY-MM-DD` on the release's entry, and a release is closed when its entry says so, no longer when its tasks are all archived; the option is `--carry-over`, to the next release neither parking nor closed; closing also prints the release's changelog entry ([ADR-0029](0029-close-a-release-in-node-toml-and-give-its-changelog.md)).
 
+> **Amended 2026-11-18.** A `[[release]]` entry MAY carry `depends_on`, the releases that must be delivered before any of its work starts, each `<node>@<release>` or `@<release>` for one of the same list; the forecast places a release after them whatever its place in its list, and `doctor` errors on a reference to an unknown node, an unknown or parking release, and on a cycle ([ADR-0030](0030-let-a-release-depend-on-releases-of-other-nodes.md)). The declared order still decides everything else.
+
 ## Consequences
 
 - One level of target, named the way the forges name it. Epics and stories carry the *what*, releases the *when*.
