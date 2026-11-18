@@ -23,7 +23,7 @@ pub struct Input {
     /// The node whose blocks give the capacity, when the calendar has one.
     pub carrier: Option<NodePath>,
     /// The releases that can be scheduled, in delivery order, parking ones
-    /// left out.
+    /// left out: a release always after the releases it depends on.
     pub releases: Vec<ReleaseSpec>,
     /// The stories and epics the work belongs to, and the unsplit ones that
     /// are work themselves.
@@ -48,6 +48,24 @@ pub struct ReleaseSpec {
     /// The day it was closed: its work is delivered and nothing is scheduled
     /// in it any more (ADR-0029).
     pub closed: Option<Date>,
+    /// Every release it waits for, as `<node>@<release>` (ADR-0030).
+    pub after: Vec<String>,
+    /// The releases of [`Input::releases`] it waits for, by index, all
+    /// earlier in the list: none of its work starts before they are delivered.
+    pub depends_on: Vec<usize>,
+    /// The releases it names in `depends_on` that the forecast cannot wait
+    /// for, and why.
+    pub ignored: Vec<(String, Ignored)>,
+}
+
+/// Why the forecast does not wait for a release named in `depends_on`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Ignored {
+    /// It is no release the forecast orders: outside its scope, a parking
+    /// release, or none at all.
+    Outside,
+    /// Waiting for it would close a cycle of releases.
+    Cycle,
 }
 
 /// A story or an epic, as a group of work.

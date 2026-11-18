@@ -8,8 +8,8 @@
 //!   `id`, a free `label`, one of the seven fixed categories and, on an
 //!   `in_progress` status, an optional `stage` such as `testing`;
 //! - `[[release]]` lists the node's releases in delivery order, each with a
-//!   `name`, an optional `parking` marker and an optional `target` date
-//!   (ADR-0023);
+//!   `name`, an optional `parking` marker, an optional `target` date
+//!   (ADR-0023) and the releases it waits for in `depends_on` (ADR-0030);
 //! - `[estimates]` gives the hours of each size, the default size, the test
 //!   ratio and who tests (ADR-0025);
 //! - `[people.<handle>]` names the people an item may wait for, with their ids
@@ -195,6 +195,25 @@ pub struct Release {
     /// more (ADR-0029).
     #[serde(default, deserialize_with = "target")]
     pub closed: Option<String>,
+    /// The releases that must be delivered before any work of this one
+    /// starts, each as `<node>@<release>`, or `@<release>` for a release of
+    /// the same list (ADR-0030).
+    #[serde(default, deserialize_with = "dependencies")]
+    pub depends_on: Vec<String>,
+}
+
+/// Reads a release's `depends_on`, a list of `<node>@<release>` references,
+/// refusing one without `@` or without a release name after it.
+fn dependencies<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<String>, D::Error> {
+    let references = Vec::<String>::deserialize(deserializer)?;
+    for reference in &references {
+        if crate::release::depends::split(reference).is_none() {
+            return Err(D::Error::custom(format!(
+                "`depends_on = \"{reference}\"` is not `<node>@<release>`, nor `@<release>` for a release of the same list"
+            )));
+        }
+    }
+    Ok(references)
 }
 
 /// Reads a release's `target` or `closed`, a TOML date such as `2027-03-01` or the same

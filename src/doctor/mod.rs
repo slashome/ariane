@@ -596,6 +596,90 @@ category = "done"
         assert!(checks(&repo).contains(&Check::InvalidNodeToml));
     }
 
+    /// `p` declares `1.0`, `2.0` with `depends_on` and a parking `later`;
+    /// `q` declares `0.1`, `r` declares nothing.
+    fn dependencies(depends_on: &str) -> Repo {
+        let repo = Repo::new();
+        repo.write(
+            "p/node.toml",
+            &format!(
+                "[[release]]\nname = \"1.0\"\n\n[[release]]\nname = \"2.0\"\ndepends_on = [{depends_on}]\n\n[[release]]\nname = \"later\"\nparking = true\n"
+            ),
+        )
+        .write("q/node.toml", "[[release]]\nname = \"0.1\"\n")
+        .write("r/node.toml", "description = \"R.\"\n");
+        repo
+    }
+
+    #[test]
+    fn a_release_may_depend_on_a_release_of_its_list_or_of_another_node() {
+        let repo = dependencies("\"@1.0\", \"q@0.1\", \"p@1.0\"");
+        assert_eq!(checks(&repo), Vec::<Check>::new());
+    }
+
+    #[test]
+    fn a_release_dependency_on_an_unknown_node_release_or_parking_one_needs_a_human() {
+        let repo = dependencies("\"nowhere@1.0\", \"q@9.9\", \"r@1.0\", \"@later\"");
+        let tree = Tree::load(repo.root()).unwrap();
+        let findings = diagnose(&tree, None, false);
+        let messages: Vec<&str> = findings
+            .iter()
+            .map(|finding| {
+                assert_eq!(finding.check, Check::UnknownReleaseDependency);
+                assert_eq!(finding.node, Some(NodePath::new("p")));
+                assert_eq!(finding.path.as_deref(), Some("tree/p/node.toml"));
+                finding.message.as_str()
+            })
+            .collect();
+        assert_eq!(messages.len(), 4, "{messages:?}");
+        assert!(messages[0].contains("`nowhere` is not a node"));
+        assert!(
+            messages[1].contains("`q`, whose list `q` plans against, declares no release `9.9`")
+        );
+        assert!(messages[2].contains("no release list applies to `r`"));
+        assert!(messages[3].contains("a parking release"));
+        assert_eq!(exit_code(&findings), 2);
+        assert!(diagnose(&tree, Some(&NodePath::new("q")), false).is_empty());
+    }
+
+    #[test]
+    fn a_cycle_of_releases_is_reported_once_with_its_path() {
+        let repo = dependencies("\"q@0.1\"");
+        repo.write(
+            "q/node.toml",
+            "[[release]]\nname = \"0.1\"\ndepends_on = [\"p@2.0\"]\n",
+        );
+        let tree = Tree::load(repo.root()).unwrap();
+        let findings = diagnose(&tree, None, false);
+        assert_eq!(findings.len(), 1, "{findings:?}");
+        assert_eq!(findings[0].check, Check::ReleaseDependencyCycle);
+        assert_eq!(
+            findings[0].message,
+            "releases wait for each other, so none can be delivered: p@2.0 -> q@0.1 -> p@2.0"
+        );
+        let Remedy::Human { resolutions } = &findings[0].remedy else {
+            panic!("a human breaks the cycle");
+        };
+        assert_eq!(
+            resolutions,
+            &[
+                "remove `q@0.1` from the `depends_on` of `p@2.0`",
+                "remove `p@2.0` from the `depends_on` of `q@0.1`",
+            ]
+        );
+        assert_eq!(exit_code(&findings), 2);
+        let scoped = diagnose(&tree, Some(&NodePath::new("q")), false);
+        assert_eq!(scoped.len(), 1);
+        let itself = dependencies("\"@2.0\"");
+        assert_eq!(checks(&itself), [Check::ReleaseDependencyCycle]);
+    }
+
+    #[test]
+    fn a_release_dependency_without_an_at_sign_is_an_invalid_node_toml() {
+        assert_eq!(checks(&dependencies("\"1.0\"")), [Check::InvalidNodeToml]);
+        assert_eq!(checks(&dependencies("\"q@\"")), [Check::InvalidNodeToml]);
+    }
+
     #[test]
     fn a_stage_unknown_or_outside_in_progress_is_an_invalid_node_toml() {
         for (category, stage) in [("in_progress", "review"), ("todo", "testing")] {

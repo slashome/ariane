@@ -22,9 +22,10 @@ use crate::node::{Category, Effective, Stage};
 use crate::rank::{self, Placement};
 use crate::relations::Index;
 use crate::release;
+use crate::release::depends::{self, Key, Target};
 use crate::tree::{Item, NodePath, Tree};
 
-use super::input::{Capacity, GroupSpec, Input, Planned, ReleaseSpec, State, Unit};
+use super::input::{Capacity, GroupSpec, Ignored, Input, Planned, ReleaseSpec, State, Unit};
 
 /// The index of each declared release by `(list, name)`, with whether it is
 /// closed.
@@ -169,7 +170,8 @@ fn by_place(a: &Item, b: &Item, node_rank: &impl Fn(&NodePath) -> usize) -> Orde
 
 /// The releases of every list that applies below `scope`, parking ones left
 /// out, in delivery order: by place in their list, lists of different nodes
-/// interleaved in the order of their node paths. Also gives the index of each
+/// interleaved in the order of their node paths, then each release moved
+/// after the releases it depends on (ADR-0030). Also gives the index of each
 /// `(list, name)`, and whether that release is closed.
 fn releases(
     tree: &Tree,
@@ -177,7 +179,7 @@ fn releases(
     configs: &mut Configs,
     node_rank: &impl Fn(&NodePath) -> usize,
 ) -> (Vec<ReleaseSpec>, ReleaseIndex) {
-    let mut entries: Vec<(usize, usize, ReleaseSpec)> = Vec::new();
+    let mut entries: Vec<(usize, usize, ReleaseSpec, Vec<String>)> = Vec::new();
     let mut seen: Vec<NodePath> = Vec::new();
     for node in tree.nodes.iter().filter(|node| node.path.is_within(scope)) {
         let effective = configs.of(&node.path);
@@ -200,25 +202,107 @@ fn releases(
                     declared_by: owner.clone(),
                     target: release.target.as_deref().and_then(|text| text.parse().ok()),
                     closed: release.closed.as_deref().and_then(|text| text.parse().ok()),
+                    after: Vec::new(),
+                    depends_on: Vec::new(),
+                    ignored: Vec::new(),
                 },
+                release.depends_on.clone(),
             ));
         }
     }
-    entries.sort_by_key(|(position, owner, _)| (*position, *owner));
-    let index = entries
+    entries.sort_by_key(|(position, owner, _, _)| (*position, *owner));
+    let ordered = after_dependencies(
+        tree,
+        entries
+            .into_iter()
+            .map(|(_, _, spec, written)| (spec, written))
+            .collect(),
+    );
+    let index = ordered
         .iter()
         .enumerate()
-        .map(|(index, (_, _, spec))| {
+        .map(|(index, spec)| {
             (
                 (spec.declared_by.clone(), spec.name.clone()),
                 (index, spec.closed.is_some()),
             )
         })
         .collect();
-    (
-        entries.into_iter().map(|(_, _, spec)| spec).collect(),
-        index,
-    )
+    (ordered, index)
+}
+
+/// `releases`, each with the `depends_on` written in its entry, reordered so
+/// that a release comes after the releases it depends on (ADR-0030), the
+/// order given kept otherwise: each step takes the first release whose
+/// dependencies are all placed. When none is, the dependencies left loop: the
+/// first release left is placed anyway, and its dependencies not placed yet
+/// are ignored as closing a cycle. A dependency on a release outside
+/// `releases`, such as a parking one, is ignored too.
+fn after_dependencies(tree: &Tree, releases: Vec<(ReleaseSpec, Vec<String>)>) -> Vec<ReleaseSpec> {
+    let keys: HashMap<Key, usize> = releases
+        .iter()
+        .enumerate()
+        .map(|(index, (spec, _))| (Key::new(&spec.declared_by, &spec.name), index))
+        .collect();
+    let mut wanted: Vec<Vec<(usize, String)>> = Vec::with_capacity(releases.len());
+    let mut specs: Vec<ReleaseSpec> = Vec::with_capacity(releases.len());
+    for (mut spec, written) in releases {
+        let mut waits = Vec::new();
+        for reference in &written {
+            let (label, found) = match depends::resolve(tree, &spec.declared_by, reference) {
+                Some(Target::Found {
+                    key,
+                    parking: false,
+                }) => {
+                    let found = keys.get(&key).copied();
+                    (key.to_string(), found)
+                }
+                Some(Target::Found { key, .. }) => (key.to_string(), None),
+                _ => (reference.clone(), None),
+            };
+            if spec.after.contains(&label) {
+                continue;
+            }
+            match found {
+                Some(index) => waits.push((index, label.clone())),
+                None => spec.ignored.push((label.clone(), Ignored::Outside)),
+            }
+            spec.after.push(label);
+        }
+        wanted.push(waits);
+        specs.push(spec);
+    }
+    let mut placed: Vec<Option<usize>> = vec![None; specs.len()];
+    let mut order: Vec<usize> = Vec::with_capacity(specs.len());
+    while let Some(next) = (0..specs.len())
+        .filter(|index| placed[*index].is_none())
+        .find(|index| {
+            wanted[*index]
+                .iter()
+                .all(|(wait, _)| placed[*wait].is_some())
+        })
+        .or_else(|| (0..specs.len()).find(|index| placed[*index].is_none()))
+    {
+        placed[next] = Some(order.len());
+        order.push(next);
+    }
+    let mut specs: Vec<Option<ReleaseSpec>> = specs.into_iter().map(Some).collect();
+    order
+        .iter()
+        .enumerate()
+        .filter_map(|(own, index)| {
+            let mut spec = specs[*index].take()?;
+            for (wait, label) in &wanted[*index] {
+                match placed[*wait] {
+                    Some(position) if position < own => spec.depends_on.push(position),
+                    _ => spec.ignored.push((label.clone(), Ignored::Cycle)),
+                }
+            }
+            spec.depends_on.sort_unstable();
+            spec.depends_on.dedup();
+            Some(spec)
+        })
+        .collect()
 }
 
 /// The story and the epic `item` belongs to: for a task, its story and that

@@ -11,6 +11,12 @@
 //! dependencies left loop on each other, the loop and every piece of work
 //! waiting on it stay unscheduled.
 //!
+//! A release waits for the releases it depends on (ADR-0030): none of its
+//! work starts before they are delivered, closed or with all their work
+//! delivered, and the releases they depend on in turn, up to a closed one.
+//! Work stuck behind a release that cannot be delivered is stuck like work
+//! behind a task.
+//!
 //! Work handed to someone takes none of the owner's hours and ignores its
 //! dependencies: work in a `waiting` status, and work in testing that others
 //! test, are validated from now for their testing hours.
@@ -121,6 +127,7 @@ pub fn run(input: &Input) -> Schedule {
         }
     }
     pending.retain(|index| !schedule.placed.contains_key(index));
+    let mut gates = Gates::new(input, &pending, &schedule.placed);
     let mut clock = 0.0_f64;
     let mut sequence = 0;
     while !pending.is_empty() {
@@ -137,7 +144,8 @@ pub fn run(input: &Input) -> Schedule {
                             .map(|placed| placed.delivered)
                     })
                     .try_fold(0.0_f64, |latest, delivered| Some(latest.max(delivered?)))?;
-                Some((slot, delivered))
+                let opened = gates.opened(&input.units[*index])?;
+                Some((slot, delivered.max(opened)))
             })
             .collect();
         let Some(&(slot, ready_at)) = ready
@@ -176,17 +184,116 @@ pub fn run(input: &Input) -> Schedule {
         };
         clock = placed.owner_end;
         sequence += 1;
+        gates.place(unit, placed.delivered);
         schedule.placed.insert(index, placed);
     }
     let stuck: HashSet<usize> = pending.iter().copied().collect();
+    let waits = waits_with_releases(input, &dependencies, &gates, &stuck);
     for index in pending {
-        if reaches(index, index, &dependencies, &stuck) {
+        if reaches(index, index, &waits, &stuck) {
             schedule.cycles.push(index);
         } else {
             schedule.blocked.push(index);
         }
     }
     schedule
+}
+
+/// When each release is delivered, as the scheduler places its work.
+struct Gates {
+    /// The releases each release waits for, directly or through the releases
+    /// it depends on, up to a closed one.
+    waits: Vec<Vec<usize>>,
+    /// The work of each release the owner still has to place.
+    remaining: Vec<usize>,
+    /// When the work placed in each release is delivered, at the latest.
+    delivered: Vec<f64>,
+}
+
+impl Gates {
+    /// The gates of the releases of `input`, `pending` being the work left to
+    /// the owner and `placed` the work handed to someone.
+    fn new(input: &Input, pending: &[usize], placed: &HashMap<usize, Placed>) -> Gates {
+        let count = input.releases.len();
+        let mut waits: Vec<Vec<usize>> = Vec::with_capacity(count);
+        for release in &input.releases {
+            let mut all = Vec::new();
+            for dependency in &release.depends_on {
+                all.push(*dependency);
+                if input.releases[*dependency].closed.is_none() {
+                    all.extend(waits[*dependency].iter().copied());
+                }
+            }
+            all.sort_unstable();
+            all.dedup();
+            waits.push(all);
+        }
+        let mut gates = Gates {
+            waits,
+            remaining: vec![0; count],
+            delivered: vec![0.0; count],
+        };
+        for index in pending {
+            if let Planned::Release(release) = input.units[*index].release {
+                gates.remaining[release] += 1;
+            }
+        }
+        for (index, placed) in placed {
+            if let Planned::Release(release) = input.units[*index].release {
+                gates.delivered[release] = gates.delivered[release].max(placed.delivered);
+            }
+        }
+        gates
+    }
+
+    /// When the releases `unit`'s release waits for are all delivered; `None`
+    /// while one of them still has work to place.
+    fn opened(&self, unit: &Unit) -> Option<f64> {
+        let Planned::Release(release) = unit.release else {
+            return Some(0.0);
+        };
+        self.waits[release]
+            .iter()
+            .try_fold(0.0_f64, |latest, wait| {
+                (self.remaining[*wait] == 0).then(|| latest.max(self.delivered[*wait]))
+            })
+    }
+
+    /// Records that `unit` is placed, delivered at `delivered`.
+    fn place(&mut self, unit: &Unit, delivered: f64) {
+        if let Planned::Release(release) = unit.release {
+            self.remaining[release] -= 1;
+            self.delivered[release] = self.delivered[release].max(delivered);
+        }
+    }
+}
+
+/// What each stuck unit waits for among the stuck units: its own
+/// dependencies, and the stuck work of the releases its release waits for.
+fn waits_with_releases(
+    input: &Input,
+    dependencies: &HashMap<usize, Vec<usize>>,
+    gates: &Gates,
+    stuck: &HashSet<usize>,
+) -> HashMap<usize, Vec<usize>> {
+    let mut by_release: HashMap<usize, Vec<usize>> = HashMap::new();
+    for index in stuck {
+        if let Planned::Release(release) = input.units[*index].release {
+            by_release.entry(release).or_default().push(*index);
+        }
+    }
+    stuck
+        .iter()
+        .map(|index| {
+            let mut waits = dependencies[index].clone();
+            if let Planned::Release(release) = input.units[*index].release {
+                for wait in &gates.waits[release] {
+                    waits.extend(by_release.get(wait).into_iter().flatten().copied());
+                }
+            }
+            (*index, waits)
+        })
+        .collect()
 }
 
 /// Tells whether a unit is with someone else, taking none of the owner's
@@ -267,7 +374,7 @@ fn reaches(
     stuck: &HashSet<usize>,
 ) -> bool {
     let mut seen = HashSet::new();
-    let mut stack: Vec<usize> = dependencies[&from].clone();
+    let mut stack: Vec<usize> = dependencies.get(&from).cloned().unwrap_or_default();
     while let Some(current) = stack.pop() {
         if current == target {
             return true;
@@ -275,7 +382,7 @@ fn reaches(
         if !stuck.contains(&current) || !seen.insert(current) {
             continue;
         }
-        stack.extend(dependencies[&current].iter().copied());
+        stack.extend(dependencies.get(&current).into_iter().flatten().copied());
     }
     false
 }

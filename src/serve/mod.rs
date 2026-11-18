@@ -577,8 +577,8 @@ mod tests {
         assert_eq!(
             node["releases"],
             serde_json::json!([
-                {"name": "1.0", "parking": false, "target": "2027-03-01", "closed": null},
-                {"name": "plus-tard", "parking": true, "target": null, "closed": null},
+                {"name": "1.0", "parking": false, "target": "2027-03-01", "closed": null, "depends_on": []},
+                {"name": "plus-tard", "parking": true, "target": null, "closed": null, "depends_on": []},
             ])
         );
         assert_eq!(node["releases_from"], "p");

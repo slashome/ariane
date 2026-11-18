@@ -706,6 +706,7 @@ mod tests {
         let marks = declare::Marks {
             parking: Some(true),
             target: None,
+            depends_on: None,
         };
         assert!(matches!(
             declare::set(&tree, &NodePath::new("p"), "0.2", marks).unwrap(),

@@ -17,7 +17,7 @@ use crate::estimate::Basis;
 use crate::item::Kind;
 use crate::tree::NodePath;
 
-use super::input::{GroupSpec, Input, Planned, State, Unit};
+use super::input::{GroupSpec, Ignored, Input, Planned, State, Unit};
 use super::schedule::{Placed, Schedule, order_key};
 use super::timeline::Timeline;
 use super::{
@@ -170,6 +170,7 @@ pub fn assemble(input: &Input, schedule: &Schedule) -> Forecast {
                 declared_by: spec.declared_by.clone(),
                 target: spec.target.map(|date| date.to_string()),
                 closed_on: spec.closed.map(|date| date.to_string()),
+                depends_on: spec.after.clone(),
                 summary: summarize(input, &members, &schedule.placed, &mut clock),
                 epics: epic_plans(&context, &members, &mut clock),
             })
@@ -523,10 +524,50 @@ fn warnings(
             Some(format!("depends on {dependency}, which is not scheduled")),
         );
     }
+    release_dependencies(input, &mut found);
     let ends = Ends::new(input, schedule, clock);
     missed_targets(input, groups, &ends, &order, &mut found);
     contradictory_targets(input, groups, &order, &mut found);
     found.finish()
+}
+
+/// Flags the releases whose `depends_on` the forecast cannot wait for
+/// (ADR-0030): a release it does not order, under an unscheduled dependency,
+/// and a dependency that would close a cycle of releases.
+fn release_dependencies(input: &Input, found: &mut Warnings) {
+    for release in &input.releases {
+        let reference = format!("release {}", release.name);
+        let named = |why: Ignored| {
+            release
+                .ignored
+                .iter()
+                .filter(|(_, ignored)| *ignored == why)
+                .map(|(name, _)| name.as_str())
+                .collect::<Vec<_>>()
+        };
+        let outside = named(Ignored::Outside);
+        if !outside.is_empty() {
+            found.flag(
+                WarningKind::UnscheduledDependency,
+                &reference,
+                Some(format!(
+                    "depends on {}, which this forecast does not schedule: outside its scope, or parking",
+                    outside.join(", ")
+                )),
+            );
+        }
+        let cycle = named(Ignored::Cycle);
+        if !cycle.is_empty() {
+            found.flag(
+                WarningKind::DependencyCycle,
+                &reference,
+                Some(format!(
+                    "waiting for {} would close a cycle of releases",
+                    cycle.join(", ")
+                )),
+            );
+        }
+    }
 }
 
 /// Flags the guessed hours of scheduled work.

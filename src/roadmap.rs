@@ -6,7 +6,8 @@
 //! descendants. This module checks the node, prints the forecast as text, and
 //! prints it as the JSON that `GET /api/roadmap?node=<node>` serves.
 //!
-//! The text lists the releases in delivery order, then their epics, stories
+//! The text lists the releases in delivery order, each with the releases it
+//! waits for (`after cmc/cmc-lib@1.1.0`), then their epics, stories
 //! and work, indented, each with its hours left (work, plus testing), its span
 //! (dates in the calendar's time zone, else hours of focused work from now),
 //! what is done and what is open, its target and whether the forecast misses
@@ -244,6 +245,9 @@ impl View<'_> {
             .count();
         if homonyms > 1 {
             let _ = write!(label, "  (declared by {})", plan.declared_by);
+        }
+        if !plan.depends_on.is_empty() {
+            let _ = write!(label, "  (after {})", plan.depends_on.join(", "));
         }
         if let Some(closed) = &plan.closed_on {
             let _ = write!(label, "  (closed {closed})");

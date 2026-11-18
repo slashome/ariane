@@ -64,7 +64,8 @@ pub struct Forecast {
     pub hours: f64,
     /// Hours of testing left in them.
     pub test_hours: f64,
-    /// The declared releases, in delivery order, parking ones left out.
+    /// The declared releases, in delivery order, parking ones left out; a
+    /// release always after the releases it depends on.
     pub releases: Vec<ReleasePlan>,
     /// Open work shown but not scheduled, with the reason.
     pub unscheduled: Vec<Unscheduled>,
@@ -103,6 +104,9 @@ pub struct ReleasePlan {
     /// scheduled in it (ADR-0029). Named apart from the summary's `closed`,
     /// the closing dates of its work.
     pub closed_on: Option<String>,
+    /// The releases it waits for, as `<node>@<release>` (ADR-0030): none of
+    /// its work starts before they are delivered.
+    pub depends_on: Vec<String>,
     /// What it adds up to.
     #[serde(flatten)]
     pub summary: Summary,
@@ -314,9 +318,11 @@ pub enum WarningKind {
     MissedTarget,
     /// A target later than the target of what contains it.
     ContradictoryTarget,
-    /// Work caught in a dependency cycle, left unscheduled.
+    /// Work caught in a dependency cycle, left unscheduled; or a release
+    /// whose dependency would close a cycle of releases, ignored.
     DependencyCycle,
-    /// A dependency on open work that is never scheduled, ignored.
+    /// A dependency on open work that is never scheduled, or on a release
+    /// the forecast does not schedule, ignored.
     UnscheduledDependency,
 }
 

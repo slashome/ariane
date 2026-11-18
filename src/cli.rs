@@ -367,7 +367,9 @@ pub enum ReleaseCommand {
     },
     #[command(about = "Remove a release no item names any more")]
     Remove { node: String, name: String },
-    #[command(about = "Mark a release as parking or not, and set or clear its target date")]
+    #[command(
+        about = "Mark a release as parking or not, and set or clear its target date and the releases it waits for"
+    )]
     Set(ReleaseSetArgs),
     #[command(about = "Plan an epic, a story or a task in a release, or in none")]
     Assign(ReleaseAssignArgs),
@@ -438,6 +440,13 @@ pub struct ReleaseAddArgs {
 
     #[arg(long, help = "The desired date, YYYY-MM-DD")]
     pub target: Option<String>,
+
+    #[arg(
+        long = "depends-on",
+        value_name = "NODE@RELEASE",
+        help = "A release delivered before any of its work starts, `@<release>` for one of the same list; repeat for several"
+    )]
+    pub depends_on: Vec<String>,
 }
 
 /// Arguments of `ariane release move`: the node, the release, and exactly one
@@ -492,6 +501,18 @@ pub struct ReleaseSetArgs {
 
     #[arg(long, group = "marks", help = "Remove its target date")]
     pub no_target: bool,
+
+    #[arg(
+        long = "depends-on",
+        value_name = "NODE@RELEASE",
+        group = "marks",
+        conflicts_with = "no_depends_on",
+        help = "Replace the releases it waits for, `@<release>` for one of the same list; repeat for several"
+    )]
+    pub depends_on: Vec<String>,
+
+    #[arg(long, group = "marks", help = "Remove the releases it waits for")]
+    pub no_depends_on: bool,
 }
 
 impl ReleaseSetArgs {
@@ -511,6 +532,12 @@ impl ReleaseSetArgs {
             (None, true) => Some(None),
             (None, false) => None,
         }
+    }
+
+    /// The references of `--depends-on`, an empty list for `--no-depends-on`,
+    /// `None` when neither is given.
+    pub fn depends_on(&self) -> Option<&[String]> {
+        (!self.depends_on.is_empty() || self.no_depends_on).then_some(self.depends_on.as_slice())
     }
 }
 

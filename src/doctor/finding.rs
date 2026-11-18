@@ -119,6 +119,11 @@ pub enum Check {
     OpenInArchives,
     /// Open work whose effective release is closed (ADR-0029).
     OpenInClosedRelease,
+    /// A release `depends_on` names an unknown node, an unknown release or a
+    /// parking one (ADR-0030).
+    UnknownReleaseDependency,
+    /// Releases whose `depends_on` loop back on themselves (ADR-0030).
+    ReleaseDependencyCycle,
     /// `parent` or `depends_on` points to no existing item.
     DanglingReference,
     /// `parent` points to an epic from an item that is not a story.

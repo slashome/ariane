@@ -365,6 +365,12 @@ pub const RELEASE_KEYS: &[ReleaseKey] = &[
         requirement: Requirement::May,
         doc: "The day `ariane release close` closed it, `YYYY-MM-DD`: its work is delivered and archived, and no item is planned in it any more. Never on a parking release.",
     },
+    ReleaseKey {
+        name: "depends_on",
+        value: "list<string>",
+        requirement: Requirement::May,
+        doc: "The releases delivered before any of its work starts, each `<node>@<release>`, or `@<release>` for one of the same list: `cmc/cmc-lib@1.1.0`. The forecast places it after them.",
+    },
 ];
 
 /// The `[[release]]` declaration as JSON: its keys, that the order of the
@@ -850,7 +856,7 @@ mod tests {
             .iter()
             .map(|key| key["name"].as_str().unwrap())
             .collect();
-        assert_eq!(names, ["name", "parking", "target", "closed"]);
+        assert_eq!(names, ["name", "parking", "target", "closed", "depends_on"]);
         assert_eq!(release["keys"][0]["requirement"], json!("must"));
         assert_eq!(release["keys"][1]["type"], json!("boolean"));
         assert_eq!(release["keys"][3]["type"], json!("date"));

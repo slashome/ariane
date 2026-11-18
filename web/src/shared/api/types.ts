@@ -144,6 +144,7 @@ export interface Release {
   parking: boolean
   target: string | null
   closed?: string | null
+  depends_on?: string[]
 }
 
 export type ReleasePlace = 'before' | 'after' | 'top' | 'bottom'
@@ -155,6 +156,7 @@ export interface ReleaseChange {
   other?: string
   parking?: boolean
   target?: string | null
+  depends_on?: string[]
   rename_to?: string
 }
 
@@ -619,6 +621,7 @@ export interface ReleasePlan extends ForecastSummary {
   declared_by: string
   target: string | null
   closed_on?: string | null
+  depends_on?: string[]
   epics: EpicPlan[]
 }
 

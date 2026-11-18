@@ -956,3 +956,127 @@ fn warnings_count_guesses_gaps_in_the_hierarchy_and_targets() {
     assert!(json["releases"][0]["span"].is_object());
     assert_eq!(json["warnings"][0]["kind"], "unsized");
 }
+
+/// Releases `1.0`, `2.0` and `3.0`, each declared with its extra lines, sizes
+/// priced 1 to 16 hours, no testing.
+fn chained(first: &str, second: &str, third: &str) -> String {
+    format!(
+        "[[release]]\nname = \"1.0\"\n{first}\n[[release]]\nname = \"2.0\"\n{second}\n[[release]]\nname = \"3.0\"\n{third}\n[estimates]\nXS = 1\nS = 2\nM = 4\nL = 8\nXL = 16\ntest_ratio = 0\n"
+    )
+}
+
+#[test]
+fn a_release_listed_before_the_release_it_depends_on_moves_after_it() {
+    let repo = repo(&chained("depends_on = [\"@3.0\"]\n", "", ""));
+    for (id, release) in [("T1", "1.0"), ("T2", "2.0"), ("T3", "3.0")] {
+        repo.write(
+            &format!("p/tasks/{id}-a.md"),
+            &item(id, "todo", &format!("release: '{release}'\nsize: S\n")),
+        );
+    }
+    let forecast = relative(&repo);
+    let order: Vec<(&str, Vec<&str>)> = forecast
+        .releases
+        .iter()
+        .map(|release| {
+            (
+                release.name.as_str(),
+                release.depends_on.iter().map(String::as_str).collect(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        order,
+        [("2.0", vec![]), ("3.0", vec![]), ("1.0", vec!["p@3.0"])]
+    );
+    assert_eq!(sequence(&forecast), ["p#T2", "p#T3", "p#T1"]);
+    assert!(flagged(&forecast, WarningKind::DependencyCycle).is_empty());
+    assert!(flagged(&forecast, WarningKind::UnscheduledDependency).is_empty());
+}
+
+#[test]
+fn started_work_waits_for_the_releases_its_release_depends_on_through_an_empty_one() {
+    let repo = repo(&chained(
+        "",
+        "depends_on = [\"@1.0\"]\n",
+        "depends_on = [\"@2.0\"]\n",
+    ));
+    repo.write(
+        "p/tasks/T1-a.md",
+        &item("T1", "todo", "release: '1.0'\nsize: S\n"),
+    )
+    .write(
+        "p/tasks/T3-c.md",
+        &item("T3", "in_progress", "release: '3.0'\nsize: S\n"),
+    );
+    let forecast = relative(&repo);
+    assert_eq!(sequence(&forecast), ["p#T1", "p#T3"]);
+    assert_eq!(moment(&work(&forecast, "p#T3").start), (2.0, None));
+    repo.write("p/node.toml", &chained("", "", ""));
+    assert_eq!(sequence(&relative(&repo)), ["p#T3", "p#T1"]);
+}
+
+#[test]
+fn a_closed_release_is_delivered_and_holds_nothing_back() {
+    let repo = repo(&chained(
+        "closed = 2026-11-01\n",
+        "depends_on = [\"@1.0\"]\n",
+        "",
+    ));
+    repo.write(
+        "p/tasks/T1-a.md",
+        &item("T1", "todo", "release: '1.0'\nsize: S\n"),
+    )
+    .write(
+        "p/tasks/T2-b.md",
+        &item("T2", "in_progress", "release: '2.0'\nsize: S\n"),
+    );
+    let forecast = relative(&repo);
+    assert_eq!(sequence(&forecast), ["p#T2"]);
+    assert_eq!(moment(&work(&forecast, "p#T2").start), (0.0, None));
+}
+
+#[test]
+fn a_cycle_of_releases_keeps_the_declared_order_and_is_warned_about() {
+    let repo = repo(&chained(
+        "depends_on = [\"@2.0\"]\n",
+        "depends_on = [\"@1.0\"]\n",
+        "",
+    ));
+    repo.write(
+        "p/tasks/T1-a.md",
+        &item("T1", "todo", "release: '1.0'\nsize: S\n"),
+    )
+    .write(
+        "p/tasks/T2-b.md",
+        &item("T2", "todo", "release: '2.0'\nsize: S\n"),
+    );
+    let forecast = relative(&repo);
+    assert_eq!(sequence(&forecast), ["p#T1", "p#T2"]);
+    assert_eq!(
+        flagged(&forecast, WarningKind::DependencyCycle),
+        ["release 1.0"]
+    );
+    assert_eq!(forecast, relative(&repo));
+}
+
+#[test]
+fn a_dependency_outside_the_forecast_is_ignored_and_warned_about() {
+    let repo = repo(&chained("depends_on = [\"o@1.0\"]\n", "", ""));
+    repo.write("o/node.toml", "[[release]]\nname = \"1.0\"\n")
+        .write(
+            "o/tasks/T1-a.md",
+            &item_of("o", "T1", "todo", "release: '1.0'\nsize: S\n"),
+        )
+        .write(
+            "p/tasks/T1-a.md",
+            &item("T1", "todo", "release: '1.0'\nsize: S\n"),
+        );
+    let forecast = relative(&repo);
+    assert_eq!(sequence(&forecast), ["p#T1"]);
+    assert_eq!(release(&forecast, "1.0").depends_on, ["o@1.0"]);
+    assert_eq!(
+        flagged(&forecast, WarningKind::UnscheduledDependency),
+        ["release 1.0"]
+    );
+}

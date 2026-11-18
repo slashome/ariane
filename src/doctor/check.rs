@@ -12,7 +12,9 @@
 //!    workflow, custom keys against the node's `node.toml`, the file name
 //!    against `id`;
 //! 3. **across items**: ids duplicated within a node, and a `parent` that
-//!    points to an epic from an item that is not a story;
+//!    points to an epic from an item that is not a story; then, across
+//!    releases, open work in a closed release and the `depends_on` of
+//!    releases: unknown targets and cycles (ADR-0030);
 //! 4. **the work calendar**: the personal `calendar.toml` (ADR-0026), or one
 //!    found where it is never read.
 
@@ -47,6 +49,7 @@ pub fn findings(tree: &Tree, scope: Option<&NodePath>) -> Vec<Finding> {
     duplicates(tree, scope, &mut found);
     epic_parents(tree, scope, &mut found);
     closed_releases(tree, scope, &mut found);
+    release_dependencies(tree, scope, &mut found);
     calendar(
         tree,
         scope,
@@ -1118,6 +1121,116 @@ fn closed_releases(tree: &Tree, scope: Option<&NodePath>, found: &mut Vec<Findin
                 remedy: Remedy::human(resolutions),
             });
         }
+    }
+}
+
+/// Reports the `depends_on` of a `[[release]]` that names an unknown node, an
+/// unknown release or a parking one, and the releases whose dependencies loop
+/// (ADR-0030). A reference is in the scope of the node declaring it; a cycle
+/// in the scope of any of its releases, reported once from its first one.
+fn release_dependencies(tree: &Tree, scope: Option<&NodePath>, found: &mut Vec<Finding>) {
+    use crate::release::depends::{self, Target};
+    let in_scope = |node: &NodePath| scope.is_none_or(|scope| node.is_within(scope));
+    let path_of = |node: &NodePath| Some(relative(tree, &tree.node_dir(node).join(NODE_FILE)));
+    let dependencies = depends::all(tree);
+    for dependency in &dependencies {
+        let from = &dependency.from;
+        if !in_scope(&from.list) {
+            continue;
+        }
+        let written = &dependency.written;
+        let (message, resolutions) = match &dependency.target {
+            Target::Found { parking: false, .. } => continue,
+            Target::Found { key, .. } => (
+                format!(
+                    "the release `{}` depends on `{written}`, a parking release that is never delivered",
+                    from.name
+                ),
+                vec![
+                    format!(
+                        "make `{key}` a scheduled release: `ariane release set {} {} --no-parking`",
+                        key.list, key.name
+                    ),
+                    format!(
+                        "remove `{written}` from the `depends_on` of `{}`",
+                        from.name
+                    ),
+                ],
+            ),
+            Target::UnknownNode(node) => (
+                format!(
+                    "the release `{}` depends on `{written}`, but `{node}` is not a node",
+                    from.name
+                ),
+                vec![
+                    format!("write the path of an existing node before `@` in `{written}`"),
+                    format!(
+                        "remove `{written}` from the `depends_on` of `{}`",
+                        from.name
+                    ),
+                ],
+            ),
+            Target::UnknownRelease { node, name, list } => (
+                match list {
+                    Some(list) => format!(
+                        "the release `{}` depends on `{written}`, but `{list}`, whose list `{node}` plans against, declares no release `{name}`",
+                        from.name
+                    ),
+                    None => format!(
+                        "the release `{}` depends on `{written}`, but no release list applies to `{node}`",
+                        from.name
+                    ),
+                },
+                vec![
+                    format!(
+                        "write the name of a release `{node}` plans against after `@` in `{written}`"
+                    ),
+                    format!(
+                        "declare `{name}` first: `ariane release add {} {name}`",
+                        list.as_ref().unwrap_or(node)
+                    ),
+                    format!(
+                        "remove `{written}` from the `depends_on` of `{}`",
+                        from.name
+                    ),
+                ],
+            ),
+        };
+        found.push(Finding {
+            check: Check::UnknownReleaseDependency,
+            severity: Severity::Error,
+            node: Some(from.list.clone()),
+            path: path_of(&from.list),
+            message,
+            remedy: Remedy::human(resolutions),
+        });
+    }
+    for cycle in depends::cycles(&depends::graph(&dependencies)) {
+        if !cycle.iter().any(|key| in_scope(&key.list)) {
+            continue;
+        }
+        let first = &cycle[0];
+        let shown: Vec<String> = cycle.iter().map(ToString::to_string).collect();
+        let resolutions: Vec<String> = cycle
+            .windows(2)
+            .map(|pair| {
+                format!(
+                    "remove `{}` from the `depends_on` of `{}`",
+                    pair[1], pair[0]
+                )
+            })
+            .collect();
+        found.push(Finding {
+            check: Check::ReleaseDependencyCycle,
+            severity: Severity::Error,
+            node: Some(first.list.clone()),
+            path: path_of(&first.list),
+            message: format!(
+                "releases wait for each other, so none can be delivered: {}",
+                shown.join(" -> ")
+            ),
+            remedy: Remedy::human(resolutions),
+        });
     }
 }
 

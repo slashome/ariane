@@ -5,13 +5,15 @@
 //! none. The nearest declaration wins, task, then story, then epic. This module
 //! resolves that precedence once, for `ariane tasks --json`, `ariane show
 //! --json` and the interface, and places the result in the node's declared
-//! order. [`declare`] writes releases, [`close`] closes one, [`changelog`]
-//! gives its changelog entry, [`command`] is `ariane release`.
+//! order. [`declare`] writes releases, [`depends`] resolves the releases one
+//! waits for, [`close`] closes one, [`changelog`] gives its changelog entry,
+//! [`command`] is `ariane release`.
 
 pub mod changelog;
 pub mod close;
 pub mod command;
 pub mod declare;
+pub mod depends;
 
 use std::collections::HashMap;
 

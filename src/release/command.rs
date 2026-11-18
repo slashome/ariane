@@ -42,6 +42,9 @@ fn print_list(root: &std::path::Path, node: &NodePath) -> Result<()> {
             if let Some(target) = &release.target {
                 shown.push_str(&format!(" (target {target})"));
             }
+            if !release.depends_on.is_empty() {
+                shown.push_str(&format!(" (after {})", release.depends_on.join(", ")));
+            }
             shown
         })
         .collect();
@@ -63,6 +66,7 @@ pub fn run(tree: &Tree, args: &ReleaseArgs, here: Option<&NodePath>) -> Result<E
                 name: add.name.clone(),
                 parking: add.parking,
                 target: add.target.clone(),
+                depends_on: add.depends_on.clone(),
             };
             let place = place(
                 add.before.as_deref(),
@@ -102,6 +106,7 @@ pub fn run(tree: &Tree, args: &ReleaseArgs, here: Option<&NodePath>) -> Result<E
             let marks = Marks {
                 parking: marked.parking(),
                 target: marked.target(),
+                depends_on: marked.depends_on(),
             };
             settle(declare::set(tree, &node, &marked.name, marks)?)?;
             Some(node)

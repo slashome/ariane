@@ -1112,6 +1112,10 @@ pub struct ReleaseRequest {
     /// A new name, rewritten in the items that name the release.
     #[serde(default)]
     pub rename_to: Option<String>,
+    /// The releases it waits for, `<node>@<release>`; on a change, `[]`
+    /// removes them and absent keeps them (ADR-0030).
+    #[serde(default)]
+    pub depends_on: Option<Vec<String>>,
 }
 
 impl ReleaseRequest {
@@ -1120,6 +1124,7 @@ impl ReleaseRequest {
         declare::Marks {
             parking: self.parking,
             target: self.target.as_ref().map(Option::as_deref),
+            depends_on: self.depends_on.as_deref(),
         }
     }
 
@@ -1218,6 +1223,7 @@ pub async fn add_release(
             name: request.name.clone(),
             parking: request.parking.unwrap_or(false),
             target: request.target.clone().flatten(),
+            depends_on: request.depends_on.clone().unwrap_or_default(),
         };
         Ok(
             declare::add(tree, &NodePath::new(&request.node), &declaration, place)
@@ -1228,9 +1234,10 @@ pub async fn add_release(
 }
 
 /// `PATCH /api/releases`: moves a release when `place` is given, sets its
-/// `parking` mark and its `target` (`null` removes it) when given, then
-/// renames it (items rewritten) when `rename_to` is, as `ariane release move`,
-/// `set` and `rename`.
+/// `parking` mark, its `target` (`null` removes it) and its `depends_on`
+/// (`[]` removes them) when given, then renames it (items and references
+/// rewritten) when `rename_to` is, as `ariane release move`, `set` and
+/// `rename`.
 pub async fn change_release(
     Shared(state): Shared<Arc<State>>,
     Json(request): Json<ReleaseRequest>,
@@ -1239,13 +1246,10 @@ pub async fn change_release(
         let node = NodePath::new(&request.node);
         let place = request.place()?;
         let marks = request.marks();
-        if place.is_none()
-            && request.rename_to.is_none()
-            && marks.parking.is_none()
-            && marks.target.is_none()
-        {
+        if place.is_none() && request.rename_to.is_none() && marks.is_empty() {
             return Err(
-                "nothing to change: give `place`, `parking`, `target` or `rename_to`".to_owned(),
+                "nothing to change: give `place`, `parking`, `target`, `depends_on` or `rename_to`"
+                    .to_owned(),
             );
         }
         Ok(move_set_then_rename(tree, &node, request, place))
@@ -1267,7 +1271,7 @@ fn move_set_then_rename(
         return Ok(Err(refusal));
     }
     let marks = request.marks();
-    if (marks.parking.is_some() || marks.target.is_some())
+    if !marks.is_empty()
         && let Err(refusal) = declare::set(tree, node, &request.name, marks)?
     {
         return Ok(Err(refusal));

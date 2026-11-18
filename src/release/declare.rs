@@ -11,7 +11,10 @@
 //! an item is not removed, the items are listed instead. Assigning writes or
 //! removes the `release` of one epic, story or task, through the header writer
 //! the rest of the CLI uses, and refuses a name the item's node does not
-//! declare.
+//! declare. A release's `depends_on` is checked before it is written: every
+//! reference names a release that is neither unknown nor parking, and none
+//! closes a cycle (ADR-0030); a rename rewrites the references to the renamed
+//! release, and a release another one depends on is not removed.
 
 use std::path::Path;
 
@@ -21,6 +24,7 @@ use yaml_serde::Value;
 
 use crate::item::{self, Document, Header, Kind};
 use crate::node::{FILE as NODE_FILE, Release};
+use crate::release::depends::{self, Key};
 use crate::schema::is_date;
 use crate::tree::{Item, NodePath, Tree};
 
@@ -37,13 +41,16 @@ pub enum Place<'a> {
     After(&'a str),
 }
 
-/// A release to declare: its name, whether it is a parking one, its target date.
+/// A release to declare: its name, whether it is a parking one, its target
+/// date, the releases it waits for.
 #[derive(Debug, Clone, Default)]
 pub struct Declaration {
     pub name: String,
     pub parking: bool,
     /// `YYYY-MM-DD`, written as a TOML date.
     pub target: Option<String>,
+    /// `<node>@<release>` or `@<release>` references (ADR-0030).
+    pub depends_on: Vec<String>,
 }
 
 /// Why a change of releases was refused.
@@ -181,6 +188,17 @@ fn last_position(table: &Table) -> isize {
         .unwrap_or(0)
 }
 
+/// Writes `written` as the `depends_on` of `entry`, trimmed; an empty list
+/// removes the key.
+fn write_dependencies(entry: &mut Table, written: &[String]) {
+    if written.is_empty() {
+        entry.remove("depends_on");
+        return;
+    }
+    let array: toml_edit::Array = written.iter().map(|reference| reference.trim()).collect();
+    crate::node::set_value(entry, "depends_on", toml_edit::Value::Array(array));
+}
+
 /// A `YYYY-MM-DD` target as a TOML date, or its refusal.
 fn parse_target(date: &str) -> Result<Result<toml_edit::Datetime, Refusal>> {
     let date = date.trim();
@@ -218,6 +236,9 @@ pub fn add(
         Some(Ok(date)) => Some(date),
         None => None,
     };
+    if let Err(message) = depends::check(tree, node, name, &release.depends_on) {
+        return Ok(Err(Refusal::Invalid(message)));
+    }
     crate::node::edit(&tree.node_dir(node).join(NODE_FILE), |document| {
         let top = last_position(document.as_table()) * 2 + 2;
         spread(document.as_table_mut());
@@ -245,6 +266,7 @@ pub fn add(
         if let Some(target) = target {
             entry.insert("target", value(target));
         }
+        write_dependencies(&mut entry, &release.depends_on);
         entry.set_position(Some(position.unwrap_or(top)));
         entries.insert(index, entry);
         Ok(())
@@ -294,23 +316,52 @@ pub struct Marks<'a> {
     pub parking: Option<bool>,
     /// The target date, `YYYY-MM-DD`; `Some(None)` removes it.
     pub target: Option<Option<&'a str>>,
+    /// The releases it waits for, replacing those written; `Some(&[])`
+    /// removes the key (ADR-0030).
+    pub depends_on: Option<&'a [String]>,
 }
 
-/// Changes whether the release `name` of `node` is a parking one, and its
-/// target date, the rest of its entry and of the file kept.
+impl Marks<'_> {
+    /// Tells whether the marks change nothing.
+    pub fn is_empty(&self) -> bool {
+        self.parking.is_none() && self.target.is_none() && self.depends_on.is_none()
+    }
+}
+
+/// Changes whether the release `name` of `node` is a parking one, its target
+/// date and the releases it waits for, the rest of its entry and of the file
+/// kept.
 ///
 /// # Errors
 ///
 /// Fails when `node.toml` cannot be read or written; refuses an unknown
-/// release, a bad target, a request that sets nothing, an inherited list.
+/// release, a bad target, a dependency [`depends::check`] refuses, a request
+/// that sets nothing, an inherited list.
 pub fn set(tree: &Tree, node: &NodePath, name: &str, marks: Marks) -> Result<Result<(), Refusal>> {
     if let Err(refusal) = check_declarer(tree, node) {
         return Ok(Err(refusal));
     }
-    if marks.parking.is_none() && marks.target.is_none() {
+    if marks.is_empty() {
         return Ok(Err(Refusal::Invalid(
-            "nothing to set: give a parking mark or a target".to_owned(),
+            "nothing to set: give a parking mark, a target or dependencies".to_owned(),
         )));
+    }
+    if let Some(written) = marks.depends_on
+        && let Err(message) = depends::check(tree, node, name, written)
+    {
+        return Ok(Err(Refusal::Invalid(message)));
+    }
+    if marks.parking == Some(true) {
+        let waiting: Vec<String> = depends::dependents(tree, node, name)
+            .into_iter()
+            .map(|dependency| dependency.from.to_string())
+            .collect();
+        if !waiting.is_empty() {
+            return Ok(Err(Refusal::Invalid(format!(
+                "`{name}` cannot become a parking release: {} wait for it",
+                waiting.join(", ")
+            ))));
+        }
     }
     let target = match marks.target {
         Some(Some(date)) => match parse_target(date)? {
@@ -349,6 +400,9 @@ pub fn set(tree: &Tree, node: &NodePath, name: &str, marks: Marks) -> Result<Res
             }
             None => {}
         }
+        if let Some(written) = marks.depends_on {
+            write_dependencies(entry, written);
+        }
         Ok(())
     })
 }
@@ -383,7 +437,16 @@ pub fn rename(
         Err(refusal) => return Ok(Err(refusal)),
     };
     let items = naming(tree, node, old);
+    let key = Key::new(node, old);
+    let mut referring: Vec<NodePath> = depends::dependents(tree, node, old)
+        .into_iter()
+        .map(|dependency| dependency.from.list)
+        .filter(|list| list != node)
+        .collect();
+    referring.sort();
+    referring.dedup();
     let renamed = crate::node::edit(&tree.node_dir(node).join(NODE_FILE), |document| {
+        rename_references(document, tree, node, &key, new);
         let entries = list(document)?;
         let names = names(entries);
         let index = index_of(&names, old, node)?;
@@ -400,6 +463,13 @@ pub fn rename(
     if let Err(refusal) = renamed {
         return Ok(Err(refusal));
     }
+    for other in &referring {
+        crate::node::edit(&tree.node_dir(other).join(NODE_FILE), |document| {
+            rename_references(document, tree, other, &key, new);
+            Ok::<(), Refusal>(())
+        })?
+        .ok();
+    }
     let mut rewritten = Vec::new();
     for item in items {
         write_release(&item.file, Some(new))?;
@@ -408,7 +478,42 @@ pub fn rename(
     Ok(Ok(rewritten))
 }
 
-/// Removes the release `name` of `node`, unless an item still names it.
+/// Rewrites, in the `depends_on` of every `[[release]]` of `document`, the
+/// list `declarer` declares, the references to the release `old` so that they
+/// name `new`, each keeping its node part and its decoration.
+fn rename_references(
+    document: &mut DocumentMut,
+    tree: &Tree,
+    declarer: &NodePath,
+    old: &Key,
+    new: &str,
+) {
+    let Some(entries) = document
+        .get_mut("release")
+        .and_then(TomlItem::as_array_of_tables_mut)
+    else {
+        return;
+    };
+    for entry in entries.iter_mut() {
+        let Some(references) = entry.get_mut("depends_on").and_then(TomlItem::as_array_mut) else {
+            continue;
+        };
+        for reference in references.iter_mut() {
+            let Some(renamed) = reference
+                .as_str()
+                .and_then(|written| depends::renamed(tree, declarer, written, old, new))
+            else {
+                continue;
+            };
+            let decor = reference.decor().clone();
+            *reference = toml_edit::Value::from(renamed);
+            *reference.decor_mut() = decor;
+        }
+    }
+}
+
+/// Removes the release `name` of `node`, unless an item still names it or
+/// another release waits for it.
 ///
 /// # Errors
 ///
@@ -417,6 +522,16 @@ pub fn rename(
 pub fn remove(tree: &Tree, node: &NodePath, name: &str) -> Result<Result<(), Refusal>> {
     if let Err(refusal) = check_declarer(tree, node) {
         return Ok(Err(refusal));
+    }
+    let waiting: Vec<String> = depends::dependents(tree, node, name)
+        .into_iter()
+        .map(|dependency| dependency.from.to_string())
+        .collect();
+    if !waiting.is_empty() {
+        return Ok(Err(Refusal::Invalid(format!(
+            "`{name}` is a dependency of {}: remove it from their `depends_on` first",
+            waiting.join(", ")
+        ))));
     }
     let used: Vec<String> = naming(tree, node, name)
         .into_iter()
@@ -643,12 +758,14 @@ mod tests {
             name: " 0.0 ".to_owned(),
             parking: false,
             target: Some("2026-12-01".to_owned()),
+            depends_on: Vec::new(),
         };
         add(&tree(&repo), &p, &first, Place::Top).unwrap().unwrap();
         let parked = Declaration {
             name: "later".to_owned(),
             parking: true,
             target: None,
+            depends_on: Vec::new(),
         };
         add(&tree(&repo), &p, &parked, Place::Bottom)
             .unwrap()
@@ -688,6 +805,7 @@ mod tests {
             name: "0.3".to_owned(),
             parking: false,
             target: Some("soon".to_owned()),
+            depends_on: Vec::new(),
         };
         for (declaration, place) in [
             (named("  "), Place::Bottom),
@@ -871,11 +989,94 @@ mod tests {
     }
 
     #[test]
+    fn references_follow_a_renamed_release_and_hold_it_against_removal_and_parking() {
+        let repo = sample();
+        let p = NodePath::new("p");
+        let d = NodePath::new("p/d");
+        let waits = |written: &[&str]| -> Vec<String> {
+            written
+                .iter()
+                .map(|reference| (*reference).to_owned())
+                .collect()
+        };
+        let on_p = waits(&["@0.1"]);
+        set(
+            &tree(&repo),
+            &p,
+            "0.2",
+            Marks {
+                depends_on: Some(&on_p),
+                ..Marks::default()
+            },
+        )
+        .unwrap()
+        .unwrap();
+        let on_both = waits(&["p/c@0.1", "p@0.2"]);
+        set(
+            &tree(&repo),
+            &d,
+            "0.1",
+            Marks {
+                depends_on: Some(&on_both),
+                ..Marks::default()
+            },
+        )
+        .unwrap()
+        .unwrap();
+        assert!(
+            node_toml(&repo, "p/d").contains("depends_on = [\"p/c@0.1\", \"p@0.2\"]"),
+            "{}",
+            node_toml(&repo, "p/d")
+        );
+        let refused = |outcome: Result<(), Refusal>| match outcome {
+            Err(Refusal::Invalid(message)) => message,
+            other => panic!("should be refused, got {other:?}"),
+        };
+        assert!(refused(remove(&tree(&repo), &p, "0.2").unwrap()).contains("p/d@0.1"));
+        let parked = Marks {
+            parking: Some(true),
+            ..Marks::default()
+        };
+        assert!(refused(set(&tree(&repo), &p, "0.2", parked).unwrap()).contains("p/d@0.1"));
+        rename(&tree(&repo), &p, "0.1", "mango").unwrap().unwrap();
+        assert!(
+            node_toml(&repo, "p").contains("depends_on = [\"@mango\"]"),
+            "{}",
+            node_toml(&repo, "p")
+        );
+        assert!(
+            node_toml(&repo, "p/d").contains("depends_on = [\"p/c@mango\", \"p@0.2\"]"),
+            "{}",
+            node_toml(&repo, "p/d")
+        );
+        assert!(errors(&repo).is_empty(), "{:?}", errors(&repo));
+        let unknown = waits(&["p@9.9"]);
+        assert!(
+            refused(
+                set(
+                    &tree(&repo),
+                    &p,
+                    "mango",
+                    Marks {
+                        depends_on: Some(&unknown),
+                        ..Marks::default()
+                    },
+                )
+                .unwrap()
+            )
+            .contains("no release `9.9`")
+        );
+    }
+
+    #[test]
     fn a_set_changes_the_parking_mark_and_the_target_and_nothing_else() {
         let repo = sample();
         let p = NodePath::new("p");
-        let marks =
-            |parking: Option<bool>, target: Option<Option<&'static str>>| Marks { parking, target };
+        let marks = |parking: Option<bool>, target: Option<Option<&'static str>>| Marks {
+            parking,
+            target,
+            depends_on: None,
+        };
         set(&tree(&repo), &p, "0.1", marks(None, Some(None)))
             .unwrap()
             .unwrap();
